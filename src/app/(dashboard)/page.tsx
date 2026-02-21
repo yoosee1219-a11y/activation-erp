@@ -3,8 +3,18 @@
 import { useEffect, useState } from "react";
 import { useDashboard } from "./layout";
 import { KpiCards } from "@/components/dashboard/kpi-cards";
-import { MonthlyChart } from "@/components/dashboard/monthly-chart";
+import { ActivationChart } from "@/components/dashboard/monthly-chart";
 import { AgencyChart } from "@/components/dashboard/agency-chart";
+import { AgencyStatusTable } from "@/components/dashboard/agency-status-table";
+import { StaffStatsTable } from "@/components/dashboard/staff-stats-table";
+import { ArcUrgentPanel } from "@/components/dashboard/arc-urgent-panel";
+
+interface TimeSeriesItem {
+  label: string;
+  total: number;
+  completed: number;
+  pending: number;
+}
 
 interface DashboardData {
   stats: {
@@ -19,10 +29,66 @@ interface DashboardData {
     completed: number;
     pending: number;
   }>;
+  weeklyStats: TimeSeriesItem[];
+  dailyStats: TimeSeriesItem[];
   agencyStats: Array<{
     agencyId: string;
     agencyName: string | null;
     total: number;
+    completed: number;
+    pending: number;
+    cancelled: number;
+    working: number;
+    autopayPending: number;
+  }>;
+  staffStats: Array<{
+    staff: string;
+    total: number;
+    completed: number;
+    pending: number;
+    working: number;
+    done: number;
+    arcUnresolved: number;
+    arcOverdue: number;
+  }>;
+  arcStats: Array<{
+    agencyId: string;
+    agencyName: string | null;
+    unresolved: number;
+    urgentCount: number;
+    overdueCount: number;
+  }>;
+  arcUrgentList: Array<{
+    id: string;
+    agencyId: string;
+    agencyName: string | null;
+    customerName: string;
+    newPhoneNumber: string | null;
+    personInCharge: string | null;
+    arcSupplementDeadline: string;
+    daysLeft: number;
+  }>;
+  kpiTotalByAgency: Array<{
+    agencyId: string;
+    agencyName: string;
+    count: number;
+  }>;
+  kpiPendingDetail: Array<{
+    id: string;
+    agencyId: string;
+    agencyName: string;
+    customerName: string;
+    entryDate: string | null;
+    newPhoneNumber: string | null;
+  }>;
+  kpiAutopayDetail: Array<{
+    id: string;
+    agencyId: string;
+    agencyName: string;
+    customerName: string;
+    newPhoneNumber: string | null;
+    activationDate: string | null;
+    daysLeft: number | null;
   }>;
 }
 
@@ -60,16 +126,45 @@ export default function DashboardPage() {
     );
   }
 
+  // 월별 데이터를 ActivationChart 형식에 맞게 변환
+  const monthlyMapped: TimeSeriesItem[] = (data.monthlyStats || []).map((d) => ({
+    label: d.month,
+    total: d.total,
+    completed: d.completed,
+    pending: d.pending,
+  }));
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">대시보드</h1>
 
-      <KpiCards stats={data.stats} />
+      <KpiCards
+        stats={data.stats}
+        kpiTotalByAgency={data.kpiTotalByAgency || []}
+        kpiPendingDetail={data.kpiPendingDetail || []}
+        kpiAutopayDetail={data.kpiAutopayDetail || []}
+      />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <MonthlyChart data={data.monthlyStats} />
+        <ActivationChart
+          monthlyData={monthlyMapped}
+          weeklyData={data.weeklyStats || []}
+          dailyData={data.dailyStats || []}
+        />
         <AgencyChart data={data.agencyStats} />
       </div>
+
+      {/* 거래처별 개통현황 테이블 */}
+      <AgencyStatusTable data={data.agencyStats} />
+
+      {/* 담당자별 현황 */}
+      <StaffStatsTable data={data.staffStats || []} />
+
+      {/* 외국인등록증 보완 - 기한 임박 경고 */}
+      <ArcUrgentPanel
+        arcStats={data.arcStats}
+        urgentList={data.arcUrgentList}
+      />
     </div>
   );
 }

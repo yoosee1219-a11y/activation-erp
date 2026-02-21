@@ -27,15 +27,35 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      // 이메일 형식이 아니면 자동 변환
+      const loginEmail = email.includes("@")
+        ? email
+        : `${email}@activation-erp.local`;
+
       const result = await signIn.email({
-        email,
+        email: loginEmail,
         password,
       });
 
       if (result.error) {
         setError("이메일 또는 비밀번호가 올바르지 않습니다.");
       } else {
-        router.push("/");
+        // 역할 확인 후 리다이렉트 (user-role 쿠키도 이 호출에서 설정됨)
+        const meRes = await fetch("/api/users/me");
+        if (!meRes.ok) {
+          // 역할 확인 실패 → 기본 대시보드로
+          router.push("/");
+          router.refresh();
+          return;
+        }
+        const meData = await meRes.json();
+        const role = meData.user?.role;
+
+        if (role === "PARTNER" || role === "GUEST") {
+          router.push("/partner");
+        } else {
+          router.push("/");
+        }
         router.refresh();
       }
     } catch {
@@ -54,11 +74,11 @@ export default function LoginPage() {
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">이메일</Label>
+            <Label htmlFor="email">로그인 ID</Label>
             <Input
               id="email"
-              type="email"
-              placeholder="admin@example.com"
+              type="text"
+              placeholder="이메일 또는 ID"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required

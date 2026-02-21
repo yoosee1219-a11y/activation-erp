@@ -57,6 +57,7 @@ export function Sidebar({ user }: SidebarProps) {
 
   const handleLogout = async () => {
     await signOut();
+    await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
   };
 

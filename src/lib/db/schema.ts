@@ -59,6 +59,7 @@ export const activations = pgTable("activations", {
   activationDate: date("activation_date"), // 개통일자
   activationStatus: text("activation_status").default("대기"), // 개통여부
   personInCharge: text("person_in_charge"), // 담당자
+  workStatus: text("work_status").default("대기"), // 진행상황: 대기/작업중/완료
 
   // 서류 상태
   applicationDocs: text("application_docs"), // 가입신청서류
@@ -75,6 +76,11 @@ export const activations = pgTable("activations", {
   notes: text("notes"), // 비고
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+
+  // 잠금 (관리자가 개통완료 후 거래처 편집 방지)
+  isLocked: boolean("is_locked").default(false),
+  lockedAt: timestamp("locked_at", { withTimezone: true }),
+  lockedBy: text("locked_by"),
 });
 
 // 4. document_files (서류 파일 메타데이터)

@@ -9,13 +9,21 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Eye, Pencil, Trash2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { MoreHorizontal, Eye, Pencil, Trash2, Lock, Unlock } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
 
 export type ActivationRow = {
   id: string;
   agencyId: string;
+  agencyName?: string;
   customerName: string;
   usimNumber: string | null;
   entryDate: string | null;
@@ -25,7 +33,9 @@ export type ActivationRow = {
   activationDate: string | null;
   activationStatus: string | null;
   personInCharge: string | null;
+  workStatus: string | null;
   autopayRegistered: boolean | null;
+  isLocked: boolean | null;
   createdAt: string;
 };
 
@@ -35,16 +45,69 @@ const statusColors: Record<string, string> = {
   개통취소: "bg-red-100 text-red-800",
 };
 
-export function getColumns(
-  onDelete?: (id: string) => void,
-  canDelete?: boolean
-): ColumnDef<ActivationRow>[] {
+const workStatusColors: Record<string, string> = {
+  대기: "bg-gray-100 text-gray-600",
+  작업중: "bg-blue-100 text-blue-700",
+  완료: "bg-green-100 text-green-700",
+};
+
+export function getColumns(options: {
+  onDelete?: (id: string) => void;
+  canDelete?: boolean;
+  onInlineUpdate?: (id: string, field: string, value: string) => void;
+  onToggleLock?: (id: string, lock: boolean) => void;
+  canLock?: boolean;
+  staffList?: string[];
+}): ColumnDef<ActivationRow>[] {
+  const { onDelete, canDelete, onInlineUpdate, onToggleLock, canLock, staffList = [] } = options;
+
   return [
+    // No. (순번)
+    {
+      id: "rowNumber",
+      header: "No.",
+      size: 50,
+      cell: ({ row }) => (
+        <span className="text-sm text-gray-500 font-medium">
+          {row.index + 1}
+        </span>
+      ),
+    },
+    // 잠금 토글 (관리자만)
+    ...(canLock && onToggleLock
+      ? [
+          {
+            id: "lockToggle",
+            header: "잠금",
+            size: 50,
+            cell: ({ row }: { row: { original: ActivationRow } }) => {
+              const isLocked = !!row.original.isLocked;
+              return (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={() => onToggleLock(row.original.id, !isLocked)}
+                  title={isLocked ? "잠금 해제" : "잠금"}
+                >
+                  {isLocked ? (
+                    <Lock className="h-3.5 w-3.5 text-red-500" />
+                  ) : (
+                    <Unlock className="h-3.5 w-3.5 text-gray-400" />
+                  )}
+                </Button>
+              );
+            },
+          } as ColumnDef<ActivationRow>,
+        ]
+      : []),
     {
       accessorKey: "agencyId",
       header: "거래처",
       cell: ({ row }) => (
-        <span className="font-medium">{row.getValue("agencyId")}</span>
+        <span className="font-medium text-sm">
+          {row.original.agencyName || row.getValue("agencyId")}
+        </span>
       ),
     },
     {
@@ -97,6 +160,62 @@ export function getColumns(
     {
       accessorKey: "personInCharge",
       header: "담당자",
+      cell: ({ row }) => {
+        const current = row.getValue("personInCharge") as string;
+        if (!onInlineUpdate || staffList.length === 0) {
+          return current || "-";
+        }
+        return (
+          <Select
+            value={current || ""}
+            onValueChange={(v) =>
+              onInlineUpdate(row.original.id, "personInCharge", v)
+            }
+          >
+            <SelectTrigger className="h-7 w-[100px] text-xs border-dashed">
+              <SelectValue placeholder="배정" />
+            </SelectTrigger>
+            <SelectContent>
+              {staffList.map((name) => (
+                <SelectItem key={name} value={name}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        );
+      },
+    },
+    {
+      accessorKey: "workStatus",
+      header: "진행상황",
+      cell: ({ row }) => {
+        const current = (row.getValue("workStatus") as string) || "대기";
+        if (!onInlineUpdate) {
+          return (
+            <Badge className={workStatusColors[current] || workStatusColors["대기"]}>
+              {current}
+            </Badge>
+          );
+        }
+        return (
+          <Select
+            value={current}
+            onValueChange={(v) =>
+              onInlineUpdate(row.original.id, "workStatus", v)
+            }
+          >
+            <SelectTrigger className={`h-7 w-[90px] text-xs border-dashed ${workStatusColors[current] || ""}`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="대기">대기</SelectItem>
+              <SelectItem value="작업중">작업중</SelectItem>
+              <SelectItem value="완료">완료</SelectItem>
+            </SelectContent>
+          </Select>
+        );
+      },
     },
     {
       accessorKey: "autopayRegistered",
@@ -115,7 +234,7 @@ export function getColumns(
     },
     {
       id: "actions",
-      header: "",
+      header: "상세",
       cell: ({ row }) => {
         const id = row.original.id;
         return (

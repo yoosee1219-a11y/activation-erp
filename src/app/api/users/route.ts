@@ -34,7 +34,12 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { email, password, name, role, allowedAgencies } = body;
+    const { email: rawEmail, password, name, role, allowedAgencies } = body;
+
+    // 이메일 형식이 아니면 자동 변환
+    const email = rawEmail.includes("@")
+      ? rawEmail
+      : `${rawEmail}@activation-erp.local`;
 
     // Better Auth로 사용자 생성
     const authResult = await auth.api.signUpEmail({

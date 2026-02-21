@@ -1,9 +1,10 @@
 import { db } from "@/lib/db";
 import { activations, agencies } from "@/lib/db/schema";
-import { eq, and, desc, sql, count, ilike, gte, lte } from "drizzle-orm";
+import { eq, and, desc, sql, count, ilike, gte, lte, inArray } from "drizzle-orm";
 
 export async function getActivations(params: {
   agencyId?: string;
+  agencyIds?: string[];
   status?: string;
   search?: string;
   dateFrom?: string;
@@ -13,6 +14,7 @@ export async function getActivations(params: {
 }) {
   const {
     agencyId,
+    agencyIds,
     status,
     search,
     dateFrom,
@@ -23,7 +25,9 @@ export async function getActivations(params: {
 
   const conditions = [];
 
-  if (agencyId) {
+  if (agencyIds && agencyIds.length > 0) {
+    conditions.push(inArray(activations.agencyId, agencyIds));
+  } else if (agencyId) {
     conditions.push(eq(activations.agencyId, agencyId));
   }
   if (status) {
@@ -158,16 +162,199 @@ export async function getMonthlyStats(agencyId?: string) {
 }
 
 export async function getAgencyStats() {
-  const result = await db
-    .select({
-      agencyId: activations.agencyId,
-      agencyName: agencies.name,
-      total: count(),
-    })
-    .from(activations)
-    .leftJoin(agencies, eq(activations.agencyId, agencies.id))
-    .groupBy(activations.agencyId, agencies.name)
-    .orderBy(desc(count()));
+  const result = await db.execute(sql`
+    SELECT
+      a.agency_id as "agencyId",
+      ag.name as "agencyName",
+      COUNT(*) as "total",
+      COUNT(*) FILTER (WHERE a.activation_status = '개통완료') as "completed",
+      COUNT(*) FILTER (WHERE a.activation_status = '대기') as "pending",
+      COUNT(*) FILTER (WHERE a.activation_status = '개통취소') as "cancelled",
+      COUNT(*) FILTER (WHERE a.work_status = '작업중') as "working",
+      COUNT(*) FILTER (WHERE a.autopay_registered = false) as "autopayPending"
+    FROM activations a
+    LEFT JOIN agencies ag ON a.agency_id = ag.id
+    GROUP BY a.agency_id, ag.name
+    ORDER BY ag.name
+  `);
+  return result.rows;
+}
 
-  return result;
+export async function getArcSupplementStats() {
+  const result = await db.execute(sql`
+    SELECT
+      a.agency_id as "agencyId",
+      ag.name as "agencyName",
+      COUNT(*) FILTER (
+        WHERE a.arc_supplement IS NULL OR a.arc_supplement = ''
+      ) as "unresolved",
+      COUNT(*) FILTER (
+        WHERE a.arc_supplement_deadline IS NOT NULL
+          AND a.arc_supplement_deadline < CURRENT_DATE + INTERVAL '30 days'
+          AND a.arc_supplement_deadline >= CURRENT_DATE
+          AND (a.arc_supplement IS NULL OR a.arc_supplement = '')
+      ) as "urgentCount",
+      COUNT(*) FILTER (
+        WHERE a.arc_supplement_deadline IS NOT NULL
+          AND a.arc_supplement_deadline < CURRENT_DATE
+          AND (a.arc_supplement IS NULL OR a.arc_supplement = '')
+      ) as "overdueCount"
+    FROM activations a
+    LEFT JOIN agencies ag ON a.agency_id = ag.id
+    GROUP BY a.agency_id, ag.name
+    HAVING COUNT(*) FILTER (
+      WHERE a.arc_supplement IS NULL OR a.arc_supplement = ''
+    ) > 0
+    ORDER BY ag.name
+  `);
+  return result.rows;
+}
+
+export async function getStaffStats() {
+  const result = await db.execute(sql`
+    SELECT
+      COALESCE(a.person_in_charge, '미배정') as "staff",
+      COUNT(*) as "total",
+      COUNT(*) FILTER (WHERE a.activation_status = '개통완료') as "completed",
+      COUNT(*) FILTER (WHERE a.activation_status = '대기') as "pending",
+      COUNT(*) FILTER (WHERE a.work_status = '작업중') as "working",
+      COUNT(*) FILTER (WHERE a.work_status = '완료') as "done",
+      COUNT(*) FILTER (
+        WHERE a.arc_supplement_deadline IS NOT NULL
+          AND (a.arc_supplement IS NULL OR a.arc_supplement = '')
+      ) as "arcUnresolved",
+      COUNT(*) FILTER (
+        WHERE a.arc_supplement_deadline IS NOT NULL
+          AND a.arc_supplement_deadline < CURRENT_DATE
+          AND (a.arc_supplement IS NULL OR a.arc_supplement = '')
+      ) as "arcOverdue"
+    FROM activations a
+    GROUP BY COALESCE(a.person_in_charge, '미배정')
+    ORDER BY "staff"
+  `);
+  return result.rows;
+}
+
+export async function getDailyStats(agencyId?: string) {
+  const agencyFilter = agencyId
+    ? `AND agency_id = '${agencyId}'`
+    : "";
+
+  const result = await db.execute(sql.raw(`
+    SELECT
+      TO_CHAR(created_at, 'MM/DD') as label,
+      TO_CHAR(created_at, 'YYYY-MM-DD') as date,
+      COUNT(*) as total,
+      COUNT(*) FILTER (WHERE activation_status = '개통완료') as completed,
+      COUNT(*) FILTER (WHERE activation_status = '대기') as pending
+    FROM activations
+    WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+    ${agencyFilter}
+    GROUP BY TO_CHAR(created_at, 'YYYY-MM-DD'), TO_CHAR(created_at, 'MM/DD')
+    ORDER BY date DESC
+    LIMIT 30
+  `));
+  return result.rows;
+}
+
+export async function getWeeklyStats(agencyId?: string) {
+  const agencyFilter = agencyId
+    ? `AND agency_id = '${agencyId}'`
+    : "";
+
+  const result = await db.execute(sql.raw(`
+    SELECT
+      TO_CHAR(DATE_TRUNC('week', created_at), 'MM/DD') || '~' as label,
+      TO_CHAR(DATE_TRUNC('week', created_at), 'YYYY-MM-DD') as week,
+      COUNT(*) as total,
+      COUNT(*) FILTER (WHERE activation_status = '개통완료') as completed,
+      COUNT(*) FILTER (WHERE activation_status = '대기') as pending
+    FROM activations
+    WHERE created_at >= CURRENT_DATE - INTERVAL '12 weeks'
+    ${agencyFilter}
+    GROUP BY DATE_TRUNC('week', created_at)
+    ORDER BY week DESC
+    LIMIT 12
+  `));
+  return result.rows;
+}
+
+// KPI 상세: 전체 개통 - 거래처별 건수
+export async function getKpiTotalByAgency() {
+  const result = await db.execute(sql`
+    SELECT
+      a.agency_id as "agencyId",
+      COALESCE(ag.name, a.agency_id) as "agencyName",
+      COUNT(*) as "count"
+    FROM activations a
+    LEFT JOIN agencies ag ON a.agency_id = ag.id
+    GROUP BY a.agency_id, ag.name
+    ORDER BY "count" DESC
+  `);
+  return result.rows;
+}
+
+// KPI 상세: 대기 중 - 거래처별 + 입국예정일
+export async function getKpiPendingDetail() {
+  const result = await db.execute(sql`
+    SELECT
+      a.id,
+      a.agency_id as "agencyId",
+      COALESCE(ag.name, a.agency_id) as "agencyName",
+      a.customer_name as "customerName",
+      a.entry_date as "entryDate",
+      a.new_phone_number as "newPhoneNumber"
+    FROM activations a
+    LEFT JOIN agencies ag ON a.agency_id = ag.id
+    WHERE a.activation_status = '대기'
+    ORDER BY a.entry_date ASC NULLS LAST
+  `);
+  return result.rows;
+}
+
+// KPI 상세: 자동이체 미등록 - 거래처별 + 개통일 기준 남은기한
+export async function getKpiAutopayDetail() {
+  const result = await db.execute(sql`
+    SELECT
+      a.id,
+      a.agency_id as "agencyId",
+      COALESCE(ag.name, a.agency_id) as "agencyName",
+      a.customer_name as "customerName",
+      a.new_phone_number as "newPhoneNumber",
+      a.activation_date as "activationDate",
+      CASE
+        WHEN a.activation_date IS NOT NULL
+        THEN (a.activation_date::date + 30 - CURRENT_DATE)
+        ELSE NULL
+      END as "daysLeft"
+    FROM activations a
+    LEFT JOIN agencies ag ON a.agency_id = ag.id
+    WHERE a.autopay_registered = false
+    ORDER BY a.activation_date ASC NULLS LAST
+  `);
+  return result.rows;
+}
+
+export async function getArcUrgentList(agencyId?: string) {
+  const agencyFilter = agencyId ? sql`AND a.agency_id = ${agencyId}` : sql``;
+  const result = await db.execute(sql`
+    SELECT
+      a.id,
+      a.agency_id as "agencyId",
+      ag.name as "agencyName",
+      a.customer_name as "customerName",
+      a.new_phone_number as "newPhoneNumber",
+      a.person_in_charge as "personInCharge",
+      a.arc_supplement_deadline as "arcSupplementDeadline",
+      a.arc_supplement as "arcSupplement",
+      (a.arc_supplement_deadline - CURRENT_DATE) as "daysLeft"
+    FROM activations a
+    LEFT JOIN agencies ag ON a.agency_id = ag.id
+    WHERE a.arc_supplement_deadline IS NOT NULL
+      AND a.arc_supplement_deadline <= CURRENT_DATE + INTERVAL '30 days'
+      AND (a.arc_supplement IS NULL OR a.arc_supplement = '')
+      ${agencyFilter}
+    ORDER BY a.arc_supplement_deadline ASC
+  `);
+  return result.rows;
 }

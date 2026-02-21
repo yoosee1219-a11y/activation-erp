@@ -1,0 +1,336 @@
+"use client";
+
+import { ColumnDef } from "@tanstack/react-table";
+import { Badge } from "@/components/ui/badge";
+import { EditableCell } from "./editable-cell";
+import { FileCell } from "./file-cell";
+import { Lock } from "lucide-react";
+import { format } from "date-fns";
+
+export type PartnerActivationRow = {
+  id: string;
+  agencyId: string;
+  agencyName?: string;
+  customerName: string;
+  usimNumber: string | null;
+  entryDate: string | null;
+  subscriptionNumber: string | null;
+  newPhoneNumber: string | null;
+  virtualAccount: string | null;
+  subscriptionType: string | null;
+  ratePlan: string | null;
+  activationDate: string | null;
+  activationStatus: string | null;
+  personInCharge: string | null;
+  workStatus: string | null;
+  autopayRegistered: boolean | null;
+  // 서류
+  applicationDocs: string | null;
+  applicationDocsReview: string | null;
+  nameChangeDocs: string | null;
+  nameChangeDocsReview: string | null;
+  arcAutopayInfo: string | null;
+  arcAutopayReview: string | null;
+  arcSupplement: string | null;
+  // 잠금
+  isLocked: boolean | null;
+  createdAt: string;
+};
+
+const statusColors: Record<string, string> = {
+  대기: "bg-yellow-100 text-yellow-800",
+  개통완료: "bg-green-100 text-green-800",
+  개통취소: "bg-red-100 text-red-800",
+};
+
+const workStatusColors: Record<string, string> = {
+  대기: "bg-gray-100 text-gray-600",
+  작업중: "bg-blue-100 text-blue-700",
+  완료: "bg-green-100 text-green-700",
+};
+
+const reviewColors: Record<string, string> = {
+  "확인완료": "bg-green-100 text-green-700",
+  "보완필요": "bg-red-100 text-red-700",
+  "검토중": "bg-yellow-100 text-yellow-700",
+};
+
+export function getPartnerColumns(options: {
+  onUpdate: (id: string, field: string, value: string) => void;
+}): ColumnDef<PartnerActivationRow>[] {
+  const { onUpdate } = options;
+
+  return [
+    // No. (순번)
+    {
+      id: "rowNumber",
+      header: "No.",
+      size: 50,
+      cell: ({ row }) => (
+        <span className="text-sm text-gray-500 font-medium">
+          {row.index + 1}
+        </span>
+      ),
+    },
+    // 잠금 상태 표시
+    {
+      id: "lockStatus",
+      header: "",
+      size: 30,
+      cell: ({ row }) => {
+        if (row.original.isLocked) {
+          return <Lock className="h-3.5 w-3.5 text-gray-400" />;
+        }
+        return null;
+      },
+    },
+    // ─── 거래처명 (다중 거래처 PARTNER용) ───
+    {
+      accessorKey: "agencyName",
+      header: "거래처",
+      cell: ({ row }) => (
+        <span className="text-sm font-medium text-gray-700">
+          {row.original.agencyName || row.original.agencyId}
+        </span>
+      ),
+    },
+    // ─── 거래처 편집 가능 필드 ───
+    {
+      accessorKey: "customerName",
+      header: "고객명",
+      cell: ({ row }) => (
+        <EditableCell
+          value={row.original.customerName}
+          rowId={row.original.id}
+          field="customerName"
+          isLocked={!!row.original.isLocked}
+          onUpdate={onUpdate}
+          placeholder="고객명"
+        />
+      ),
+    },
+    {
+      accessorKey: "usimNumber",
+      header: "USIM번호",
+      cell: ({ row }) => (
+        <EditableCell
+          value={row.original.usimNumber}
+          rowId={row.original.id}
+          field="usimNumber"
+          isLocked={!!row.original.isLocked}
+          onUpdate={onUpdate}
+          placeholder="USIM번호"
+        />
+      ),
+    },
+    {
+      accessorKey: "entryDate",
+      header: "입국예정일",
+      cell: ({ row }) => (
+        <EditableCell
+          value={row.original.entryDate}
+          rowId={row.original.id}
+          field="entryDate"
+          type="date"
+          isLocked={!!row.original.isLocked}
+          onUpdate={onUpdate}
+        />
+      ),
+    },
+    {
+      accessorKey: "subscriptionType",
+      header: "가입유형",
+      cell: ({ row }) => (
+        <EditableCell
+          value={row.original.subscriptionType}
+          rowId={row.original.id}
+          field="subscriptionType"
+          type="select"
+          options={["신규", "번호이동", "기기변경"]}
+          isLocked={!!row.original.isLocked}
+          onUpdate={onUpdate}
+        />
+      ),
+    },
+    {
+      accessorKey: "ratePlan",
+      header: "요금제",
+      cell: ({ row }) => (
+        <EditableCell
+          value={row.original.ratePlan}
+          rowId={row.original.id}
+          field="ratePlan"
+          isLocked={!!row.original.isLocked}
+          onUpdate={onUpdate}
+          placeholder="요금제"
+        />
+      ),
+    },
+    // ─── 서류 (거래처 편집 가능) ───
+    {
+      accessorKey: "applicationDocs",
+      header: "가입신청서",
+      cell: ({ row }) => (
+        <FileCell
+          value={row.original.applicationDocs}
+          rowId={row.original.id}
+          field="applicationDocs"
+          isLocked={!!row.original.isLocked}
+          onUpdate={onUpdate}
+        />
+      ),
+    },
+    {
+      accessorKey: "nameChangeDocs",
+      header: "명의변경서류",
+      cell: ({ row }) => (
+        <FileCell
+          value={row.original.nameChangeDocs}
+          rowId={row.original.id}
+          field="nameChangeDocs"
+          isLocked={!!row.original.isLocked}
+          onUpdate={onUpdate}
+        />
+      ),
+    },
+    {
+      accessorKey: "arcAutopayInfo",
+      header: "외국인등록증/자동이체",
+      cell: ({ row }) => (
+        <FileCell
+          value={row.original.arcAutopayInfo}
+          rowId={row.original.id}
+          field="arcAutopayInfo"
+          isLocked={!!row.original.isLocked}
+          onUpdate={onUpdate}
+        />
+      ),
+    },
+    {
+      accessorKey: "arcSupplement",
+      header: "외국인등록증보완",
+      cell: ({ row }) => (
+        <FileCell
+          value={row.original.arcSupplement}
+          rowId={row.original.id}
+          field="arcSupplement"
+          isLocked={!!row.original.isLocked}
+          onUpdate={onUpdate}
+        />
+      ),
+    },
+    // ─── 관리자 전용 (거래처 읽기만) ───
+    {
+      accessorKey: "newPhoneNumber",
+      header: "신규번호",
+      cell: ({ row }) => (
+        <span className="text-sm text-gray-700">
+          {row.original.newPhoneNumber || "-"}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "subscriptionNumber",
+      header: "가입번호",
+      cell: ({ row }) => (
+        <span className="text-sm text-gray-700">
+          {row.original.subscriptionNumber || "-"}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "virtualAccount",
+      header: "가상계좌",
+      cell: ({ row }) => (
+        <span className="text-sm text-gray-700">
+          {row.original.virtualAccount || "-"}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "activationDate",
+      header: "개통일자",
+      cell: ({ row }) => {
+        const date = row.original.activationDate;
+        return (
+          <span className="text-sm text-gray-700">
+            {date ? format(new Date(date), "yyyy-MM-dd") : "-"}
+          </span>
+        );
+      },
+    },
+    {
+      accessorKey: "activationStatus",
+      header: "개통상태",
+      cell: ({ row }) => {
+        const status = row.original.activationStatus || "대기";
+        return (
+          <Badge className={statusColors[status] || "bg-gray-100 text-gray-800"}>
+            {status}
+          </Badge>
+        );
+      },
+    },
+    {
+      accessorKey: "personInCharge",
+      header: "담당자",
+      cell: ({ row }) => (
+        <span className="text-sm text-gray-700">
+          {row.original.personInCharge || "-"}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "workStatus",
+      header: "진행상황",
+      cell: ({ row }) => {
+        const ws = row.original.workStatus || "대기";
+        return (
+          <Badge className={workStatusColors[ws] || workStatusColors["대기"]}>
+            {ws}
+          </Badge>
+        );
+      },
+    },
+    // ─── 서류검수 (관리자 전용, 거래처 읽기만) ───
+    {
+      accessorKey: "applicationDocsReview",
+      header: "서류검수1",
+      cell: ({ row }) => {
+        const v = row.original.applicationDocsReview;
+        if (!v) return <span className="text-xs text-gray-400">-</span>;
+        return (
+          <Badge className={`text-[10px] ${reviewColors[v] || "bg-gray-100 text-gray-600"}`}>
+            {v}
+          </Badge>
+        );
+      },
+    },
+    {
+      accessorKey: "nameChangeDocsReview",
+      header: "서류검수2",
+      cell: ({ row }) => {
+        const v = row.original.nameChangeDocsReview;
+        if (!v) return <span className="text-xs text-gray-400">-</span>;
+        return (
+          <Badge className={`text-[10px] ${reviewColors[v] || "bg-gray-100 text-gray-600"}`}>
+            {v}
+          </Badge>
+        );
+      },
+    },
+    {
+      accessorKey: "arcAutopayReview",
+      header: "서류검수3",
+      cell: ({ row }) => {
+        const v = row.original.arcAutopayReview;
+        if (!v) return <span className="text-xs text-gray-400">-</span>;
+        return (
+          <Badge className={`text-[10px] ${reviewColors[v] || "bg-gray-100 text-gray-600"}`}>
+            {v}
+          </Badge>
+        );
+      },
+    },
+  ];
+}

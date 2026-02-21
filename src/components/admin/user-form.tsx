@@ -113,16 +113,20 @@ export function UserForm({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label>이메일</Label>
+            <Label>로그인 ID</Label>
             <Input
-              type="email"
+              type="text"
               value={formData.email}
               onChange={(e) =>
                 setFormData((p) => ({ ...p, email: e.target.value }))
               }
               disabled={isEdit}
               required
+              placeholder="이메일 또는 자유 ID (예: dreamhigh01)"
             />
+            <p className="text-xs text-gray-500">
+              이메일 형식이 아니면 자동으로 @activation-erp.local이 붙습니다
+            </p>
           </div>
 
           {!isEdit && (
@@ -135,7 +139,7 @@ export function UserForm({
                   setFormData((p) => ({ ...p, password: e.target.value }))
                 }
                 required
-                minLength={8}
+                minLength={4}
               />
             </div>
           )}
