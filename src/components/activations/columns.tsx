@@ -36,6 +36,14 @@ export type ActivationRow = {
   workStatus: string | null;
   autopayRegistered: boolean | null;
   isLocked: boolean | null;
+  // 서류
+  applicationDocs: string | null;
+  applicationDocsReview: string | null;
+  nameChangeDocs: string | null;
+  nameChangeDocsReview: string | null;
+  arcAutopayInfo: string | null;
+  arcAutopayReview: string | null;
+  arcSupplement: string | null;
   createdAt: string;
 };
 
@@ -51,6 +59,12 @@ const workStatusColors: Record<string, string> = {
   완료: "bg-green-100 text-green-700",
 };
 
+const reviewColors: Record<string, string> = {
+  "완료": "bg-green-100 text-green-700",
+  "보완요청": "bg-red-100 text-red-700",
+  "개통요청": "bg-blue-100 text-blue-700",
+};
+
 export function getColumns(options: {
   onDelete?: (id: string) => void;
   canDelete?: boolean;
@@ -62,7 +76,7 @@ export function getColumns(options: {
   const { onDelete, canDelete, onInlineUpdate, onToggleLock, canLock, staffList = [] } = options;
 
   return [
-    // No. (순번)
+    // ─── 기본 ───
     {
       id: "rowNumber",
       header: "No.",
@@ -73,7 +87,6 @@ export function getColumns(options: {
         </span>
       ),
     },
-    // 잠금 토글 (관리자만)
     ...(canLock && onToggleLock
       ? [
           {
@@ -137,6 +150,152 @@ export function getColumns(options: {
         return date ? format(new Date(date), "yyyy-MM-dd") : "-";
       },
     },
+
+    // ─── 서류 + 검수 (나란히 배치) ───
+    {
+      accessorKey: "applicationDocs",
+      header: "가입신청서",
+      cell: ({ row }) => {
+        const v = row.original.applicationDocs;
+        if (!v) return <span className="text-xs text-gray-400">-</span>;
+        return (
+          <a href={v} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
+            보기
+          </a>
+        );
+      },
+    },
+    {
+      accessorKey: "applicationDocsReview",
+      header: "검수",
+      cell: ({ row }) => {
+        const current = row.original.applicationDocsReview || "";
+        if (!onInlineUpdate) {
+          if (!current) return <span className="text-xs text-gray-400">-</span>;
+          return (
+            <Badge className={`text-[10px] ${reviewColors[current] || "bg-gray-100 text-gray-600"}`}>
+              {current}
+            </Badge>
+          );
+        }
+        return (
+          <Select
+            value={current}
+            onValueChange={(v) => onInlineUpdate(row.original.id, "applicationDocsReview", v)}
+          >
+            <SelectTrigger className={`h-7 w-[90px] text-[10px] border-dashed ${reviewColors[current] || ""}`}>
+              <SelectValue placeholder="검수" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="완료">완료</SelectItem>
+              <SelectItem value="보완요청">보완요청</SelectItem>
+              <SelectItem value="개통요청">개통요청</SelectItem>
+            </SelectContent>
+          </Select>
+        );
+      },
+    },
+    {
+      accessorKey: "nameChangeDocs",
+      header: "명의변경서류",
+      cell: ({ row }) => {
+        const v = row.original.nameChangeDocs;
+        if (!v) return <span className="text-xs text-gray-400">-</span>;
+        return (
+          <a href={v} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
+            보기
+          </a>
+        );
+      },
+    },
+    {
+      accessorKey: "nameChangeDocsReview",
+      header: "검수",
+      cell: ({ row }) => {
+        const current = row.original.nameChangeDocsReview || "";
+        if (!onInlineUpdate) {
+          if (!current) return <span className="text-xs text-gray-400">-</span>;
+          return (
+            <Badge className={`text-[10px] ${reviewColors[current] || "bg-gray-100 text-gray-600"}`}>
+              {current}
+            </Badge>
+          );
+        }
+        return (
+          <Select
+            value={current}
+            onValueChange={(v) => onInlineUpdate(row.original.id, "nameChangeDocsReview", v)}
+          >
+            <SelectTrigger className={`h-7 w-[90px] text-[10px] border-dashed ${reviewColors[current] || ""}`}>
+              <SelectValue placeholder="검수" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="완료">완료</SelectItem>
+              <SelectItem value="보완요청">보완요청</SelectItem>
+              <SelectItem value="개통요청">개통요청</SelectItem>
+            </SelectContent>
+          </Select>
+        );
+      },
+    },
+    {
+      accessorKey: "arcAutopayInfo",
+      header: "외국인등록증/자동이체",
+      cell: ({ row }) => {
+        const v = row.original.arcAutopayInfo;
+        if (!v) return <span className="text-xs text-gray-400">-</span>;
+        return (
+          <a href={v} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
+            보기
+          </a>
+        );
+      },
+    },
+    {
+      accessorKey: "arcAutopayReview",
+      header: "검수",
+      cell: ({ row }) => {
+        const current = row.original.arcAutopayReview || "";
+        if (!onInlineUpdate) {
+          if (!current) return <span className="text-xs text-gray-400">-</span>;
+          return (
+            <Badge className={`text-[10px] ${reviewColors[current] || "bg-gray-100 text-gray-600"}`}>
+              {current}
+            </Badge>
+          );
+        }
+        return (
+          <Select
+            value={current}
+            onValueChange={(v) => onInlineUpdate(row.original.id, "arcAutopayReview", v)}
+          >
+            <SelectTrigger className={`h-7 w-[90px] text-[10px] border-dashed ${reviewColors[current] || ""}`}>
+              <SelectValue placeholder="검수" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="완료">완료</SelectItem>
+              <SelectItem value="보완요청">보완요청</SelectItem>
+              <SelectItem value="개통요청">개통요청</SelectItem>
+            </SelectContent>
+          </Select>
+        );
+      },
+    },
+    {
+      accessorKey: "arcSupplement",
+      header: "외국인등록증보완",
+      cell: ({ row }) => {
+        const v = row.original.arcSupplement;
+        if (!v) return <span className="text-xs text-gray-400">-</span>;
+        return (
+          <a href={v} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
+            보기
+          </a>
+        );
+      },
+    },
+
+    // ─── 상태/관리 ───
     {
       accessorKey: "activationDate",
       header: "개통일자",

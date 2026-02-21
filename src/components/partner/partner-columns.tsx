@@ -50,9 +50,9 @@ const workStatusColors: Record<string, string> = {
 };
 
 const reviewColors: Record<string, string> = {
-  "확인완료": "bg-green-100 text-green-700",
-  "보완필요": "bg-red-100 text-red-700",
-  "검토중": "bg-yellow-100 text-yellow-700",
+  "완료": "bg-green-100 text-green-700",
+  "보완요청": "bg-red-100 text-red-700",
+  "개통요청": "bg-blue-100 text-blue-700",
 };
 
 export function getPartnerColumns(options: {
@@ -61,7 +61,7 @@ export function getPartnerColumns(options: {
   const { onUpdate } = options;
 
   return [
-    // No. (순번)
+    // ─── 기본 정보 ───
     {
       id: "rowNumber",
       header: "No.",
@@ -72,7 +72,6 @@ export function getPartnerColumns(options: {
         </span>
       ),
     },
-    // 잠금 상태 표시
     {
       id: "lockStatus",
       header: "",
@@ -84,7 +83,6 @@ export function getPartnerColumns(options: {
         return null;
       },
     },
-    // ─── 거래처명 (다중 거래처 PARTNER용) ───
     {
       accessorKey: "agencyName",
       header: "거래처",
@@ -94,7 +92,6 @@ export function getPartnerColumns(options: {
         </span>
       ),
     },
-    // ─── 거래처 편집 가능 필드 ───
     {
       accessorKey: "customerName",
       header: "고객명",
@@ -166,7 +163,8 @@ export function getPartnerColumns(options: {
         />
       ),
     },
-    // ─── 서류 (거래처 편집 가능) ───
+
+    // ─── 서류 + 검수 (나란히 배치) ───
     {
       accessorKey: "applicationDocs",
       header: "가입신청서",
@@ -179,6 +177,19 @@ export function getPartnerColumns(options: {
           onUpdate={onUpdate}
         />
       ),
+    },
+    {
+      accessorKey: "applicationDocsReview",
+      header: "검수",
+      cell: ({ row }) => {
+        const v = row.original.applicationDocsReview;
+        if (!v) return <span className="text-xs text-gray-400">-</span>;
+        return (
+          <Badge className={`text-[10px] ${reviewColors[v] || "bg-gray-100 text-gray-600"}`}>
+            {v}
+          </Badge>
+        );
+      },
     },
     {
       accessorKey: "nameChangeDocs",
@@ -194,6 +205,19 @@ export function getPartnerColumns(options: {
       ),
     },
     {
+      accessorKey: "nameChangeDocsReview",
+      header: "검수",
+      cell: ({ row }) => {
+        const v = row.original.nameChangeDocsReview;
+        if (!v) return <span className="text-xs text-gray-400">-</span>;
+        return (
+          <Badge className={`text-[10px] ${reviewColors[v] || "bg-gray-100 text-gray-600"}`}>
+            {v}
+          </Badge>
+        );
+      },
+    },
+    {
       accessorKey: "arcAutopayInfo",
       header: "외국인등록증/자동이체",
       cell: ({ row }) => (
@@ -205,6 +229,19 @@ export function getPartnerColumns(options: {
           onUpdate={onUpdate}
         />
       ),
+    },
+    {
+      accessorKey: "arcAutopayReview",
+      header: "검수",
+      cell: ({ row }) => {
+        const v = row.original.arcAutopayReview;
+        if (!v) return <span className="text-xs text-gray-400">-</span>;
+        return (
+          <Badge className={`text-[10px] ${reviewColors[v] || "bg-gray-100 text-gray-600"}`}>
+            {v}
+          </Badge>
+        );
+      },
     },
     {
       accessorKey: "arcSupplement",
@@ -219,7 +256,8 @@ export function getPartnerColumns(options: {
         />
       ),
     },
-    // ─── 관리자 전용 (거래처 읽기만) ───
+
+    // ─── 관리자 기입 (거래처 읽기만) ───
     {
       accessorKey: "newPhoneNumber",
       header: "신규번호",
@@ -288,46 +326,6 @@ export function getPartnerColumns(options: {
         return (
           <Badge className={workStatusColors[ws] || workStatusColors["대기"]}>
             {ws}
-          </Badge>
-        );
-      },
-    },
-    // ─── 서류검수 (관리자 전용, 거래처 읽기만) ───
-    {
-      accessorKey: "applicationDocsReview",
-      header: "서류검수1",
-      cell: ({ row }) => {
-        const v = row.original.applicationDocsReview;
-        if (!v) return <span className="text-xs text-gray-400">-</span>;
-        return (
-          <Badge className={`text-[10px] ${reviewColors[v] || "bg-gray-100 text-gray-600"}`}>
-            {v}
-          </Badge>
-        );
-      },
-    },
-    {
-      accessorKey: "nameChangeDocsReview",
-      header: "서류검수2",
-      cell: ({ row }) => {
-        const v = row.original.nameChangeDocsReview;
-        if (!v) return <span className="text-xs text-gray-400">-</span>;
-        return (
-          <Badge className={`text-[10px] ${reviewColors[v] || "bg-gray-100 text-gray-600"}`}>
-            {v}
-          </Badge>
-        );
-      },
-    },
-    {
-      accessorKey: "arcAutopayReview",
-      header: "서류검수3",
-      cell: ({ row }) => {
-        const v = row.original.arcAutopayReview;
-        if (!v) return <span className="text-xs text-gray-400">-</span>;
-        return (
-          <Badge className={`text-[10px] ${reviewColors[v] || "bg-gray-100 text-gray-600"}`}>
-            {v}
           </Badge>
         );
       },
