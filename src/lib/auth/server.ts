@@ -5,9 +5,15 @@ import * as schema from "@/lib/db/schema";
 
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL,
-  trustedOrigins: [
-    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-  ],
+  trustedOrigins: (origin) => {
+    // 로컬 개발
+    if (origin === "http://localhost:3000" || origin === "http://localhost:3001") return true;
+    // Vercel 모든 배포 URL (프로덕션 + 프리뷰)
+    if (origin.endsWith(".vercel.app")) return true;
+    // 환경변수에 설정된 URL
+    if (process.env.NEXT_PUBLIC_APP_URL && origin === process.env.NEXT_PUBLIC_APP_URL) return true;
+    return false;
+  },
   database: drizzleAdapter(db, {
     provider: "pg",
     schema: {
