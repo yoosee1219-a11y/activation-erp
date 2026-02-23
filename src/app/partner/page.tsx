@@ -183,8 +183,23 @@ export default function PartnerPage() {
     setStatusFilter((prev) => (prev === filter ? null : filter));
   };
 
+  const today = new Date();
+  const dateStr = today.toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+  });
+
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold">개통 현황</h1>
+        <div className="rounded-lg bg-gray-900 px-4 py-2 text-white shadow">
+          <span className="text-sm font-medium">{dateStr}</span>
+        </div>
+      </div>
+
       {/* 요약 카드 (workStatus 기준, 클릭 필터링) */}
       <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
         <Card

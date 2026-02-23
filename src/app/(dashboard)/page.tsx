@@ -134,9 +134,22 @@ export default function DashboardPage() {
     pending: d.pending,
   }));
 
+  const today = new Date();
+  const dateStr = today.toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+  });
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">대시보드</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">대시보드</h1>
+        <div className="rounded-lg bg-gray-900 px-4 py-2 text-white shadow">
+          <span className="text-sm font-medium">{dateStr}</span>
+        </div>
+      </div>
 
       <KpiCards
         stats={data.stats}
