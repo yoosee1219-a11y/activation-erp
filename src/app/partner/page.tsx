@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Clock, CheckCircle2, Loader2, RotateCcw, X } from "lucide-react";
+import { Plus, Clock, CheckCircle2, Loader2, RotateCcw, X, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 type WorkStatusFilter = "개통요청" | "작업중" | "완료" | "보완요청" | null;
@@ -73,16 +73,6 @@ export default function PartnerPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-
-  // 30초 자동 폴링 (탭이 활성 상태일 때만)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (document.visibilityState === "visible") {
-        fetchDataRef.current();
-      }
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
 
   // handleUpdate를 ref로 감싸서 stale closure 방지
   const fetchDataRef = useRef(fetchData);
@@ -308,10 +298,21 @@ export default function PartnerPage() {
             </Select>
           )}
         </div>
-        <Button onClick={handleAddRow} disabled={creating}>
-          <Plus className="mr-2 h-4 w-4" />
-          {creating ? "추가 중..." : "새 고객 추가"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => fetchData()}
+            disabled={loading}
+            title="새로고침"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+          <Button onClick={handleAddRow} disabled={creating}>
+            <Plus className="mr-2 h-4 w-4" />
+            {creating ? "추가 중..." : "새 고객 추가"}
+          </Button>
+        </div>
       </div>
 
       {/* 스프레드시트 테이블 */}
