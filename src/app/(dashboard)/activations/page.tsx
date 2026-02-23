@@ -146,11 +146,11 @@ export default function ActivationsPage() {
         groups[row.agencyId] = {
           name: row.agencyName || row.agencyId,
           rows: [],
-          counts: { 대기: 0, 작업중: 0, 완료: 0 },
+          counts: { 개통요청: 0, 작업중: 0, 완료: 0, 보완요청: 0 },
         };
       }
       groups[row.agencyId].rows.push(row);
-      const ws = row.workStatus || "대기";
+      const ws = row.workStatus || "개통요청";
       if (ws in groups[row.agencyId].counts) {
         groups[row.agencyId].counts[ws]++;
       }
@@ -270,19 +270,24 @@ export default function ActivationsPage() {
                     {group.rows.length}건
                   </p>
                   <div className="flex gap-1 mt-2 flex-wrap">
-                    {group.counts["대기"] > 0 && (
-                      <Badge className="bg-gray-100 text-gray-600 text-[10px]">
-                        대기 {group.counts["대기"]}
+                    {group.counts["개통요청"] > 0 && (
+                      <Badge className="bg-blue-100 text-blue-700 text-[10px]">
+                        개통요청 {group.counts["개통요청"]}
                       </Badge>
                     )}
                     {group.counts["작업중"] > 0 && (
-                      <Badge className="bg-blue-100 text-blue-700 text-[10px]">
+                      <Badge className="bg-yellow-100 text-yellow-700 text-[10px]">
                         작업중 {group.counts["작업중"]}
                       </Badge>
                     )}
                     {group.counts["완료"] > 0 && (
                       <Badge className="bg-green-100 text-green-700 text-[10px]">
                         완료 {group.counts["완료"]}
+                      </Badge>
+                    )}
+                    {group.counts["보완요청"] > 0 && (
+                      <Badge className="bg-red-100 text-red-700 text-[10px]">
+                        보완요청 {group.counts["보완요청"]}
                       </Badge>
                     )}
                   </div>
@@ -297,14 +302,24 @@ export default function ActivationsPage() {
               <div className="flex items-center gap-3 mb-2 mt-4">
                 <h2 className="text-lg font-semibold">{group.name}</h2>
                 <Badge variant="secondary">{group.rows.length}건</Badge>
-                {group.counts["작업중"] > 0 && (
+                {group.counts["개통요청"] > 0 && (
                   <Badge className="bg-blue-100 text-blue-700">
+                    개통요청 {group.counts["개통요청"]}
+                  </Badge>
+                )}
+                {group.counts["작업중"] > 0 && (
+                  <Badge className="bg-yellow-100 text-yellow-700">
                     작업중 {group.counts["작업중"]}
                   </Badge>
                 )}
                 {group.counts["완료"] > 0 && (
                   <Badge className="bg-green-100 text-green-700">
                     완료 {group.counts["완료"]}
+                  </Badge>
+                )}
+                {group.counts["보완요청"] > 0 && (
+                  <Badge className="bg-red-100 text-red-700">
+                    보완요청 {group.counts["보완요청"]}
                   </Badge>
                 )}
               </div>

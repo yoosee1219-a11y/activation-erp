@@ -309,11 +309,28 @@ export function getColumns(options: {
       accessorKey: "activationStatus",
       header: "상태",
       cell: ({ row }) => {
-        const status = row.getValue("activationStatus") as string;
+        const current = (row.getValue("activationStatus") as string) || "대기";
+        if (!onInlineUpdate) {
+          return (
+            <Badge className={statusColors[current] || "bg-gray-100 text-gray-800"}>
+              {current}
+            </Badge>
+          );
+        }
         return (
-          <Badge className={statusColors[status] || "bg-gray-100 text-gray-800"}>
-            {status || "대기"}
-          </Badge>
+          <Select
+            value={current}
+            onValueChange={(v) => onInlineUpdate(row.original.id, "activationStatus", v)}
+          >
+            <SelectTrigger className={`h-7 w-[100px] text-xs border-dashed ${statusColors[current] || ""}`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="대기">대기</SelectItem>
+              <SelectItem value="개통완료">개통완료</SelectItem>
+              <SelectItem value="개통취소">개통취소</SelectItem>
+            </SelectContent>
+          </Select>
         );
       },
     },

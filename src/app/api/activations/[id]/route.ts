@@ -9,11 +9,6 @@ import { canAccessAgency } from "@/lib/db/queries/users";
 
 // 거래처(PARTNER)가 편집할 수 있는 필드
 const PARTNER_EDITABLE_FIELDS = new Set([
-  "customerName",
-  "usimNumber",
-  "entryDate",
-  "subscriptionType",
-  "ratePlan",
   "applicationDocs",
   "nameChangeDocs",
   "arcAutopayInfo",
@@ -21,16 +16,7 @@ const PARTNER_EDITABLE_FIELDS = new Set([
   "workStatus",
 ]);
 
-// 기본정보 필드 (workStatus가 "개통요청"일 때만 편집 가능)
-const BASIC_INFO_FIELDS = new Set([
-  "customerName",
-  "usimNumber",
-  "entryDate",
-  "subscriptionType",
-  "ratePlan",
-]);
-
-// 서류 필드 (workStatus가 "개통요청" 또는 "보완요청"일 때만 편집 가능)
+// 서류 필드 (workStatus가 "보완요청"일 때만 편집 가능)
 const DOCUMENT_FIELDS = new Set([
   "applicationDocs",
   "nameChangeDocs",
@@ -102,14 +88,6 @@ export async function PATCH(
 
     // PARTNER 역할 제한
     if (user.role === "PARTNER") {
-      // 잠긴 행은 수정 불가
-      if (existing.isLocked) {
-        return NextResponse.json(
-          { error: "이 행은 잠겨있어 수정할 수 없습니다." },
-          { status: 403 }
-        );
-      }
-
       // 관리자 전용 필드 수정 시도 → 거부
       const requestedFields = Object.keys(body);
       const forbiddenFields = requestedFields.filter(
@@ -140,20 +118,11 @@ export async function PATCH(
         }
       }
 
-      // 기본정보 필드: workStatus가 "개통요청"일 때만 편집 가능
-      const basicInfoAttempt = requestedFields.filter((f) => BASIC_INFO_FIELDS.has(f));
-      if (basicInfoAttempt.length > 0 && currentWorkStatus !== "개통요청") {
-        return NextResponse.json(
-          { error: "현재 상태에서는 기본정보를 수정할 수 없습니다." },
-          { status: 403 }
-        );
-      }
-
-      // 서류 필드: workStatus가 "개통요청" 또는 "보완요청"일 때만 편집 가능
+      // 서류 필드: workStatus가 "보완요청"일 때만 편집 가능
       const docAttempt = requestedFields.filter((f) => DOCUMENT_FIELDS.has(f));
-      if (docAttempt.length > 0 && currentWorkStatus !== "개통요청" && currentWorkStatus !== "보완요청") {
+      if (docAttempt.length > 0 && currentWorkStatus !== "보완요청") {
         return NextResponse.json(
-          { error: "현재 상태에서는 서류를 수정할 수 없습니다." },
+          { error: "현재 상태에서는 서류를 수정할 수 없습니다. 보완요청 상태에서만 가능합니다." },
           { status: 403 }
         );
       }
@@ -168,6 +137,21 @@ export async function PATCH(
       updateData.isLocked = true;
       updateData.lockedAt = new Date();
       updateData.lockedBy = user.id;
+    }
+
+    // 관리자가 workStatus 변경 시 isLocked 자동 제어
+    if ((user.role === "ADMIN" || user.role === "SUB_ADMIN") && body.workStatus) {
+      if (body.workStatus === "보완요청") {
+        // 보완요청 → 자동 잠금 해제 (파트너가 서류 편집 가능)
+        updateData.isLocked = false;
+        updateData.lockedAt = null;
+        updateData.lockedBy = null;
+      } else if (existing.workStatus === "보완요청") {
+        // 보완요청에서 다른 상태로 → 자동 잠금
+        updateData.isLocked = true;
+        updateData.lockedAt = new Date();
+        updateData.lockedBy = user.id;
+      }
     }
 
     const activation = await updateActivation(id, updateData);

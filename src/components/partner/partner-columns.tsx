@@ -120,13 +120,12 @@ export function getPartnerColumns(options: {
       accessorKey: "customerName",
       header: "고객명",
       cell: ({ row }) => {
-        const ws = row.original.workStatus || "개통요청";
         return (
           <EditableCell
             value={row.original.customerName}
             rowId={row.original.id}
             field="customerName"
-            isLocked={!!row.original.isLocked || ws !== "개통요청"}
+            isLocked={true}
             onUpdate={onUpdate}
             placeholder="고객명"
           />
@@ -160,13 +159,12 @@ export function getPartnerColumns(options: {
       accessorKey: "usimNumber",
       header: "USIM번호",
       cell: ({ row }) => {
-        const ws = row.original.workStatus || "개통요청";
         return (
           <EditableCell
             value={row.original.usimNumber}
             rowId={row.original.id}
             field="usimNumber"
-            isLocked={!!row.original.isLocked || ws !== "개통요청"}
+            isLocked={true}
             onUpdate={onUpdate}
             placeholder="USIM번호"
           />
@@ -177,14 +175,13 @@ export function getPartnerColumns(options: {
       accessorKey: "entryDate",
       header: "입국예정일",
       cell: ({ row }) => {
-        const ws = row.original.workStatus || "개통요청";
         return (
           <EditableCell
             value={row.original.entryDate}
             rowId={row.original.id}
             field="entryDate"
             type="date"
-            isLocked={!!row.original.isLocked || ws !== "개통요청"}
+            isLocked={true}
             onUpdate={onUpdate}
           />
         );
@@ -194,7 +191,6 @@ export function getPartnerColumns(options: {
       accessorKey: "subscriptionType",
       header: "가입유형",
       cell: ({ row }) => {
-        const ws = row.original.workStatus || "개통요청";
         return (
           <EditableCell
             value={row.original.subscriptionType}
@@ -202,7 +198,7 @@ export function getPartnerColumns(options: {
             field="subscriptionType"
             type="select"
             options={["신규", "번호이동", "기기변경"]}
-            isLocked={!!row.original.isLocked || ws !== "개통요청"}
+            isLocked={true}
             onUpdate={onUpdate}
           />
         );
@@ -212,13 +208,12 @@ export function getPartnerColumns(options: {
       accessorKey: "ratePlan",
       header: "요금제",
       cell: ({ row }) => {
-        const ws = row.original.workStatus || "개통요청";
         return (
           <EditableCell
             value={row.original.ratePlan}
             rowId={row.original.id}
             field="ratePlan"
-            isLocked={!!row.original.isLocked || ws !== "개통요청"}
+            isLocked={true}
             onUpdate={onUpdate}
             placeholder="요금제"
           />
@@ -278,7 +273,7 @@ export function getPartnerColumns(options: {
             value={row.original.applicationDocs}
             rowId={row.original.id}
             field="applicationDocs"
-            isLocked={!!row.original.isLocked || (ws !== "개통요청" && ws !== "보완요청")}
+            isLocked={ws !== "보완요청"}
             onUpdate={onUpdate}
           />
         );
@@ -307,7 +302,7 @@ export function getPartnerColumns(options: {
             value={row.original.nameChangeDocs}
             rowId={row.original.id}
             field="nameChangeDocs"
-            isLocked={!!row.original.isLocked || (ws !== "개통요청" && ws !== "보완요청")}
+            isLocked={ws !== "보완요청"}
             onUpdate={onUpdate}
           />
         );
@@ -336,7 +331,7 @@ export function getPartnerColumns(options: {
             value={row.original.arcAutopayInfo}
             rowId={row.original.id}
             field="arcAutopayInfo"
-            isLocked={!!row.original.isLocked || (ws !== "개통요청" && ws !== "보완요청")}
+            isLocked={ws !== "보완요청"}
             onUpdate={onUpdate}
           />
         );
@@ -365,7 +360,7 @@ export function getPartnerColumns(options: {
             value={row.original.arcSupplement}
             rowId={row.original.id}
             field="arcSupplement"
-            isLocked={!!row.original.isLocked || (ws !== "개통요청" && ws !== "보완요청")}
+            isLocked={ws !== "보완요청"}
             onUpdate={onUpdate}
           />
         );
