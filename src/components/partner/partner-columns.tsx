@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/select";
 import { EditableCell } from "./editable-cell";
 import { FileCell } from "./file-cell";
-import { Lock } from "lucide-react";
 import { format } from "date-fns";
 
 export type PartnerActivationRow = {
@@ -79,17 +78,6 @@ export function getPartnerColumns(options: {
           {row.index + 1}
         </span>
       ),
-    },
-    {
-      id: "lockStatus",
-      header: "",
-      size: 30,
-      cell: ({ row }) => {
-        if (row.original.isLocked) {
-          return <Lock className="h-3.5 w-3.5 text-gray-400" />;
-        }
-        return null;
-      },
     },
     {
       accessorKey: "workStatus",
