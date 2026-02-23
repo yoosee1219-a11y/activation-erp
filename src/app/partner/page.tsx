@@ -17,8 +17,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Clock, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Plus, Clock, CheckCircle2, Loader2, RotateCcw, X } from "lucide-react";
 import { toast } from "sonner";
+
+type WorkStatusFilter = "개통요청" | "작업중" | "완료" | "보완요청" | null;
 
 export default function PartnerPage() {
   const { user } = useAuth();
@@ -29,6 +31,7 @@ export default function PartnerPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [selectedAgency, setSelectedAgency] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<WorkStatusFilter>(null);
 
   // 허용된 거래처 목록 (PARTNER용)
   const allowedAgencies = useMemo(() => {
@@ -70,6 +73,16 @@ export default function PartnerPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // 30초 자동 폴링 (탭이 활성 상태일 때만)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        fetchDataRef.current();
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   // handleUpdate를 ref로 감싸서 stale closure 방지
   const fetchDataRef = useRef(fetchData);
@@ -150,56 +163,108 @@ export default function PartnerPage() {
     [handleUpdate]
   );
 
-  // 요약 통계
+  // 요약 통계 (workStatus 기준)
   const stats = useMemo(() => {
-    const pending = data.filter(
-      (r) => !r.activationStatus || r.activationStatus === "대기"
+    const requested = data.filter(
+      (r) => !r.workStatus || r.workStatus === "개통요청"
+    ).length;
+    const working = data.filter(
+      (r) => r.workStatus === "작업중"
     ).length;
     const completed = data.filter(
-      (r) => r.activationStatus === "개통완료"
+      (r) => r.workStatus === "완료"
     ).length;
     const needsFix = data.filter(
-      (r) =>
-        r.applicationDocsReview === "보완필요" ||
-        r.nameChangeDocsReview === "보완필요" ||
-        r.arcAutopayReview === "보완필요"
+      (r) => r.workStatus === "보완요청"
     ).length;
-    return { pending, completed, needsFix };
+    return { requested, working, completed, needsFix };
   }, [data]);
+
+  // 필터링된 데이터
+  const filteredData = useMemo(() => {
+    if (!statusFilter) return data;
+    return data.filter((r) => {
+      const ws = r.workStatus || "개통요청";
+      return ws === statusFilter;
+    });
+  }, [data, statusFilter]);
+
+  const handleCardClick = (filter: WorkStatusFilter) => {
+    setStatusFilter((prev) => (prev === filter ? null : filter));
+  };
 
   return (
     <div className="space-y-6">
-      {/* 요약 카드 */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
-        <Card>
+      {/* 요약 카드 (workStatus 기준, 클릭 필터링) */}
+      <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
+        <Card
+          className={`cursor-pointer transition-all hover:shadow-md ${
+            statusFilter === "개통요청"
+              ? "ring-2 ring-blue-500 shadow-md"
+              : "hover:ring-1 hover:ring-blue-200"
+          }`}
+          onClick={() => handleCardClick("개통요청")}
+        >
           <CardContent className="flex items-center gap-3 p-4">
-            <div className="rounded-lg bg-yellow-100 p-2">
-              <Clock className="h-5 w-5 text-yellow-700" />
+            <div className="rounded-lg bg-blue-100 p-2">
+              <Clock className="h-5 w-5 text-blue-700" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">대기</p>
-              <p className="text-2xl font-bold">{stats.pending}건</p>
+              <p className="text-sm text-gray-500">개통요청</p>
+              <p className="text-2xl font-bold">{stats.requested}건</p>
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={`cursor-pointer transition-all hover:shadow-md ${
+            statusFilter === "작업중"
+              ? "ring-2 ring-yellow-500 shadow-md"
+              : "hover:ring-1 hover:ring-yellow-200"
+          }`}
+          onClick={() => handleCardClick("작업중")}
+        >
+          <CardContent className="flex items-center gap-3 p-4">
+            <div className="rounded-lg bg-yellow-100 p-2">
+              <Loader2 className="h-5 w-5 text-yellow-700" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">작업중</p>
+              <p className="text-2xl font-bold">{stats.working}건</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card
+          className={`cursor-pointer transition-all hover:shadow-md ${
+            statusFilter === "완료"
+              ? "ring-2 ring-green-500 shadow-md"
+              : "hover:ring-1 hover:ring-green-200"
+          }`}
+          onClick={() => handleCardClick("완료")}
+        >
           <CardContent className="flex items-center gap-3 p-4">
             <div className="rounded-lg bg-green-100 p-2">
               <CheckCircle2 className="h-5 w-5 text-green-700" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">개통완료</p>
+              <p className="text-sm text-gray-500">완료</p>
               <p className="text-2xl font-bold">{stats.completed}건</p>
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={`cursor-pointer transition-all hover:shadow-md ${
+            statusFilter === "보완요청"
+              ? "ring-2 ring-red-500 shadow-md"
+              : "hover:ring-1 hover:ring-red-200"
+          }`}
+          onClick={() => handleCardClick("보완요청")}
+        >
           <CardContent className="flex items-center gap-3 p-4">
             <div className="rounded-lg bg-red-100 p-2">
-              <AlertTriangle className="h-5 w-5 text-red-700" />
+              <RotateCcw className="h-5 w-5 text-red-700" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">보완필요</p>
+              <p className="text-sm text-gray-500">보완요청</p>
               <p className="text-2xl font-bold">{stats.needsFix}건</p>
             </div>
           </CardContent>
@@ -210,6 +275,17 @@ export default function PartnerPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-bold">고객 개통 관리</h1>
+          {statusFilter && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setStatusFilter(null)}
+              className="h-7 gap-1 text-xs"
+            >
+              {statusFilter} 필터 해제
+              <X className="h-3 w-3" />
+            </Button>
+          )}
           {allowedAgencies.length > 1 && (
             <Select
               value={selectedAgency}
@@ -246,8 +322,8 @@ export default function PartnerPage() {
       ) : (
         <DataTable
           columns={columns}
-          data={data}
-          total={total}
+          data={filteredData}
+          total={statusFilter ? filteredData.length : total}
           page={page}
           pageSize={200}
           onPageChange={setPage}

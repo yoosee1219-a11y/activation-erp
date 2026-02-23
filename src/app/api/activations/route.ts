@@ -82,7 +82,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const activation = await createActivation(body);
+    const activation = await createActivation({
+      ...body,
+      workStatus: body.workStatus || "개통요청",
+    });
     return NextResponse.json({ activation }, { status: 201 });
   } catch (error) {
     console.error("Failed to create activation:", error);

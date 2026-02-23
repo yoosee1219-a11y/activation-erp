@@ -18,6 +18,24 @@ const PARTNER_EDITABLE_FIELDS = new Set([
   "nameChangeDocs",
   "arcAutopayInfo",
   "arcSupplement",
+  "workStatus",
+]);
+
+// 기본정보 필드 (workStatus가 "개통요청"일 때만 편집 가능)
+const BASIC_INFO_FIELDS = new Set([
+  "customerName",
+  "usimNumber",
+  "entryDate",
+  "subscriptionType",
+  "ratePlan",
+]);
+
+// 서류 필드 (workStatus가 "개통요청" 또는 "보완요청"일 때만 편집 가능)
+const DOCUMENT_FIELDS = new Set([
+  "applicationDocs",
+  "nameChangeDocs",
+  "arcAutopayInfo",
+  "arcSupplement",
 ]);
 
 export async function GET(
@@ -100,6 +118,42 @@ export async function PATCH(
       if (forbiddenFields.length > 0) {
         return NextResponse.json(
           { error: `수정 권한이 없는 필드: ${forbiddenFields.join(", ")}` },
+          { status: 403 }
+        );
+      }
+
+      const currentWorkStatus = existing.workStatus || "개통요청";
+
+      // workStatus 변경 검증: 보완요청 → 개통요청만 허용
+      if (body.workStatus !== undefined) {
+        if (currentWorkStatus !== "보완요청") {
+          return NextResponse.json(
+            { error: "현재 상태에서는 진행상황을 변경할 수 없습니다." },
+            { status: 403 }
+          );
+        }
+        if (body.workStatus !== "개통요청") {
+          return NextResponse.json(
+            { error: "개통요청으로만 변경할 수 있습니다." },
+            { status: 403 }
+          );
+        }
+      }
+
+      // 기본정보 필드: workStatus가 "개통요청"일 때만 편집 가능
+      const basicInfoAttempt = requestedFields.filter((f) => BASIC_INFO_FIELDS.has(f));
+      if (basicInfoAttempt.length > 0 && currentWorkStatus !== "개통요청") {
+        return NextResponse.json(
+          { error: "현재 상태에서는 기본정보를 수정할 수 없습니다." },
+          { status: 403 }
+        );
+      }
+
+      // 서류 필드: workStatus가 "개통요청" 또는 "보완요청"일 때만 편집 가능
+      const docAttempt = requestedFields.filter((f) => DOCUMENT_FIELDS.has(f));
+      if (docAttempt.length > 0 && currentWorkStatus !== "개통요청" && currentWorkStatus !== "보완요청") {
+        return NextResponse.json(
+          { error: "현재 상태에서는 서류를 수정할 수 없습니다." },
           { status: 403 }
         );
       }

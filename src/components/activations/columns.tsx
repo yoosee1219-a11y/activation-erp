@@ -54,9 +54,10 @@ const statusColors: Record<string, string> = {
 };
 
 const workStatusColors: Record<string, string> = {
-  대기: "bg-gray-100 text-gray-600",
-  작업중: "bg-blue-100 text-blue-700",
+  개통요청: "bg-blue-100 text-blue-700",
+  작업중: "bg-yellow-100 text-yellow-700",
   완료: "bg-green-100 text-green-700",
+  보완요청: "bg-red-100 text-red-700",
 };
 
 const reviewColors: Record<string, string> = {
@@ -349,10 +350,10 @@ export function getColumns(options: {
       accessorKey: "workStatus",
       header: "진행상황",
       cell: ({ row }) => {
-        const current = (row.getValue("workStatus") as string) || "대기";
+        const current = (row.getValue("workStatus") as string) || "개통요청";
         if (!onInlineUpdate) {
           return (
-            <Badge className={workStatusColors[current] || workStatusColors["대기"]}>
+            <Badge className={workStatusColors[current] || workStatusColors["개통요청"]}>
               {current}
             </Badge>
           );
@@ -364,13 +365,14 @@ export function getColumns(options: {
               onInlineUpdate(row.original.id, "workStatus", v)
             }
           >
-            <SelectTrigger className={`h-7 w-[90px] text-xs border-dashed ${workStatusColors[current] || ""}`}>
+            <SelectTrigger className={`h-7 w-[100px] text-xs border-dashed ${workStatusColors[current] || ""}`}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="대기">대기</SelectItem>
+              <SelectItem value="개통요청">개통요청</SelectItem>
               <SelectItem value="작업중">작업중</SelectItem>
               <SelectItem value="완료">완료</SelectItem>
+              <SelectItem value="보완요청">보완요청</SelectItem>
             </SelectContent>
           </Select>
         );
