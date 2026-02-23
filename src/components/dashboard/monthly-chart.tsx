@@ -75,9 +75,9 @@ export function ActivationChart({
   const chartData = dataMap[viewMode];
 
   const summary = useMemo(() => {
-    const totalAll = chartData.reduce((s, d) => s + d.total, 0);
-    const completedAll = chartData.reduce((s, d) => s + d.completed, 0);
-    const pendingAll = chartData.reduce((s, d) => s + d.pending, 0);
+    const totalAll = chartData.reduce((s, d) => s + Number(d.total), 0);
+    const completedAll = chartData.reduce((s, d) => s + Number(d.completed), 0);
+    const pendingAll = chartData.reduce((s, d) => s + Number(d.pending), 0);
     const rate = totalAll > 0 ? Math.round((completedAll / totalAll) * 100) : 0;
     return { totalAll, completedAll, pendingAll, rate };
   }, [chartData]);
