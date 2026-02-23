@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useDashboard } from "./layout";
 import { KpiCards } from "@/components/dashboard/kpi-cards";
 import { ActivationChart } from "@/components/dashboard/monthly-chart";
-import { AgencyChart } from "@/components/dashboard/agency-chart";
+
 import { AgencyStatusTable } from "@/components/dashboard/agency-status-table";
 import { StaffStatsTable } from "@/components/dashboard/staff-stats-table";
 import { ArcUrgentPanel } from "@/components/dashboard/arc-urgent-panel";
@@ -145,14 +145,11 @@ export default function DashboardPage() {
         kpiAutopayDetail={data.kpiAutopayDetail || []}
       />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <ActivationChart
-          monthlyData={monthlyMapped}
-          weeklyData={data.weeklyStats || []}
-          dailyData={data.dailyStats || []}
-        />
-        <AgencyChart data={data.agencyStats} />
-      </div>
+      <ActivationChart
+        monthlyData={monthlyMapped}
+        weeklyData={data.weeklyStats || []}
+        dailyData={data.dailyStats || []}
+      />
 
       {/* 거래처별 개통현황 테이블 */}
       <AgencyStatusTable data={data.agencyStats} />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +12,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   Legend,
+  LabelList,
 } from "recharts";
 
 type ViewMode = "daily" | "weekly" | "monthly";
@@ -35,6 +36,29 @@ const viewLabels: Record<ViewMode, string> = {
   monthly: "월별",
 };
 
+function CustomTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  const total = payload.reduce((s: number, p: any) => s + (p.value || 0), 0);
+  return (
+    <div className="rounded-lg border bg-white px-4 py-3 shadow-lg">
+      <p className="mb-2 text-sm font-semibold text-gray-700">{label}</p>
+      {payload.map((p: any) => (
+        <div key={p.dataKey} className="flex items-center gap-2 text-sm">
+          <span
+            className="inline-block h-2.5 w-2.5 rounded-full"
+            style={{ backgroundColor: p.fill }}
+          />
+          <span className="text-gray-600">{p.name}</span>
+          <span className="ml-auto font-medium">{p.value}건</span>
+        </div>
+      ))}
+      <div className="mt-1.5 border-t pt-1.5 text-sm font-semibold text-gray-800">
+        합계 {total}건
+      </div>
+    </div>
+  );
+}
+
 export function ActivationChart({
   monthlyData,
   weeklyData,
@@ -50,10 +74,26 @@ export function ActivationChart({
 
   const chartData = dataMap[viewMode];
 
+  const summary = useMemo(() => {
+    const totalAll = chartData.reduce((s, d) => s + d.total, 0);
+    const completedAll = chartData.reduce((s, d) => s + d.completed, 0);
+    const pendingAll = chartData.reduce((s, d) => s + d.pending, 0);
+    const rate = totalAll > 0 ? Math.round((completedAll / totalAll) * 100) : 0;
+    return { totalAll, completedAll, pendingAll, rate };
+  }, [chartData]);
+
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>{viewLabels[viewMode]} 개통 현황</CardTitle>
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <div>
+          <CardTitle className="text-lg">{viewLabels[viewMode]} 개통 현황</CardTitle>
+          <div className="mt-1 flex items-center gap-4 text-sm text-gray-500">
+            <span>전체 <strong className="text-gray-900">{summary.totalAll}</strong>건</span>
+            <span>완료 <strong className="text-emerald-600">{summary.completedAll}</strong>건</span>
+            <span>대기 <strong className="text-amber-600">{summary.pendingAll}</strong>건</span>
+            <span>완료율 <strong className="text-blue-600">{summary.rate}%</strong></span>
+          </div>
+        </div>
         <div className="flex gap-1">
           {(["daily", "weekly", "monthly"] as ViewMode[]).map((mode) => (
             <Button
@@ -70,33 +110,53 @@ export function ActivationChart({
       </CardHeader>
       <CardContent>
         {chartData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
+          <ResponsiveContainer width="100%" height={360}>
+            <BarChart data={chartData} barGap={2} barCategoryGap="20%">
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
               <XAxis
                 dataKey="label"
                 tick={{ fontSize: 12 }}
                 interval={viewMode === "daily" ? 2 : 0}
+                axisLine={false}
+                tickLine={false}
               />
-              <YAxis />
-              <Tooltip />
-              <Legend />
+              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
+              <Legend
+                iconType="circle"
+                iconSize={8}
+                wrapperStyle={{ paddingTop: 12 }}
+              />
               <Bar
                 dataKey="completed"
                 name="개통완료"
                 fill="#10b981"
                 radius={[4, 4, 0, 0]}
-              />
+              >
+                <LabelList
+                  dataKey="completed"
+                  position="top"
+                  style={{ fontSize: 11, fill: "#6b7280" }}
+                  formatter={(v) => (Number(v) > 0 ? v : "")}
+                />
+              </Bar>
               <Bar
                 dataKey="pending"
                 name="대기"
                 fill="#f59e0b"
                 radius={[4, 4, 0, 0]}
-              />
+              >
+                <LabelList
+                  dataKey="pending"
+                  position="top"
+                  style={{ fontSize: 11, fill: "#6b7280" }}
+                  formatter={(v) => (Number(v) > 0 ? v : "")}
+                />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex h-[300px] items-center justify-center text-gray-400">
+          <div className="flex h-[360px] items-center justify-center text-gray-400">
             데이터가 없습니다.
           </div>
         )}
