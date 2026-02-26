@@ -122,10 +122,11 @@ export function UserForm({
               }
               disabled={isEdit}
               required
-              placeholder="이메일 또는 자유 ID (예: dreamhigh01)"
+              placeholder="4글자 이상 (예: dreamhigh01)"
+              minLength={4}
             />
             <p className="text-xs text-gray-500">
-              이메일 형식이 아니면 자동으로 @activation-erp.local이 붙습니다
+              내부적으로 @activation-erp.local이 자동 추가됩니다
             </p>
           </div>
 

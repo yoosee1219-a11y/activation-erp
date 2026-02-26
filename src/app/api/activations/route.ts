@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search") || undefined;
     const dateFrom = searchParams.get("dateFrom") || undefined;
     const dateTo = searchParams.get("dateTo") || undefined;
+    const month = searchParams.get("month") || undefined;
     const page = parseInt(searchParams.get("page") || "1");
     const pageSize = parseInt(searchParams.get("pageSize") || "50");
 
@@ -48,6 +49,7 @@ export async function GET(request: NextRequest) {
       search,
       dateFrom,
       dateTo,
+      month,
       page,
       pageSize,
     });

@@ -9,6 +9,7 @@ export async function getActivations(params: {
   search?: string;
   dateFrom?: string;
   dateTo?: string;
+  month?: string;
   page?: number;
   pageSize?: number;
 }) {
@@ -19,6 +20,7 @@ export async function getActivations(params: {
     search,
     dateFrom,
     dateTo,
+    month,
     page = 1,
     pageSize = 50,
   } = params;
@@ -41,6 +43,11 @@ export async function getActivations(params: {
   }
   if (dateTo) {
     conditions.push(lte(activations.createdAt, new Date(dateTo)));
+  }
+  if (month) {
+    conditions.push(
+      sql`TO_CHAR(COALESCE(${activations.activationDate}, ${activations.entryDate}, ${activations.createdAt}::date), 'YYYY-MM') = ${month}`
+    );
   }
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
@@ -140,23 +147,39 @@ export async function getDashboardStats(agencyId?: string) {
   };
 }
 
-export async function getMonthlyStats(agencyId?: string) {
-  const conditions = agencyId
-    ? `WHERE agency_id = '${agencyId}'`
-    : "";
+export async function getAvailableMonths(agencyId?: string) {
+  const agencyFilter = agencyId ? sql`WHERE agency_id = ${agencyId}` : sql``;
 
-  const result = await db.execute(sql.raw(`
+  const result = await db.execute(sql`
     SELECT
-      TO_CHAR(created_at, 'YYYY-MM') as month,
+      TO_CHAR(COALESCE(activation_date, entry_date, created_at::date), 'YYYY-MM') as month,
+      COUNT(*) as total,
+      COUNT(*) FILTER (WHERE activation_status = '개통완료') as completed,
+      COUNT(*) FILTER (WHERE activation_status = '대기') as pending,
+      COUNT(*) FILTER (WHERE activation_status = '개통취소') as cancelled
+    FROM activations
+    ${agencyFilter}
+    GROUP BY TO_CHAR(COALESCE(activation_date, entry_date, created_at::date), 'YYYY-MM')
+    ORDER BY month DESC
+  `);
+  return result.rows;
+}
+
+export async function getMonthlyStats(agencyId?: string) {
+  const agencyFilter = agencyId ? sql`WHERE agency_id = ${agencyId}` : sql``;
+
+  const result = await db.execute(sql`
+    SELECT
+      TO_CHAR(COALESCE(activation_date, entry_date, created_at::date), 'YYYY-MM') as month,
       COUNT(*) as total,
       COUNT(*) FILTER (WHERE activation_status = '개통완료') as completed,
       COUNT(*) FILTER (WHERE activation_status = '대기') as pending
     FROM activations
-    ${conditions}
-    GROUP BY TO_CHAR(created_at, 'YYYY-MM')
+    ${agencyFilter}
+    GROUP BY TO_CHAR(COALESCE(activation_date, entry_date, created_at::date), 'YYYY-MM')
     ORDER BY month DESC
     LIMIT 12
-  `));
+  `);
 
   return result.rows;
 }
@@ -236,46 +259,43 @@ export async function getStaffStats() {
 }
 
 export async function getDailyStats(agencyId?: string) {
-  const agencyFilter = agencyId
-    ? `AND agency_id = '${agencyId}'`
-    : "";
+  const agencyFilter = agencyId ? sql`AND agency_id = ${agencyId}` : sql``;
 
-  const result = await db.execute(sql.raw(`
+  const result = await db.execute(sql`
     SELECT
-      TO_CHAR(created_at, 'MM/DD') as label,
-      TO_CHAR(created_at, 'YYYY-MM-DD') as date,
+      TO_CHAR(COALESCE(activation_date, entry_date, created_at::date), 'MM/DD') as label,
+      TO_CHAR(COALESCE(activation_date, entry_date, created_at::date), 'YYYY-MM-DD') as date,
       COUNT(*) as total,
       COUNT(*) FILTER (WHERE activation_status = '개통완료') as completed,
       COUNT(*) FILTER (WHERE activation_status = '대기') as pending
     FROM activations
-    WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+    WHERE COALESCE(activation_date, entry_date, created_at::date) >= CURRENT_DATE - INTERVAL '30 days'
     ${agencyFilter}
-    GROUP BY TO_CHAR(created_at, 'YYYY-MM-DD'), TO_CHAR(created_at, 'MM/DD')
+    GROUP BY TO_CHAR(COALESCE(activation_date, entry_date, created_at::date), 'YYYY-MM-DD'),
+             TO_CHAR(COALESCE(activation_date, entry_date, created_at::date), 'MM/DD')
     ORDER BY date DESC
     LIMIT 30
-  `));
+  `);
   return result.rows;
 }
 
 export async function getWeeklyStats(agencyId?: string) {
-  const agencyFilter = agencyId
-    ? `AND agency_id = '${agencyId}'`
-    : "";
+  const agencyFilter = agencyId ? sql`AND agency_id = ${agencyId}` : sql``;
 
-  const result = await db.execute(sql.raw(`
+  const result = await db.execute(sql`
     SELECT
-      TO_CHAR(DATE_TRUNC('week', created_at), 'MM/DD') || '~' as label,
-      TO_CHAR(DATE_TRUNC('week', created_at), 'YYYY-MM-DD') as week,
+      TO_CHAR(DATE_TRUNC('week', COALESCE(activation_date, entry_date, created_at::date)), 'MM/DD') || '~' as label,
+      TO_CHAR(DATE_TRUNC('week', COALESCE(activation_date, entry_date, created_at::date)), 'YYYY-MM-DD') as week,
       COUNT(*) as total,
       COUNT(*) FILTER (WHERE activation_status = '개통완료') as completed,
       COUNT(*) FILTER (WHERE activation_status = '대기') as pending
     FROM activations
-    WHERE created_at >= CURRENT_DATE - INTERVAL '12 weeks'
+    WHERE COALESCE(activation_date, entry_date, created_at::date) >= CURRENT_DATE - INTERVAL '12 weeks'
     ${agencyFilter}
-    GROUP BY DATE_TRUNC('week', created_at)
+    GROUP BY DATE_TRUNC('week', COALESCE(activation_date, entry_date, created_at::date))
     ORDER BY week DESC
     LIMIT 12
-  `));
+  `);
   return result.rows;
 }
 

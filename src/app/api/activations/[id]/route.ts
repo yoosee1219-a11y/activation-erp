@@ -9,10 +9,18 @@ import { canAccessAgency } from "@/lib/db/queries/users";
 
 // 거래처(PARTNER)가 편집할 수 있는 필드
 const PARTNER_EDITABLE_FIELDS = new Set([
+  // 기본 정보 (isLocked=false일 때만)
+  "customerName",
+  "usimNumber",
+  "entryDate",
+  "subscriptionType",
+  "ratePlan",
+  // 서류 (workStatus="보완요청"일 때만)
   "applicationDocs",
   "nameChangeDocs",
   "arcAutopayInfo",
   "arcSupplement",
+  // 진행상황 (보완요청→개통요청만)
   "workStatus",
 ]);
 
@@ -22,6 +30,15 @@ const DOCUMENT_FIELDS = new Set([
   "nameChangeDocs",
   "arcAutopayInfo",
   "arcSupplement",
+]);
+
+// 기본 정보 필드 (isLocked=false일 때만 편집 가능)
+const PARTNER_BASIC_FIELDS = new Set([
+  "customerName",
+  "usimNumber",
+  "entryDate",
+  "subscriptionType",
+  "ratePlan",
 ]);
 
 export async function GET(
@@ -100,7 +117,19 @@ export async function PATCH(
         );
       }
 
+      const isLocked = existing.isLocked ?? false;
       const currentWorkStatus = existing.workStatus || "개통요청";
+
+      // 잠금 상태에서 기본 정보 필드 편집 차단
+      if (isLocked) {
+        const basicAttempt = requestedFields.filter((f) => PARTNER_BASIC_FIELDS.has(f));
+        if (basicAttempt.length > 0) {
+          return NextResponse.json(
+            { error: "잠금 상태에서는 기본 정보를 수정할 수 없습니다." },
+            { status: 403 }
+          );
+        }
+      }
 
       // workStatus 변경 검증: 보완요청 → 개통요청만 허용
       if (body.workStatus !== undefined) {

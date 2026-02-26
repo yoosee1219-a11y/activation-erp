@@ -125,7 +125,7 @@ export function getPartnerColumns(options: {
             value={row.original.customerName}
             rowId={row.original.id}
             field="customerName"
-            isLocked={true}
+            isLocked={!!row.original.isLocked}
             onUpdate={onUpdate}
             placeholder="고객명"
           />
@@ -164,7 +164,7 @@ export function getPartnerColumns(options: {
             value={row.original.usimNumber}
             rowId={row.original.id}
             field="usimNumber"
-            isLocked={true}
+            isLocked={!!row.original.isLocked}
             onUpdate={onUpdate}
             placeholder="USIM번호"
           />
@@ -181,7 +181,7 @@ export function getPartnerColumns(options: {
             rowId={row.original.id}
             field="entryDate"
             type="date"
-            isLocked={true}
+            isLocked={!!row.original.isLocked}
             onUpdate={onUpdate}
           />
         );
@@ -198,7 +198,7 @@ export function getPartnerColumns(options: {
             field="subscriptionType"
             type="select"
             options={["신규", "번호이동", "기기변경"]}
-            isLocked={true}
+            isLocked={!!row.original.isLocked}
             onUpdate={onUpdate}
           />
         );
@@ -213,7 +213,7 @@ export function getPartnerColumns(options: {
             value={row.original.ratePlan}
             rowId={row.original.id}
             field="ratePlan"
-            isLocked={true}
+            isLocked={!!row.original.isLocked}
             onUpdate={onUpdate}
             placeholder="요금제"
           />

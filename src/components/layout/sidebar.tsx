@@ -10,6 +10,7 @@ import {
   Building2,
   Settings,
   LogOut,
+  FileSpreadsheet,
 } from "lucide-react";
 import { signOut } from "@/lib/auth/client";
 import { useRouter } from "next/navigation";
@@ -29,6 +30,11 @@ const mainNavItems = [
     label: "개통 관리",
     href: "/activations",
     icon: Smartphone,
+  },
+  {
+    label: "가져오기/내보내기",
+    href: "/import",
+    icon: FileSpreadsheet,
   },
 ];
 

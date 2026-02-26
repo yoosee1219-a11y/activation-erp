@@ -38,7 +38,7 @@ export default function LoginPage() {
       });
 
       if (result.error) {
-        setError("이메일 또는 비밀번호가 올바르지 않습니다.");
+        setError("아이디 또는 비밀번호가 올바르지 않습니다.");
       } else {
         // 역할 확인 후 리다이렉트 (user-role 쿠키도 이 호출에서 설정됨)
         const meRes = await fetch("/api/users/me");
@@ -74,14 +74,15 @@ export default function LoginPage() {
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">로그인 ID</Label>
+            <Label htmlFor="email">아이디</Label>
             <Input
               id="email"
               type="text"
-              placeholder="이메일 또는 ID"
+              placeholder="4글자 이상"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              minLength={4}
             />
           </div>
           <div className="space-y-2">
@@ -92,6 +93,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              minLength={4}
             />
           </div>
           {error && (

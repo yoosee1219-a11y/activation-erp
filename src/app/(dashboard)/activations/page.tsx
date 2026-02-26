@@ -17,6 +17,14 @@ import { toast } from "sonner";
 
 const STAFF_LIST = ["Admin", "김대리", "박과장", "이사원", "최주임"];
 
+interface MonthSummary {
+  month: string;
+  total: number;
+  completed: number;
+  pending: number;
+  cancelled: number;
+}
+
 export default function ActivationsPage() {
   const { agencyParam, agencies, user } = useDashboard();
   const [data, setData] = useState<ActivationRow[]>([]);
@@ -26,6 +34,8 @@ export default function ActivationsPage() {
   const [status, setStatus] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [month, setMonth] = useState("all");
+  const [availableMonths, setAvailableMonths] = useState<MonthSummary[]>([]);
   const [viewMode, setViewMode] = useState<"list" | "grouped">("grouped");
   const [selectedAgency, setSelectedAgency] = useState<string | null>(null);
 
@@ -35,6 +45,20 @@ export default function ActivationsPage() {
     return map;
   }, [agencies]);
 
+  // 월 요약 데이터 로드
+  useEffect(() => {
+    async function loadMonths() {
+      try {
+        const res = await fetch("/api/activations/months");
+        const result = await res.json();
+        setAvailableMonths(result.months || []);
+      } catch {
+        // 실패해도 무시
+      }
+    }
+    loadMonths();
+  }, []);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams();
@@ -42,6 +66,7 @@ export default function ActivationsPage() {
     if (status !== "all") params.set("status", status);
     if (dateFrom) params.set("dateFrom", dateFrom);
     if (dateTo) params.set("dateTo", dateTo);
+    if (month && month !== "all") params.set("month", month);
     params.set("page", page.toString());
     params.set("pageSize", "200");
 
@@ -59,7 +84,7 @@ export default function ActivationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [agencyParam, agencyMap, status, dateFrom, dateTo, page]);
+  }, [agencyParam, agencyMap, status, dateFrom, dateTo, month, page]);
 
   useEffect(() => {
     fetchData();
@@ -169,10 +194,52 @@ export default function ActivationsPage() {
     setSelectedAgency((prev) => (prev === agencyId ? null : agencyId));
   };
 
+  // 현재 선택 월의 요약 정보
+  const currentMonthSummary = useMemo(() => {
+    if (month && month !== "all") {
+      return availableMonths.find((m) => m.month === month);
+    }
+    // 전체 합산
+    return {
+      month: "all",
+      total: availableMonths.reduce((s, m) => s + Number(m.total), 0),
+      completed: availableMonths.reduce((s, m) => s + Number(m.completed), 0),
+      pending: availableMonths.reduce((s, m) => s + Number(m.pending), 0),
+      cancelled: availableMonths.reduce((s, m) => s + Number(m.cancelled), 0),
+    };
+  }, [month, availableMonths]);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">개통 관리</h1>
+        <div>
+          <h1 className="text-2xl font-bold">개통 관리</h1>
+          {currentMonthSummary && (
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-sm text-gray-500">
+                {month && month !== "all"
+                  ? `${month.split("-")[0]}년 ${parseInt(month.split("-")[1])}월`
+                  : "전체"}
+              </span>
+              <Badge variant="secondary">{Number(currentMonthSummary.total)}건</Badge>
+              {Number(currentMonthSummary.completed) > 0 && (
+                <Badge className="bg-green-100 text-green-700 text-[10px]">
+                  개통완료 {Number(currentMonthSummary.completed)}
+                </Badge>
+              )}
+              {Number(currentMonthSummary.pending) > 0 && (
+                <Badge className="bg-blue-100 text-blue-700 text-[10px]">
+                  대기 {Number(currentMonthSummary.pending)}
+                </Badge>
+              )}
+              {Number(currentMonthSummary.cancelled) > 0 && (
+                <Badge className="bg-red-100 text-red-700 text-[10px]">
+                  취소 {Number(currentMonthSummary.cancelled)}
+                </Badge>
+              )}
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <div className="flex rounded-md border">
             <Button
@@ -212,7 +279,10 @@ export default function ActivationsPage() {
         onDateFromChange={(v) => { setDateFrom(v); setPage(1); }}
         dateTo={dateTo}
         onDateToChange={(v) => { setDateTo(v); setPage(1); }}
-        onClear={() => { setStatus("all"); setDateFrom(""); setDateTo(""); setPage(1); }}
+        onClear={() => { setStatus("all"); setDateFrom(""); setDateTo(""); setMonth("all"); setPage(1); }}
+        month={month}
+        onMonthChange={(v) => { setMonth(v); setPage(1); }}
+        availableMonths={availableMonths}
       />
 
       {loading ? (

@@ -36,6 +36,19 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { email: rawEmail, password, name, role, allowedAgencies } = body;
 
+    if (!rawEmail || rawEmail.length < 4) {
+      return NextResponse.json(
+        { error: "아이디는 4글자 이상이어야 합니다." },
+        { status: 400 }
+      );
+    }
+    if (!password || password.length < 4) {
+      return NextResponse.json(
+        { error: "비밀번호는 4글자 이상이어야 합니다." },
+        { status: 400 }
+      );
+    }
+
     // 이메일 형식이 아니면 자동 변환
     const email = rawEmail.includes("@")
       ? rawEmail
