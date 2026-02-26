@@ -3,25 +3,38 @@
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { useAuth } from "@/hooks/use-auth";
-import { useAgencyFilter } from "@/hooks/use-agency-filter";
-import { createContext, useContext, useEffect } from "react";
+import { useAgencyFilter, type CategoryNode, type Agency } from "@/hooks/use-agency-filter";
+import { createContext, useContext, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { SessionUser } from "@/types";
 
 interface DashboardContextType {
   user: SessionUser | null;
-  selectedAgency: string;
-  setSelectedAgency: (id: string) => void;
-  agencyParam: string | undefined;
-  agencies: { id: string; name: string }[];
+  selectedMajors: string[];
+  setSelectedMajors: (ids: string[]) => void;
+  selectedMediums: string[];
+  setSelectedMediums: (ids: string[]) => void;
+  selectedAgencies: string[];
+  setSelectedAgencies: (ids: string[]) => void;
+  agencies: Agency[];
+  categories: CategoryNode[];
+  /** 선택된 값을 API 쿼리 파라미터로 변환 */
+  getFilterParams: () => Record<string, string>;
+  refreshCategories: () => void;
 }
 
 const DashboardContext = createContext<DashboardContextType>({
   user: null,
-  selectedAgency: "all",
-  setSelectedAgency: () => {},
-  agencyParam: undefined,
+  selectedMajors: [],
+  setSelectedMajors: () => {},
+  selectedMediums: [],
+  setSelectedMediums: () => {},
+  selectedAgencies: [],
+  setSelectedAgencies: () => {},
   agencies: [],
+  categories: [],
+  getFilterParams: () => ({}),
+  refreshCategories: () => {},
 });
 
 export const useDashboard = () => useContext(DashboardContext);
@@ -35,13 +48,33 @@ export default function DashboardLayout({
   const router = useRouter();
   const {
     agencies,
-    selectedAgency,
-    setSelectedAgency,
-    agencyParam,
+    categories,
+    selectedMajors,
+    setSelectedMajors,
+    selectedMediums,
+    setSelectedMediums,
+    selectedAgencies,
+    setSelectedAgencies,
+    refreshCategories,
   } = useAgencyFilter();
 
-  // 클라이언트 사이드 fallback: PARTNER/GUEST가 관리자 대시보드에 진입한 경우 리다이렉트
-  // (미들웨어의 user-role 쿠키가 아직 설정되기 전 첫 방문 시 발생 가능)
+  // 멀티셀렉트 → API 파라미터 변환
+  // 우선순위: 소분류(거래처) > 중분류 > 대분류
+  const getFilterParams = useMemo(() => {
+    return (): Record<string, string> => {
+      if (selectedAgencies.length > 0) {
+        return { agencyIds: selectedAgencies.join(",") };
+      }
+      if (selectedMediums.length > 0) {
+        return { mediumCategories: selectedMediums.join(",") };
+      }
+      if (selectedMajors.length > 0) {
+        return { majorCategories: selectedMajors.join(",") };
+      }
+      return {};
+    };
+  }, [selectedMajors, selectedMediums, selectedAgencies]);
+
   useEffect(() => {
     if (!authLoading && user) {
       if (user.role === "PARTNER" || user.role === "GUEST") {
@@ -58,7 +91,6 @@ export default function DashboardLayout({
     );
   }
 
-  // PARTNER/GUEST는 리다이렉트 될 것이므로 로딩 표시
   if (user?.role === "PARTNER" || user?.role === "GUEST") {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -71,10 +103,16 @@ export default function DashboardLayout({
     <DashboardContext.Provider
       value={{
         user,
-        selectedAgency,
-        setSelectedAgency,
-        agencyParam,
+        selectedMajors,
+        setSelectedMajors,
+        selectedMediums,
+        setSelectedMediums,
+        selectedAgencies,
+        setSelectedAgencies,
         agencies,
+        categories,
+        getFilterParams,
+        refreshCategories,
       }}
     >
       <div className="flex h-screen">
@@ -83,8 +121,13 @@ export default function DashboardLayout({
           <Header
             user={user}
             agencies={agencies}
-            selectedAgency={selectedAgency}
-            onAgencyChange={setSelectedAgency}
+            categories={categories}
+            selectedMajors={selectedMajors}
+            selectedMediums={selectedMediums}
+            selectedAgencies={selectedAgencies}
+            onMajorsChange={setSelectedMajors}
+            onMediumsChange={setSelectedMediums}
+            onAgenciesChange={setSelectedAgencies}
           />
           <main className="flex-1 overflow-auto bg-gray-50 p-6">
             {children}

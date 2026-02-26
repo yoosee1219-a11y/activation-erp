@@ -1,20 +1,20 @@
 "use client";
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { CascadingFilter } from "@/components/layout/cascading-filter";
 import type { SessionUser } from "@/types";
+import type { CategoryNode, Agency } from "@/hooks/use-agency-filter";
 
 interface HeaderProps {
   user: SessionUser | null;
-  agencies: { id: string; name: string }[];
-  selectedAgency: string;
-  onAgencyChange: (agencyId: string) => void;
+  agencies: Agency[];
+  categories: CategoryNode[];
+  selectedMajors: string[];
+  selectedMediums: string[];
+  selectedAgencies: string[];
+  onMajorsChange: (ids: string[]) => void;
+  onMediumsChange: (ids: string[]) => void;
+  onAgenciesChange: (ids: string[]) => void;
 }
 
 const roleLabels: Record<string, string> = {
@@ -34,8 +34,13 @@ const roleColors: Record<string, string> = {
 export function Header({
   user,
   agencies,
-  selectedAgency,
-  onAgencyChange,
+  categories,
+  selectedMajors,
+  selectedMediums,
+  selectedAgencies,
+  onMajorsChange,
+  onMediumsChange,
+  onAgenciesChange,
 }: HeaderProps) {
   const showAgencyFilter =
     user?.role === "ADMIN" || user?.role === "SUB_ADMIN";
@@ -44,19 +49,16 @@ export function Header({
     <header className="flex h-16 items-center justify-between border-b bg-white px-6">
       <div className="flex items-center gap-4">
         {showAgencyFilter && (
-          <Select value={selectedAgency} onValueChange={onAgencyChange}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="전체 거래처" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">전체 거래처</SelectItem>
-              {agencies.map((agency) => (
-                <SelectItem key={agency.id} value={agency.id}>
-                  {agency.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <CascadingFilter
+            categories={categories}
+            agencies={agencies}
+            selectedMajors={selectedMajors}
+            selectedMediums={selectedMediums}
+            selectedAgencies={selectedAgencies}
+            onMajorsChange={onMajorsChange}
+            onMediumsChange={onMediumsChange}
+            onAgenciesChange={onAgenciesChange}
+          />
         )}
       </div>
 

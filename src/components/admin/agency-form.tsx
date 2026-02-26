@@ -1,9 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -11,16 +18,20 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import type { CategoryNode } from "@/hooks/use-agency-filter";
 
 interface AgencyFormProps {
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  categories?: CategoryNode[];
   initialData?: {
     id: string;
     name: string;
     contactName: string | null;
     contactPhone: string | null;
+    majorCategory?: string | null;
+    mediumCategory?: string | null;
   };
 }
 
@@ -28,6 +39,7 @@ export function AgencyForm({
   open,
   onClose,
   onSuccess,
+  categories = [],
   initialData,
 }: AgencyFormProps) {
   const isEdit = !!initialData;
@@ -37,7 +49,16 @@ export function AgencyForm({
     name: initialData?.name || "",
     contactName: initialData?.contactName || "",
     contactPhone: initialData?.contactPhone || "",
+    majorCategory: initialData?.majorCategory || "",
+    mediumCategory: initialData?.mediumCategory || "",
   });
+
+  // 선택된 대분류의 중분류 목록
+  const mediumOptions = useMemo(() => {
+    if (!formData.majorCategory) return [];
+    const major = categories.find((c) => c.id === formData.majorCategory);
+    return major?.children || [];
+  }, [formData.majorCategory, categories]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,7 +68,11 @@ export function AgencyForm({
       const res = await fetch("/api/agencies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          majorCategory: formData.majorCategory || null,
+          mediumCategory: formData.mediumCategory || null,
+        }),
       });
 
       if (!res.ok) throw new Error("Failed");
@@ -101,6 +126,62 @@ export function AgencyForm({
               required
             />
           </div>
+
+          {categories.length > 0 && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>대분류</Label>
+                <Select
+                  value={formData.majorCategory}
+                  onValueChange={(v) =>
+                    setFormData((p) => ({
+                      ...p,
+                      majorCategory: v === "__none__" ? "" : v,
+                      mediumCategory: "",
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="미분류" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">미분류</SelectItem>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>중분류</Label>
+                <Select
+                  value={formData.mediumCategory}
+                  onValueChange={(v) =>
+                    setFormData((p) => ({
+                      ...p,
+                      mediumCategory: v === "__none__" ? "" : v,
+                    }))
+                  }
+                  disabled={!formData.majorCategory}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={formData.majorCategory ? "선택" : "대분류 먼저 선택"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">미분류</SelectItem>
+                    {mediumOptions.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label>담당자명</Label>

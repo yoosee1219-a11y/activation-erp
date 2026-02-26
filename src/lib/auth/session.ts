@@ -23,5 +23,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     name: profile.name,
     role: profile.role as SessionUser["role"],
     allowedAgencies: profile.allowedAgencies ?? [],
+    allowedMajorCategory: profile.allowedMajorCategory ?? null,
+    allowedMediumCategories: profile.allowedMediumCategories ?? [],
   };
 }

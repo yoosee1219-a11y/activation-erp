@@ -76,9 +76,11 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { rows, defaultAgencyId } = body as {
+    const { rows, defaultAgencyId, defaultMajorCategory, defaultMediumCategory } = body as {
       rows: Record<string, string>[];
       defaultAgencyId?: string;
+      defaultMajorCategory?: string;
+      defaultMediumCategory?: string;
     };
 
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
@@ -117,6 +119,8 @@ export async function POST(request: NextRequest) {
           id: id || `agency_${Date.now()}`,
           name,
           isActive: true,
+          majorCategory: defaultMajorCategory || null,
+          mediumCategory: defaultMediumCategory || null,
         });
         agencyNameMap.set(name.toLowerCase(), id);
         results.newAgencies.push(name);

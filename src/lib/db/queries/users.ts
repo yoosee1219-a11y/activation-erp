@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { userProfiles } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { userProfiles, agencies } from "@/lib/db/schema";
+import { eq, and, inArray } from "drizzle-orm";
 import type { UserRole } from "@/types";
 
 export async function getUserProfile(userId: string) {
@@ -22,6 +22,8 @@ export async function createUserProfile(data: {
   name: string;
   role: UserRole;
   allowedAgencies: string[];
+  allowedMajorCategory?: string | null;
+  allowedMediumCategories?: string[];
 }) {
   const result = await db.insert(userProfiles).values(data).returning();
   return result[0];
@@ -33,6 +35,8 @@ export async function updateUserProfile(
     name: string;
     role: UserRole;
     allowedAgencies: string[];
+    allowedMajorCategory: string | null;
+    allowedMediumCategories: string[];
   }>
 ) {
   const result = await db
@@ -65,4 +69,56 @@ export function getAccessibleAgencyFilter(
     return null; // 전체 접근
   }
   return allowedAgencies;
+}
+
+/**
+ * 사용자의 카테고리/에이전시 설정을 기반으로 접근 가능한 agencyId[] 반환.
+ * - ADMIN / ALL → null (전체 접근)
+ * - allowedAgencies에 직접 지정된 값이 있으면 → 그대로 반환 (하위 호환)
+ * - allowedMediumCategories → 해당 중분류에 속하는 agencies 조회
+ * - allowedMajorCategory만 → 해당 대분류에 속하는 agencies 조회
+ */
+export async function resolveAllowedAgencyIds(user: {
+  role: string;
+  allowedAgencies: string[];
+  allowedMajorCategory: string | null;
+  allowedMediumCategories: string[];
+}): Promise<string[] | null> {
+  if (user.role === "ADMIN" || user.role === "SUB_ADMIN") return null;
+  if (user.allowedAgencies.includes("ALL")) return null;
+
+  // 직접 지정된 에이전시가 있으면 우선 사용 (하위 호환)
+  if (user.allowedAgencies.length > 0) {
+    return user.allowedAgencies;
+  }
+
+  // 중분류 기반 해석
+  if (user.allowedMediumCategories.length > 0) {
+    const result = await db
+      .select({ id: agencies.id })
+      .from(agencies)
+      .where(
+        and(
+          inArray(agencies.mediumCategory, user.allowedMediumCategories),
+          eq(agencies.isActive, true)
+        )
+      );
+    return result.map((r) => r.id);
+  }
+
+  // 대분류 기반 해석
+  if (user.allowedMajorCategory) {
+    const result = await db
+      .select({ id: agencies.id })
+      .from(agencies)
+      .where(
+        and(
+          eq(agencies.majorCategory, user.allowedMajorCategory),
+          eq(agencies.isActive, true)
+        )
+      );
+    return result.map((r) => r.id);
+  }
+
+  return [];
 }

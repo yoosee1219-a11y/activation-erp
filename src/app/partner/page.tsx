@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Clock, CheckCircle2, Loader2, RotateCcw, X, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
@@ -24,7 +25,7 @@ type WorkStatusFilter = "개통요청" | "작업중" | "완료" | "보완요청"
 
 export default function PartnerPage() {
   const { user } = useAuth();
-  const { agencies } = useAgencyFilter();
+  const { agencies, categories } = useAgencyFilter();
   const [data, setData] = useState<PartnerActivationRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -33,20 +34,66 @@ export default function PartnerPage() {
   const [selectedAgency, setSelectedAgency] = useState("all");
   const [statusFilter, setStatusFilter] = useState<WorkStatusFilter>(null);
 
-  // 허용된 거래처 목록 (PARTNER용)
+  // 카테고리 기반 필터 상태
+  const [selectedMediumCategories, setSelectedMediumCategories] = useState<string[]>([]);
+  const [categoryFilterInitialized, setCategoryFilterInitialized] = useState(false);
+
+  // 카테고리 기반 접근인지 판별
+  const hasCategoryAccess = useMemo(() => {
+    return !!user?.allowedMajorCategory;
+  }, [user]);
+
+  // 사용자의 허용된 중분류 목록
+  const allowedMediumCats = useMemo(() => {
+    if (!user?.allowedMajorCategory || !categories.length) return [];
+    const majorNode = categories.find((c) => c.id === user.allowedMajorCategory);
+    if (!majorNode?.children) return [];
+    // allowedMediumCategories가 비어있으면 해당 대분류의 전체 중분류
+    if (!user.allowedMediumCategories.length) return majorNode.children;
+    return majorNode.children.filter((c) => user.allowedMediumCategories.includes(c.id));
+  }, [user, categories]);
+
+  // 카테고리 필터 초기화 (전체 선택)
+  useEffect(() => {
+    if (hasCategoryAccess && allowedMediumCats.length > 0 && !categoryFilterInitialized) {
+      setSelectedMediumCategories(allowedMediumCats.map((c) => c.id));
+      setCategoryFilterInitialized(true);
+    }
+  }, [hasCategoryAccess, allowedMediumCats, categoryFilterInitialized]);
+
+  // 허용된 거래처 목록 (직접 배정 방식)
   const allowedAgencies = useMemo(() => {
     if (!user) return [];
+    if (hasCategoryAccess) return agencies; // 카테고리 기반이면 agencies API가 이미 필터링
     if (user.allowedAgencies.includes("ALL")) return agencies;
     return agencies.filter((a) => user.allowedAgencies.includes(a.id));
-  }, [user, agencies]);
+  }, [user, agencies, hasCategoryAccess]);
+
+  // 대분류 이름
+  const majorCategoryName = useMemo(() => {
+    if (!user?.allowedMajorCategory) return "";
+    const major = categories.find((c) => c.id === user.allowedMajorCategory);
+    return major?.name || user.allowedMajorCategory;
+  }, [user, categories]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (selectedAgency !== "all") {
-        params.set("agencyId", selectedAgency);
+
+      if (hasCategoryAccess) {
+        // 카테고리 기반 필터링
+        if (selectedMediumCategories.length > 0 && selectedMediumCategories.length < allowedMediumCats.length) {
+          params.set("mediumCategories", selectedMediumCategories.join(","));
+        }
+        // 전체 선택이면 파라미터 없이 (서버에서 카테고리 기반 필터링)
+      } else {
+        // 직접 에이전시 필터링
+        if (selectedAgency !== "all") {
+          params.set("agencyId", selectedAgency);
+        }
       }
+
       params.set("page", page.toString());
       params.set("pageSize", "200");
 
@@ -68,11 +115,12 @@ export default function PartnerPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, selectedAgency, agencies]);
+  }, [page, selectedAgency, selectedMediumCategories, agencies, hasCategoryAccess, allowedMediumCats.length]);
 
   useEffect(() => {
+    if (hasCategoryAccess && !categoryFilterInitialized) return; // 초기화 전에는 fetch하지 않음
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, hasCategoryAccess, categoryFilterInitialized]);
 
   // handleUpdate를 ref로 감싸서 stale closure 방지
   const fetchDataRef = useRef(fetchData);
@@ -104,23 +152,39 @@ export default function PartnerPage() {
   );
 
   const handleAddRow = async () => {
-    if (!user?.allowedAgencies?.length) {
-      toast.error("거래처가 배정되지 않았습니다.");
-      return;
-    }
-
-    // 거래처 결정: 선택된 거래처 > 첫 번째 허용 거래처
+    // 거래처 결정
     let agencyId: string;
-    if (selectedAgency !== "all") {
-      agencyId = selectedAgency;
-    } else if (user.allowedAgencies.includes("ALL")) {
-      toast.error("거래처를 먼저 선택해주세요.");
-      return;
-    } else if (user.allowedAgencies.length === 1) {
-      agencyId = user.allowedAgencies[0];
+
+    if (hasCategoryAccess) {
+      // 카테고리 기반: 선택된 중분류에 속한 첫 번째 거래처
+      const selectedAgencies = agencies.filter((a) =>
+        selectedMediumCategories.includes(a.mediumCategory || "")
+      );
+      if (selectedAgencies.length === 1) {
+        agencyId = selectedAgencies[0].id;
+      } else if (selectedAgencies.length > 1) {
+        toast.error("거래처를 하나만 선택한 후 추가해주세요.");
+        return;
+      } else {
+        toast.error("선택된 분류에 거래처가 없습니다.");
+        return;
+      }
     } else {
-      toast.error("거래처를 먼저 선택해주세요.");
-      return;
+      if (!user?.allowedAgencies?.length) {
+        toast.error("거래처가 배정되지 않았습니다.");
+        return;
+      }
+      if (selectedAgency !== "all") {
+        agencyId = selectedAgency;
+      } else if (user.allowedAgencies.includes("ALL")) {
+        toast.error("거래처를 먼저 선택해주세요.");
+        return;
+      } else if (user.allowedAgencies.length === 1) {
+        agencyId = user.allowedAgencies[0];
+      } else {
+        toast.error("거래처를 먼저 선택해주세요.");
+        return;
+      }
     }
 
     setCreating(true);
@@ -182,6 +246,33 @@ export default function PartnerPage() {
   const handleCardClick = (filter: WorkStatusFilter) => {
     setStatusFilter((prev) => (prev === filter ? null : filter));
   };
+
+  // 중분류 체크박스 토글
+  const handleMediumCategoryToggle = (catId: string) => {
+    setSelectedMediumCategories((prev) => {
+      if (prev.includes(catId)) {
+        // 최소 1개는 선택 유지
+        if (prev.length <= 1) return prev;
+        return prev.filter((id) => id !== catId);
+      }
+      return [...prev, catId];
+    });
+    setPage(1);
+  };
+
+  // 전체 선택/해제
+  const handleSelectAll = () => {
+    const allIds = allowedMediumCats.map((c) => c.id);
+    if (selectedMediumCategories.length === allIds.length) {
+      // 전체 해제 → 첫 번째만 남기기 (최소 1개)
+      setSelectedMediumCategories([allIds[0]]);
+    } else {
+      setSelectedMediumCategories(allIds);
+    }
+    setPage(1);
+  };
+
+  const isAllSelected = selectedMediumCategories.length === allowedMediumCats.length;
 
   const today = new Date();
   const dateStr = today.toLocaleDateString("ko-KR", {
@@ -276,7 +367,7 @@ export default function PartnerPage() {
         </Card>
       </div>
 
-      {/* 헤더 + 거래처 필터 */}
+      {/* 헤더 + 필터 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-bold">고객 개통 관리</h1>
@@ -291,26 +382,54 @@ export default function PartnerPage() {
               <X className="h-3 w-3" />
             </Button>
           )}
-          {allowedAgencies.length > 1 && (
-            <Select
-              value={selectedAgency}
-              onValueChange={(v) => {
-                setSelectedAgency(v);
-                setPage(1);
-              }}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="전체 거래처" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">전체 거래처</SelectItem>
-                {allowedAgencies.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+
+          {/* 카테고리 기반 필터 (중분류 체크박스) */}
+          {hasCategoryAccess && allowedMediumCats.length > 0 ? (
+            <div className="flex items-center gap-3 rounded-lg border bg-white px-3 py-1.5">
+              <span className="text-sm font-medium text-gray-700">{majorCategoryName}</span>
+              <div className="h-4 w-px bg-gray-300" />
+              {allowedMediumCats.length > 1 && (
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <Checkbox
+                    checked={isAllSelected}
+                    onCheckedChange={handleSelectAll}
+                  />
+                  <span className="text-xs font-medium text-gray-500">전체</span>
+                </label>
+              )}
+              {allowedMediumCats.map((cat) => (
+                <label key={cat.id} className="flex items-center gap-1.5 cursor-pointer">
+                  <Checkbox
+                    checked={selectedMediumCategories.includes(cat.id)}
+                    onCheckedChange={() => handleMediumCategoryToggle(cat.id)}
+                  />
+                  <span className="text-sm">{cat.name}</span>
+                </label>
+              ))}
+            </div>
+          ) : (
+            /* 직접 에이전시 필터 (기존 방식) */
+            allowedAgencies.length > 1 && (
+              <Select
+                value={selectedAgency}
+                onValueChange={(v) => {
+                  setSelectedAgency(v);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="전체 거래처" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체 거래처</SelectItem>
+                  {allowedAgencies.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )
           )}
         </div>
         <div className="flex items-center gap-2">

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAgencies, createAgency } from "@/lib/db/queries/agencies";
 import { getSessionUser } from "@/lib/auth/session";
+import { resolveAllowedAgencyIds } from "@/lib/db/queries/users";
 
 export async function GET() {
   try {
@@ -11,12 +12,11 @@ export async function GET() {
 
     let agencyList = await getAgencies(true);
 
-    // PARTNER는 자기 에이전시만 볼 수 있음
+    // PARTNER/GUEST는 허용된 에이전시만 (카테고리 기반 해석 포함)
     if (user.role === "PARTNER" || user.role === "GUEST") {
-      if (!user.allowedAgencies.includes("ALL")) {
-        agencyList = agencyList.filter((a) =>
-          user.allowedAgencies.includes(a.id)
-        );
+      const allowedIds = await resolveAllowedAgencyIds(user);
+      if (allowedIds !== null) {
+        agencyList = agencyList.filter((a) => allowedIds.includes(a.id));
       }
     }
 

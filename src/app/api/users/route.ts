@@ -34,7 +34,15 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { email: rawEmail, password, name, role, allowedAgencies } = body;
+    const {
+      email: rawEmail,
+      password,
+      name,
+      role,
+      allowedAgencies,
+      allowedMajorCategory,
+      allowedMediumCategories,
+    } = body;
 
     if (!rawEmail || rawEmail.length < 4) {
       return NextResponse.json(
@@ -73,6 +81,8 @@ export async function POST(request: NextRequest) {
       name,
       role,
       allowedAgencies: allowedAgencies || [],
+      allowedMajorCategory: allowedMajorCategory || null,
+      allowedMediumCategories: allowedMediumCategories || [],
     });
 
     return NextResponse.json({ user: profile }, { status: 201 });

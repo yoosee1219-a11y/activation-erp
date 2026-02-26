@@ -25,8 +25,20 @@ interface MonthSummary {
   cancelled: number;
 }
 
+type AgencyGroup = {
+  name: string;
+  rows: ActivationRow[];
+  counts: Record<string, number>;
+};
+
+type CategoryGroup = {
+  categoryName: string;
+  agencies: [string, AgencyGroup][];
+  totalRows: number;
+};
+
 export default function ActivationsPage() {
-  const { agencyParam, agencies, user } = useDashboard();
+  const { getFilterParams, selectedMajors, selectedMediums, selectedAgencies: dashboardSelectedAgencies, agencies, categories, user } = useDashboard();
   const [data, setData] = useState<ActivationRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -42,6 +54,27 @@ export default function ActivationsPage() {
   const agencyMap = useMemo(() => {
     const map: Record<string, string> = {};
     agencies.forEach((a) => (map[a.id] = a.name));
+    return map;
+  }, [agencies]);
+
+  // 카테고리 이름 맵 (중분류 id → 표시명)
+  const categoryNameMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    categories.forEach((major) => {
+      map[major.id] = major.name;
+      (major.children || []).forEach((medium) => {
+        map[medium.id] = medium.name;
+      });
+    });
+    return map;
+  }, [categories]);
+
+  // 거래처 → 중분류 매핑
+  const agencyMediumMap = useMemo(() => {
+    const map: Record<string, string | null> = {};
+    agencies.forEach((a) => {
+      map[a.id] = a.mediumCategory || null;
+    });
     return map;
   }, [agencies]);
 
@@ -62,7 +95,9 @@ export default function ActivationsPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams();
-    if (agencyParam) params.set("agencyId", agencyParam);
+    // getFilterParams()로 카테고리/거래처 필터 적용
+    const filterParams = getFilterParams();
+    Object.entries(filterParams).forEach(([k, v]) => params.set(k, v));
     if (status !== "all") params.set("status", status);
     if (dateFrom) params.set("dateFrom", dateFrom);
     if (dateTo) params.set("dateTo", dateTo);
@@ -84,7 +119,7 @@ export default function ActivationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [agencyParam, agencyMap, status, dateFrom, dateTo, month, page]);
+  }, [getFilterParams, selectedMajors, selectedMediums, dashboardSelectedAgencies, agencyMap, status, dateFrom, dateTo, month, page]);
 
   useEffect(() => {
     fetchData();
@@ -160,35 +195,72 @@ export default function ActivationsPage() {
     staffList: STAFF_LIST,
   });
 
-  // 거래처별 그룹핑
-  const groupedData = useMemo(() => {
-    const groups: Record<
-      string,
-      { name: string; rows: ActivationRow[]; counts: Record<string, number> }
-    > = {};
+  // 2단계 그룹핑: 중분류 → 거래처
+  const twoLevelGrouped = useMemo(() => {
+    // 1단계: 거래처별 그룹
+    const agencyGroups: Record<string, AgencyGroup> = {};
     data.forEach((row) => {
-      if (!groups[row.agencyId]) {
-        groups[row.agencyId] = {
+      if (!agencyGroups[row.agencyId]) {
+        agencyGroups[row.agencyId] = {
           name: row.agencyName || row.agencyId,
           rows: [],
-          counts: { 개통요청: 0, 작업중: 0, 완료: 0, 보완요청: 0 },
+          counts: { "개통요청": 0, "작업중": 0, "완료": 0, "보완요청": 0 },
         };
       }
-      groups[row.agencyId].rows.push(row);
+      agencyGroups[row.agencyId].rows.push(row);
       const ws = row.workStatus || "개통요청";
-      if (ws in groups[row.agencyId].counts) {
-        groups[row.agencyId].counts[ws]++;
+      if (ws in agencyGroups[row.agencyId].counts) {
+        agencyGroups[row.agencyId].counts[ws]++;
       }
     });
-    return Object.entries(groups).sort((a, b) =>
-      a[1].name.localeCompare(b[1].name)
-    );
-  }, [data]);
 
-  // 선택된 거래처 필터링된 데이터
-  const filteredGrouped = selectedAgency
-    ? groupedData.filter(([id]) => id === selectedAgency)
-    : groupedData;
+    // 2단계: 중분류별 거래처 그룹
+    const catGroups: Record<string, CategoryGroup> = {};
+    Object.entries(agencyGroups).forEach(([agencyId, group]) => {
+      const mediumCat = agencyMediumMap[agencyId] || "__uncategorized__";
+      if (!catGroups[mediumCat]) {
+        catGroups[mediumCat] = {
+          categoryName:
+            mediumCat === "__uncategorized__"
+              ? "미분류"
+              : categoryNameMap[mediumCat] || mediumCat,
+          agencies: [],
+          totalRows: 0,
+        };
+      }
+      catGroups[mediumCat].agencies.push([agencyId, group]);
+      catGroups[mediumCat].totalRows += group.rows.length;
+    });
+
+    // 거래처 이름순 정렬
+    Object.values(catGroups).forEach((g) =>
+      g.agencies.sort((a, b) => a[1].name.localeCompare(b[1].name))
+    );
+
+    // 분류 있는 것 먼저, 미분류 나중
+    return Object.entries(catGroups).sort((a, b) => {
+      if (a[0] === "__uncategorized__") return 1;
+      if (b[0] === "__uncategorized__") return -1;
+      return a[1].categoryName.localeCompare(b[1].categoryName);
+    });
+  }, [data, agencyMediumMap, categoryNameMap]);
+
+  // 카테고리 존재 여부 (카테고리가 없으면 기존 flat 그룹 뷰)
+  const hasCategories = categories.length > 0;
+
+  // flat 그룹 (카테고리 없을 때 or 전체 agency 목록)
+  const flatGrouped = useMemo(() => {
+    const allAgencies: [string, AgencyGroup][] = [];
+    twoLevelGrouped.forEach(([, catGroup]) => {
+      allAgencies.push(...catGroup.agencies);
+    });
+    return allAgencies;
+  }, [twoLevelGrouped]);
+
+  // 선택된 거래처 필터링
+  const filteredFlat = selectedAgency
+    ? flatGrouped.filter(([id]) => id === selectedAgency)
+    : flatGrouped;
 
   const handleCardClick = (agencyId: string) => {
     setSelectedAgency((prev) => (prev === agencyId ? null : agencyId));
@@ -199,7 +271,6 @@ export default function ActivationsPage() {
     if (month && month !== "all") {
       return availableMonths.find((m) => m.month === month);
     }
-    // 전체 합산
     return {
       month: "all",
       total: availableMonths.reduce((s, m) => s + Number(m.total), 0),
@@ -208,6 +279,32 @@ export default function ActivationsPage() {
       cancelled: availableMonths.reduce((s, m) => s + Number(m.cancelled), 0),
     };
   }, [month, availableMonths]);
+
+  // 상태 뱃지 렌더링 헬퍼
+  const renderStatusBadges = (counts: Record<string, number>) => (
+    <>
+      {counts["개통요청"] > 0 && (
+        <Badge className="bg-blue-100 text-blue-700 text-[10px]">
+          개통요청 {counts["개통요청"]}
+        </Badge>
+      )}
+      {counts["작업중"] > 0 && (
+        <Badge className="bg-yellow-100 text-yellow-700 text-[10px]">
+          작업중 {counts["작업중"]}
+        </Badge>
+      )}
+      {counts["완료"] > 0 && (
+        <Badge className="bg-green-100 text-green-700 text-[10px]">
+          완료 {counts["완료"]}
+        </Badge>
+      )}
+      {counts["보완요청"] > 0 && (
+        <Badge className="bg-red-100 text-red-700 text-[10px]">
+          보완요청 {counts["보완요청"]}
+        </Badge>
+      )}
+    </>
+  );
 
   return (
     <div className="space-y-6">
@@ -318,80 +415,87 @@ export default function ActivationsPage() {
             </div>
           )}
 
-          {/* 거래처별 요약 카드 */}
-          <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-            {groupedData.map(([agencyId, group]) => (
-              <Card
-                key={agencyId}
-                className={`cursor-pointer transition-all hover:shadow-md ${
-                  selectedAgency === agencyId
-                    ? "ring-2 ring-blue-500 shadow-md"
-                    : selectedAgency
-                    ? "opacity-40"
-                    : ""
-                }`}
-                onClick={() => handleCardClick(agencyId)}
-              >
-                <CardContent className="p-3">
-                  <p className="font-semibold text-sm truncate">
-                    {group.name}
-                  </p>
-                  <p className="text-2xl font-bold mt-1">
-                    {group.rows.length}건
-                  </p>
-                  <div className="flex gap-1 mt-2 flex-wrap">
-                    {group.counts["개통요청"] > 0 && (
-                      <Badge className="bg-blue-100 text-blue-700 text-[10px]">
-                        개통요청 {group.counts["개통요청"]}
-                      </Badge>
-                    )}
-                    {group.counts["작업중"] > 0 && (
-                      <Badge className="bg-yellow-100 text-yellow-700 text-[10px]">
-                        작업중 {group.counts["작업중"]}
-                      </Badge>
-                    )}
-                    {group.counts["완료"] > 0 && (
-                      <Badge className="bg-green-100 text-green-700 text-[10px]">
-                        완료 {group.counts["완료"]}
-                      </Badge>
-                    )}
-                    {group.counts["보완요청"] > 0 && (
-                      <Badge className="bg-red-100 text-red-700 text-[10px]">
-                        보완요청 {group.counts["보완요청"]}
-                      </Badge>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          {/* 2단계 그룹 카드: 중분류 → 거래처 */}
+          {hasCategories ? (
+            twoLevelGrouped.map(([catId, catGroup]) => (
+              <div key={catId}>
+                {/* 중분류 헤더 */}
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">
+                    {catGroup.categoryName}
+                  </h3>
+                  <Badge variant="outline" className="text-xs">
+                    {catGroup.totalRows}건
+                  </Badge>
+                </div>
+                {/* 해당 중분류의 거래처 카드들 */}
+                <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 mb-3">
+                  {catGroup.agencies.map(([agencyId, group]) => (
+                    <Card
+                      key={agencyId}
+                      className={`cursor-pointer transition-all hover:shadow-md ${
+                        selectedAgency === agencyId
+                          ? "ring-2 ring-blue-500 shadow-md"
+                          : selectedAgency
+                          ? "opacity-40"
+                          : ""
+                      }`}
+                      onClick={() => handleCardClick(agencyId)}
+                    >
+                      <CardContent className="p-3">
+                        <p className="font-semibold text-sm truncate">
+                          {group.name}
+                        </p>
+                        <p className="text-2xl font-bold mt-1">
+                          {group.rows.length}건
+                        </p>
+                        <div className="flex gap-1 mt-2 flex-wrap">
+                          {renderStatusBadges(group.counts)}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            ))
+          ) : (
+            /* 카테고리 없을 때: 기존 flat 카드 */
+            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+              {flatGrouped.map(([agencyId, group]) => (
+                <Card
+                  key={agencyId}
+                  className={`cursor-pointer transition-all hover:shadow-md ${
+                    selectedAgency === agencyId
+                      ? "ring-2 ring-blue-500 shadow-md"
+                      : selectedAgency
+                      ? "opacity-40"
+                      : ""
+                  }`}
+                  onClick={() => handleCardClick(agencyId)}
+                >
+                  <CardContent className="p-3">
+                    <p className="font-semibold text-sm truncate">
+                      {group.name}
+                    </p>
+                    <p className="text-2xl font-bold mt-1">
+                      {group.rows.length}건
+                    </p>
+                    <div className="flex gap-1 mt-2 flex-wrap">
+                      {renderStatusBadges(group.counts)}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
 
           {/* 거래처별 테이블 (선택된 거래처만 or 전체) */}
-          {filteredGrouped.map(([agencyId, group]) => (
+          {filteredFlat.map(([agencyId, group]) => (
             <div key={agencyId}>
               <div className="flex items-center gap-3 mb-2 mt-4">
                 <h2 className="text-lg font-semibold">{group.name}</h2>
                 <Badge variant="secondary">{group.rows.length}건</Badge>
-                {group.counts["개통요청"] > 0 && (
-                  <Badge className="bg-blue-100 text-blue-700">
-                    개통요청 {group.counts["개통요청"]}
-                  </Badge>
-                )}
-                {group.counts["작업중"] > 0 && (
-                  <Badge className="bg-yellow-100 text-yellow-700">
-                    작업중 {group.counts["작업중"]}
-                  </Badge>
-                )}
-                {group.counts["완료"] > 0 && (
-                  <Badge className="bg-green-100 text-green-700">
-                    완료 {group.counts["완료"]}
-                  </Badge>
-                )}
-                {group.counts["보완요청"] > 0 && (
-                  <Badge className="bg-red-100 text-red-700">
-                    보완요청 {group.counts["보완요청"]}
-                  </Badge>
-                )}
+                {renderStatusBadges(group.counts)}
               </div>
               <DataTable
                 columns={columns}
@@ -404,7 +508,7 @@ export default function ActivationsPage() {
             </div>
           ))}
 
-          {filteredGrouped.length === 0 && (
+          {filteredFlat.length === 0 && (
             <div className="flex h-32 items-center justify-center text-gray-500">
               데이터가 없습니다.
             </div>

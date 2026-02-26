@@ -12,4 +12,6 @@ export interface SessionUser {
   name: string;
   role: UserRole;
   allowedAgencies: string[];
+  allowedMajorCategory: string | null;
+  allowedMediumCategories: string[];
 }

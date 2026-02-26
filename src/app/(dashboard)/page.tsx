@@ -93,13 +93,14 @@ interface DashboardData {
 }
 
 export default function DashboardPage() {
-  const { agencyParam } = useDashboard();
+  const { getFilterParams, selectedMajors, selectedMediums, selectedAgencies } = useDashboard();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const filterParams = getFilterParams();
     const params = new URLSearchParams();
-    if (agencyParam) params.set("agencyId", agencyParam);
+    Object.entries(filterParams).forEach(([k, v]) => params.set(k, v));
 
     fetch(`/api/dashboard?${params}`)
       .then((res) => res.json())
@@ -108,7 +109,7 @@ export default function DashboardPage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [agencyParam]);
+  }, [getFilterParams, selectedMajors, selectedMediums, selectedAgencies]);
 
   if (loading) {
     return (

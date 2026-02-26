@@ -282,3 +282,80 @@ GOOGLE_DRIVE_FOLDER_ID=...
 
 ### 빌드 상태
 - `npm run build` 성공 (25 pages, 0 TypeScript errors)
+
+---
+
+## 2026-02-26 세션 4~5: 거래처 계층 구조 시스템 (대분류-중분류-소분류)
+
+### 개요
+거래처를 3단계 계층으로 분류: DOD(대분류) → 키르기스스탄/ON(중분류) → 개별 거래처(소분류)
+
+### Phase 0: 스키마 변경
+- `agency_categories` 테이블 신규 (id, name, level, parentId, sortOrder, isActive)
+- `agencies` 테이블에 `majorCategory`, `mediumCategory` 컬럼 추가
+- `userProfiles` 테이블에 `allowedMajorCategory`, `allowedMediumCategories` 추가
+- 초기 데이터: DOD 대분류, DOD_키르기스스탄/DOD_ON 중분류
+- dream_high, creatoria → DOD_키르기스스탄 매핑
+
+### Phase 1: 백엔드 API
+- `src/types/index.ts` - SessionUser 확장
+- `src/lib/auth/session.ts` - 새 필드 반환
+- `src/lib/db/queries/categories.ts` (신규) - getCategoryTree, getAgencyIdsByMediumCategories 등
+- `src/lib/db/queries/users.ts` - resolveAllowedAgencyIds 함수
+- `src/app/api/categories/route.ts` (신규) - GET: 카테고리 트리
+- `src/app/api/agencies/route.ts` - 카테고리 포함 응답
+- `src/app/api/activations/route.ts` - mediumCategories/majorCategory 파라미터
+- `src/app/api/users/route.ts` - 카테고리 필드 저장
+- `src/app/api/export/route.ts` - 대분류/중분류 CSV 컬럼
+- `src/app/api/import/route.ts` - 카테고리 포함 거래처 자동 생성
+
+### Phase 2: Partner 뷰
+- `src/app/partner/page.tsx` - 중분류 체크박스 멀티셀렉트 필터
+- `src/hooks/use-agency-filter.ts` - CategoryNode 타입 + 카테고리 데이터 로드
+
+### Phase 3: Admin 뷰
+- 3-1: `header.tsx` - SelectGroup 계층형 거래처 드롭다운
+- 3-2: `layout.tsx` - DashboardContext에 categories, getFilterParams 추가
+  - selectedAgency 인코딩: 'all' | 'major:DOD' | 'medium:DOD_ON' | 'dream_high'
+- 3-3: `activations/page.tsx` - 중분류→거래처 2단계 그룹 뷰
+- 3-4: `user-form.tsx` - 3가지 접근 모드(전체/카테고리/직접) + 중분류 체크박스
+- 3-5: `admin/agencies/page.tsx` - 대분류/중분류 컬럼 + 수정 버튼 + AgencyForm에 categories 전달
+
+### Phase 4: Dashboard 통계 카테고리 반영
+- `src/lib/db/queries/activations.ts` - 모든 통계 함수에 agencyIds[] 파라미터 추가
+- `src/app/api/dashboard/route.ts` - majorCategory/mediumCategories → agencyIds 변환 후 통계 쿼리에 전달
+
+### Phase 5: 3단계 캐스케이딩 체크박스 멀티셀렉트 필터 (2026-02-26)
+
+기존 단일 Select 드롭다운 → 대분류/중분류/소분류 3개 독립 드롭다운(체크박스 멀티셀렉트)으로 전면 교체.
+
+**변경 파일:**
+- `src/components/layout/cascading-filter.tsx` (신규) - 3단계 캐스케이딩 필터 UI
+- `src/hooks/use-agency-filter.ts` - selectedAgency(단일) → selectedMajors/Mediums/Agencies(배열) 3개로 변경
+- `src/app/(dashboard)/layout.tsx` - DashboardContext 전체 재설계 (멀티셀렉트 + getFilterParams)
+- `src/components/layout/header.tsx` - Select → CascadingFilter 교체
+- `src/app/api/dashboard/route.ts` - agencyIds(복수), majorCategories(복수) 파라미터 추가
+- `src/app/api/activations/route.ts` - agencyIds(복수), majorCategories(복수) 파라미터 추가
+- `src/app/(dashboard)/page.tsx` - selectedAgency → selectedMajors/Mediums/Agencies로 의존성 변경
+- `src/app/(dashboard)/activations/page.tsx` - dashboardAgency → dashboardSelectedAgencies로 변경
+
+**API 파라미터 체계:**
+- `agencyIds` (comma-separated) - 소분류(거래처) 직접 지정
+- `mediumCategories` (comma-separated) - 중분류로 필터
+- `majorCategories` (comma-separated) - 대분류로 필터
+- 우선순위: agencyIds > mediumCategories > majorCategories
+- 기존 단수 파라미터(agencyId, majorCategory) 하위호환 유지
+
+### Phase 5 버그 수정: neon-http ANY() 배열 직렬화 오류 (2026-02-26)
+
+**증상**: 대분류(DOD) 선택 시 `/api/dashboard?majorCategories=DOD` → 500 에러
+**원인**: `@neondatabase/serverless`의 `neon-http` 드라이버에서 raw SQL의 `ANY(${jsArray})`가
+JavaScript 배열을 PostgreSQL 배열로 올바르게 직렬화하지 못함
+**수정**: `src/lib/db/queries/activations.ts` - 10개 raw SQL 함수의 `ANY(${agencyIds})` →
+`IN (${sql.join(...)})` 패턴으로 전면 교체. `inList()` 헬퍼 함수 추가.
+**검증**: 빌드 성공 + 런타임 API 테스트 (majorCategories=DOD → 200, 21건 정상 반환)
+
+### 빌드 상태
+- `npm run build` 성공 (26 pages, 0 TypeScript errors)
+- 런타임 검증 완료: dashboard/activations API - 대분류/중분류/전체 필터 모두 정상
+- Plan file: `C:\Users\woosol\.claude\plans\linear-finding-eagle.md`

@@ -1,32 +1,66 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 
-interface Agency {
+export interface Agency {
   id: string;
   name: string;
+  majorCategory?: string | null;
+  mediumCategory?: string | null;
+}
+
+export interface CategoryNode {
+  id: string;
+  name: string;
+  level: "major" | "medium";
+  parentId: string | null;
+  children?: CategoryNode[];
 }
 
 export function useAgencyFilter() {
   const [agencies, setAgencies] = useState<Agency[]>([]);
-  const [selectedAgency, setSelectedAgency] = useState("all");
+  const [categories, setCategories] = useState<CategoryNode[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetch("/api/agencies")
-      .then((res) => res.json())
-      .then((data) => {
-        setAgencies(data.agencies || []);
+  // 멀티셀렉트 상태
+  const [selectedMajors, setSelectedMajors] = useState<string[]>([]);
+  const [selectedMediums, setSelectedMediums] = useState<string[]>([]);
+  const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
+
+  const fetchData = useCallback(() => {
+    Promise.all([
+      fetch("/api/agencies").then((res) => res.json()),
+      fetch("/api/categories").then((res) => res.json()),
+    ])
+      .then(([agencyData, categoryData]) => {
+        setAgencies(agencyData.agencies || []);
+        setCategories(categoryData.categories || []);
         setLoading(false);
       })
       .catch(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const refreshCategories = useCallback(() => {
+    fetch("/api/categories")
+      .then((res) => res.json())
+      .then((data) => setCategories(data.categories || []))
+      .catch(() => {});
+  }, []);
+
   return {
     agencies,
-    selectedAgency,
-    setSelectedAgency,
+    categories,
+    selectedMajors,
+    setSelectedMajors,
+    selectedMediums,
+    setSelectedMediums,
+    selectedAgencies,
+    setSelectedAgencies,
     loading,
-    agencyParam: selectedAgency === "all" ? undefined : selectedAgency,
+    refreshCategories,
   };
 }

@@ -9,10 +9,23 @@ import {
   integer,
 } from "drizzle-orm/pg-core";
 
-// 1. agencies (거래처/유학원)
+// 0. agency_categories (거래처 분류 - 대분류/중분류)
+export const agencyCategories = pgTable("agency_categories", {
+  id: text("id").primaryKey(), // 'DOD', 'DOD_키르기스스탄' 등
+  name: text("name").notNull(), // 표시명
+  level: text("level").notNull(), // 'major' | 'medium'
+  parentId: text("parent_id"), // medium이면 major의 id
+  sortOrder: integer("sort_order").default(0),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+// 1. agencies (거래처/유학원 = 소분류)
 export const agencies = pgTable("agencies", {
   id: text("id").primaryKey(), // 'dream_high', 'creatoria' 등
   name: text("name").notNull(),
+  majorCategory: text("major_category"), // 대분류: 'DOD'
+  mediumCategory: text("medium_category"), // 중분류: 'DOD_키르기스스탄'
   contactName: text("contact_name"),
   contactPhone: text("contact_phone"),
   isActive: boolean("is_active").default(true),
@@ -29,6 +42,10 @@ export const userProfiles = pgTable("user_profiles", {
     .array()
     .notNull()
     .default([]),
+  allowedMajorCategory: text("allowed_major_category"), // 대분류: 'DOD'
+  allowedMediumCategories: text("allowed_medium_categories")
+    .array()
+    .default([]), // 중분류: ['DOD_키르기스스탄', 'DOD_ON']
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });

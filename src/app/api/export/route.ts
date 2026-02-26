@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { activations, agencies } from "@/lib/db/schema";
+import { activations, agencies, agencyCategories } from "@/lib/db/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
+import { resolveAllowedAgencyIds } from "@/lib/db/queries/users";
 
 const CSV_HEADERS = [
+  "대분류",
+  "중분류",
   "업체명(유학원)",
   "고객명",
   "유심번호",
@@ -56,11 +59,11 @@ export async function GET(request: NextRequest) {
 
     // 조건 빌드
     const conditions = [];
-    if (user.role === "PARTNER") {
-      if (user.allowedAgencies.length > 0) {
-        conditions.push(inArray(activations.agencyId, user.allowedAgencies));
-      } else {
-        return new Response("", { status: 200 });
+    if (user.role === "PARTNER" || user.role === "GUEST") {
+      const allowedIds = await resolveAllowedAgencyIds(user);
+      if (allowedIds !== null) {
+        if (allowedIds.length === 0) return new Response("", { status: 200 });
+        conditions.push(inArray(activations.agencyId, allowedIds));
       }
     } else if (agencyId && agencyId !== "all") {
       conditions.push(eq(activations.agencyId, agencyId));
@@ -71,9 +74,15 @@ export async function GET(request: NextRequest) {
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-    // 거래처 이름 매핑
+    // 거래처 이름/카테고리 매핑
     const allAgencies = await db.select().from(agencies);
     const agencyNameMap = new Map(allAgencies.map((a) => [a.id, a.name]));
+    const agencyMajorMap = new Map(allAgencies.map((a) => [a.id, a.majorCategory]));
+    const agencyMediumMap = new Map(allAgencies.map((a) => [a.id, a.mediumCategory]));
+
+    // 카테고리 이름 매핑
+    const allCategories = await db.select().from(agencyCategories);
+    const categoryNameMap = new Map(allCategories.map((c) => [c.id, c.name]));
 
     // 데이터 조회
     const data = await db
@@ -86,7 +95,11 @@ export async function GET(request: NextRequest) {
     const csvRows = [CSV_HEADERS.map(escapeCSV).join(",")];
 
     for (const row of data) {
+      const majorCatId = agencyMajorMap.get(row.agencyId);
+      const mediumCatId = agencyMediumMap.get(row.agencyId);
       const csvRow = [
+        escapeCSV(majorCatId ? categoryNameMap.get(majorCatId) || majorCatId : ""),
+        escapeCSV(mediumCatId ? categoryNameMap.get(mediumCatId) || mediumCatId : ""),
         escapeCSV(agencyNameMap.get(row.agencyId) || row.agencyId),
         escapeCSV(row.customerName),
         escapeCSV(row.usimNumber),

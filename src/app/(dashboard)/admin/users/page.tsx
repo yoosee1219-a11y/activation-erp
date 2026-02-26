@@ -22,6 +22,8 @@ interface UserProfile {
   name: string;
   role: string;
   allowedAgencies: string[];
+  allowedMajorCategory?: string | null;
+  allowedMediumCategories?: string[];
 }
 
 const roleLabels: Record<string, string> = {
@@ -39,7 +41,7 @@ const roleColors: Record<string, string> = {
 };
 
 export default function UsersPage() {
-  const { user, agencies } = useDashboard();
+  const { user, agencies, categories } = useDashboard();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
@@ -128,9 +130,11 @@ export default function UsersPage() {
                       {roleLabels[u.role] || u.role}
                     </Badge>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="text-sm">
                     {u.allowedAgencies?.includes("ALL")
                       ? "전체"
+                      : u.allowedMajorCategory
+                      ? `${u.allowedMajorCategory}${u.allowedMediumCategories?.length ? ` (${u.allowedMediumCategories.join(", ")})` : ""}`
                       : u.allowedAgencies?.join(", ") || "-"}
                   </TableCell>
                   <TableCell>
@@ -182,6 +186,7 @@ export default function UsersPage() {
         }}
         onSuccess={fetchUsers}
         agencies={agencies}
+        categories={categories}
         initialData={editUser}
       />
     </div>

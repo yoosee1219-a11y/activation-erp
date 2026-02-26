@@ -2,6 +2,12 @@ import { db } from "@/lib/db";
 import { activations, agencies } from "@/lib/db/schema";
 import { eq, and, desc, sql, count, ilike, gte, lte, inArray } from "drizzle-orm";
 
+// neon-http 드라이버에서 ANY(${array})가 배열 직렬화 실패하므로
+// IN (...) + sql.join()으로 안전하게 처리
+function inList(ids: string[]) {
+  return sql.join(ids.map(id => sql`${id}`), sql`, `);
+}
+
 export async function getActivations(params: {
   agencyId?: string;
   agencyIds?: string[];
@@ -104,10 +110,13 @@ export async function deleteActivation(id: string) {
   await db.delete(activations).where(eq(activations.id, id));
 }
 
-export async function getDashboardStats(agencyId?: string) {
-  const conditions = agencyId
-    ? [eq(activations.agencyId, agencyId)]
-    : [];
+export async function getDashboardStats(agencyId?: string, agencyIds?: string[]) {
+  const conditions = [];
+  if (agencyIds && agencyIds.length > 0) {
+    conditions.push(inArray(activations.agencyId, agencyIds));
+  } else if (agencyId) {
+    conditions.push(eq(activations.agencyId, agencyId));
+  }
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
   const [totalResult, pendingResult, completedResult, autopayPendingResult] =
@@ -165,8 +174,10 @@ export async function getAvailableMonths(agencyId?: string) {
   return result.rows;
 }
 
-export async function getMonthlyStats(agencyId?: string) {
-  const agencyFilter = agencyId ? sql`WHERE agency_id = ${agencyId}` : sql``;
+export async function getMonthlyStats(agencyId?: string, agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`WHERE agency_id IN (${inList(agencyIds)})`
+    : agencyId ? sql`WHERE agency_id = ${agencyId}` : sql``;
 
   const result = await db.execute(sql`
     SELECT
@@ -184,7 +195,11 @@ export async function getMonthlyStats(agencyId?: string) {
   return result.rows;
 }
 
-export async function getAgencyStats() {
+export async function getAgencyStats(agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`WHERE a.agency_id IN (${inList(agencyIds)})`
+    : sql``;
+
   const result = await db.execute(sql`
     SELECT
       a.agency_id as "agencyId",
@@ -197,13 +212,18 @@ export async function getAgencyStats() {
       COUNT(*) FILTER (WHERE a.autopay_registered = false) as "autopayPending"
     FROM activations a
     LEFT JOIN agencies ag ON a.agency_id = ag.id
+    ${agencyFilter}
     GROUP BY a.agency_id, ag.name
     ORDER BY ag.name
   `);
   return result.rows;
 }
 
-export async function getArcSupplementStats() {
+export async function getArcSupplementStats(agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`WHERE a.agency_id IN (${inList(agencyIds)})`
+    : sql``;
+
   const result = await db.execute(sql`
     SELECT
       a.agency_id as "agencyId",
@@ -224,6 +244,7 @@ export async function getArcSupplementStats() {
       ) as "overdueCount"
     FROM activations a
     LEFT JOIN agencies ag ON a.agency_id = ag.id
+    ${agencyFilter}
     GROUP BY a.agency_id, ag.name
     HAVING COUNT(*) FILTER (
       WHERE a.arc_supplement IS NULL OR a.arc_supplement = ''
@@ -233,7 +254,11 @@ export async function getArcSupplementStats() {
   return result.rows;
 }
 
-export async function getStaffStats() {
+export async function getStaffStats(agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`WHERE a.agency_id IN (${inList(agencyIds)})`
+    : sql``;
+
   const result = await db.execute(sql`
     SELECT
       COALESCE(a.person_in_charge, '미배정') as "staff",
@@ -252,14 +277,17 @@ export async function getStaffStats() {
           AND (a.arc_supplement IS NULL OR a.arc_supplement = '')
       ) as "arcOverdue"
     FROM activations a
+    ${agencyFilter}
     GROUP BY COALESCE(a.person_in_charge, '미배정')
     ORDER BY "staff"
   `);
   return result.rows;
 }
 
-export async function getDailyStats(agencyId?: string) {
-  const agencyFilter = agencyId ? sql`AND agency_id = ${agencyId}` : sql``;
+export async function getDailyStats(agencyId?: string, agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`AND agency_id IN (${inList(agencyIds)})`
+    : agencyId ? sql`AND agency_id = ${agencyId}` : sql``;
 
   const result = await db.execute(sql`
     SELECT
@@ -279,8 +307,10 @@ export async function getDailyStats(agencyId?: string) {
   return result.rows;
 }
 
-export async function getWeeklyStats(agencyId?: string) {
-  const agencyFilter = agencyId ? sql`AND agency_id = ${agencyId}` : sql``;
+export async function getWeeklyStats(agencyId?: string, agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`AND agency_id IN (${inList(agencyIds)})`
+    : agencyId ? sql`AND agency_id = ${agencyId}` : sql``;
 
   const result = await db.execute(sql`
     SELECT
@@ -300,7 +330,11 @@ export async function getWeeklyStats(agencyId?: string) {
 }
 
 // KPI 상세: 전체 개통 - 거래처별 건수
-export async function getKpiTotalByAgency() {
+export async function getKpiTotalByAgency(agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`WHERE a.agency_id IN (${inList(agencyIds)})`
+    : sql``;
+
   const result = await db.execute(sql`
     SELECT
       a.agency_id as "agencyId",
@@ -308,6 +342,7 @@ export async function getKpiTotalByAgency() {
       COUNT(*) as "count"
     FROM activations a
     LEFT JOIN agencies ag ON a.agency_id = ag.id
+    ${agencyFilter}
     GROUP BY a.agency_id, ag.name
     ORDER BY "count" DESC
   `);
@@ -315,7 +350,11 @@ export async function getKpiTotalByAgency() {
 }
 
 // KPI 상세: 대기 중 - 거래처별 + 입국예정일
-export async function getKpiPendingDetail() {
+export async function getKpiPendingDetail(agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`AND a.agency_id IN (${inList(agencyIds)})`
+    : sql``;
+
   const result = await db.execute(sql`
     SELECT
       a.id,
@@ -327,13 +366,18 @@ export async function getKpiPendingDetail() {
     FROM activations a
     LEFT JOIN agencies ag ON a.agency_id = ag.id
     WHERE a.activation_status = '대기'
+    ${agencyFilter}
     ORDER BY a.entry_date ASC NULLS LAST
   `);
   return result.rows;
 }
 
 // KPI 상세: 자동이체 미등록 - 거래처별 + 개통일 기준 남은기한
-export async function getKpiAutopayDetail() {
+export async function getKpiAutopayDetail(agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`AND a.agency_id IN (${inList(agencyIds)})`
+    : sql``;
+
   const result = await db.execute(sql`
     SELECT
       a.id,
@@ -350,13 +394,16 @@ export async function getKpiAutopayDetail() {
     FROM activations a
     LEFT JOIN agencies ag ON a.agency_id = ag.id
     WHERE a.autopay_registered = false
+    ${agencyFilter}
     ORDER BY a.activation_date ASC NULLS LAST
   `);
   return result.rows;
 }
 
-export async function getArcUrgentList(agencyId?: string) {
-  const agencyFilter = agencyId ? sql`AND a.agency_id = ${agencyId}` : sql``;
+export async function getArcUrgentList(agencyId?: string, agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`AND a.agency_id IN (${inList(agencyIds)})`
+    : agencyId ? sql`AND a.agency_id = ${agencyId}` : sql``;
   const result = await db.execute(sql`
     SELECT
       a.id,
