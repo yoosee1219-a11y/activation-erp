@@ -180,7 +180,7 @@ export async function POST(request: NextRequest) {
           autopayRegistered: parseBool(row.autopayRegistered || ""),
           notes: row.notes || null,
           commitmentDate: parseDate(row.commitmentDate || ""),
-          workStatus: row.activationStatus === "개통완료" ? "완료" : "개통요청",
+          workStatus: row.activationStatus === "개통완료" ? "개통완료" : "입력중",
         };
 
         await db.insert(activations).values(insertData);

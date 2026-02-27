@@ -76,7 +76,7 @@ export const activations = pgTable("activations", {
   activationDate: date("activation_date"), // 개통일자
   activationStatus: text("activation_status").default("대기"), // 개통여부
   personInCharge: text("person_in_charge"), // 담당자
-  workStatus: text("work_status").default("개통요청"), // 진행상황: 개통요청/작업중/완료/보완요청
+  workStatus: text("work_status").default("입력중"), // 진행상황: 입력중/개통요청/진행중/개통완료/보완요청
 
   // 서류 상태
   applicationDocs: text("application_docs"), // 가입신청서류

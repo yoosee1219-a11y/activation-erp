@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
 
     const activation = await createActivation({
       ...body,
-      workStatus: body.workStatus || "개통요청",
+      workStatus: body.workStatus || "입력중",
     });
     return NextResponse.json({ activation }, { status: 201 });
   } catch (error) {

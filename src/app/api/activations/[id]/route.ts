@@ -7,24 +7,24 @@ import {
 import { getSessionUser } from "@/lib/auth/session";
 import { canAccessAgency } from "@/lib/db/queries/users";
 
-// 거래처(PARTNER)가 편집할 수 있는 필드
+// 거래처(PARTNER)가 편집할 수 있는 필드 (전체 목록)
 const PARTNER_EDITABLE_FIELDS = new Set([
-  // 기본 정보 (isLocked=false일 때만)
+  // 기본 정보 (입력중/보완요청 상태에서만)
   "customerName",
   "usimNumber",
   "entryDate",
   "subscriptionType",
   "ratePlan",
-  // 서류 (workStatus="보완요청"일 때만)
+  // 서류 (입력중/보완요청 상태에서만)
   "applicationDocs",
   "nameChangeDocs",
   "arcAutopayInfo",
   "arcSupplement",
-  // 진행상황 (보완요청→개통요청만)
+  // 진행상황 (입력중→개통요청, 보완요청→개통요청)
   "workStatus",
 ]);
 
-// 서류 필드 (workStatus가 "보완요청"일 때만 편집 가능)
+// 서류 필드
 const DOCUMENT_FIELDS = new Set([
   "applicationDocs",
   "nameChangeDocs",
@@ -32,7 +32,7 @@ const DOCUMENT_FIELDS = new Set([
   "arcSupplement",
 ]);
 
-// 기본 정보 필드 (isLocked=false일 때만 편집 가능)
+// 기본 정보 필드
 const PARTNER_BASIC_FIELDS = new Set([
   "customerName",
   "usimNumber",
@@ -40,6 +40,9 @@ const PARTNER_BASIC_FIELDS = new Set([
   "subscriptionType",
   "ratePlan",
 ]);
+
+// 파트너가 편집 가능한 상태 (입력중 + 보완요청)
+const PARTNER_EDITABLE_STATUSES = new Set(["입력중", "보완요청"]);
 
 export async function GET(
   request: NextRequest,
@@ -103,10 +106,13 @@ export async function PATCH(
 
     const body = await request.json();
 
-    // PARTNER 역할 제한
+    // PARTNER 역할 제한 (workStatus 기반 통합 권한)
     if (user.role === "PARTNER") {
-      // 관리자 전용 필드 수정 시도 → 거부
       const requestedFields = Object.keys(body);
+      const currentWorkStatus = existing.workStatus || "입력중";
+      const isEditable = PARTNER_EDITABLE_STATUSES.has(currentWorkStatus);
+
+      // 1) 관리자 전용 필드 수정 시도 → 거부
       const forbiddenFields = requestedFields.filter(
         (f) => !PARTNER_EDITABLE_FIELDS.has(f)
       );
@@ -117,23 +123,10 @@ export async function PATCH(
         );
       }
 
-      const isLocked = existing.isLocked ?? false;
-      const currentWorkStatus = existing.workStatus || "개통요청";
-
-      // 잠금 상태에서 기본 정보 필드 편집 차단
-      if (isLocked) {
-        const basicAttempt = requestedFields.filter((f) => PARTNER_BASIC_FIELDS.has(f));
-        if (basicAttempt.length > 0) {
-          return NextResponse.json(
-            { error: "잠금 상태에서는 기본 정보를 수정할 수 없습니다." },
-            { status: 403 }
-          );
-        }
-      }
-
-      // workStatus 변경 검증: 보완요청 → 개통요청만 허용
+      // 2) workStatus 변경 검증
       if (body.workStatus !== undefined) {
-        if (currentWorkStatus !== "보완요청") {
+        // 입력중 → 개통요청, 보완요청 → 개통요청만 허용
+        if (!isEditable) {
           return NextResponse.json(
             { error: "현재 상태에서는 진행상황을 변경할 수 없습니다." },
             { status: 403 }
@@ -147,36 +140,60 @@ export async function PATCH(
         }
       }
 
-      // 서류 필드: workStatus가 "보완요청"일 때만 편집 가능
-      const docAttempt = requestedFields.filter((f) => DOCUMENT_FIELDS.has(f));
-      if (docAttempt.length > 0 && currentWorkStatus !== "보완요청") {
+      // 3) 기본 정보 필드: 입력중/보완요청 상태에서만 편집 가능
+      const basicAttempt = requestedFields.filter((f) => PARTNER_BASIC_FIELDS.has(f));
+      if (basicAttempt.length > 0 && !isEditable) {
         return NextResponse.json(
-          { error: "현재 상태에서는 서류를 수정할 수 없습니다. 보완요청 상태에서만 가능합니다." },
+          { error: "현재 상태에서는 기본 정보를 수정할 수 없습니다." },
+          { status: 403 }
+        );
+      }
+
+      // 4) 서류 필드: 입력중/보완요청 상태에서만 편집 가능
+      const docAttempt = requestedFields.filter((f) => DOCUMENT_FIELDS.has(f));
+      if (docAttempt.length > 0 && !isEditable) {
+        return NextResponse.json(
+          { error: "현재 상태에서는 서류를 수정할 수 없습니다." },
           { status: 403 }
         );
       }
     }
 
-    // 관리자가 activationStatus = "개통완료" 설정 시 → 자동 잠금
+    // 자동 잠금 제어 (workStatus 기반 통합)
     const updateData: Record<string, unknown> = { ...body };
-    if (
-      (user.role === "ADMIN" || user.role === "SUB_ADMIN") &&
-      body.activationStatus === "개통완료"
-    ) {
-      updateData.isLocked = true;
-      updateData.lockedAt = new Date();
-      updateData.lockedBy = user.id;
+
+    if (user.role === "PARTNER") {
+      // 파트너가 개통요청으로 변경 → 자동 잠금
+      if (body.workStatus === "개통요청") {
+        updateData.isLocked = true;
+        updateData.lockedAt = new Date();
+        updateData.lockedBy = user.id;
+      }
     }
 
-    // 관리자가 workStatus 변경 시 isLocked 자동 제어
-    if ((user.role === "ADMIN" || user.role === "SUB_ADMIN") && body.workStatus) {
-      if (body.workStatus === "보완요청") {
-        // 보완요청 → 자동 잠금 해제 (파트너가 서류 편집 가능)
-        updateData.isLocked = false;
-        updateData.lockedAt = null;
-        updateData.lockedBy = null;
-      } else if (existing.workStatus === "보완요청") {
-        // 보완요청에서 다른 상태로 → 자동 잠금
+    if (user.role === "ADMIN" || user.role === "SUB_ADMIN") {
+      if (body.workStatus) {
+        if (body.workStatus === "보완요청" || body.workStatus === "입력중") {
+          // 보완요청/입력중 → 잠금 해제 (파트너 편집 가능)
+          updateData.isLocked = false;
+          updateData.lockedAt = null;
+          updateData.lockedBy = null;
+        } else if (body.workStatus === "개통요청" || body.workStatus === "진행중") {
+          // 개통요청/진행중 → 잠금
+          updateData.isLocked = true;
+          updateData.lockedAt = new Date();
+          updateData.lockedBy = user.id;
+        } else if (body.workStatus === "개통완료") {
+          // 개통완료 → 잠금 + activationStatus 동기화
+          updateData.isLocked = true;
+          updateData.lockedAt = new Date();
+          updateData.lockedBy = user.id;
+          updateData.activationStatus = "개통완료";
+        }
+      }
+
+      // 하위호환: activationStatus 직접 변경 시에도 잠금
+      if (body.activationStatus === "개통완료" && !body.workStatus) {
         updateData.isLocked = true;
         updateData.lockedAt = new Date();
         updateData.lockedBy = user.id;

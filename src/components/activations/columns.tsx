@@ -54,9 +54,10 @@ const statusColors: Record<string, string> = {
 };
 
 const workStatusColors: Record<string, string> = {
+  입력중: "bg-gray-100 text-gray-700",
   개통요청: "bg-blue-100 text-blue-700",
-  작업중: "bg-yellow-100 text-yellow-700",
-  완료: "bg-green-100 text-green-700",
+  진행중: "bg-yellow-100 text-yellow-700",
+  개통완료: "bg-green-100 text-green-700",
   보완요청: "bg-red-100 text-red-700",
 };
 
@@ -306,35 +307,6 @@ export function getColumns(options: {
       },
     },
     {
-      accessorKey: "activationStatus",
-      header: "상태",
-      cell: ({ row }) => {
-        const current = (row.getValue("activationStatus") as string) || "대기";
-        if (!onInlineUpdate) {
-          return (
-            <Badge className={statusColors[current] || "bg-gray-100 text-gray-800"}>
-              {current}
-            </Badge>
-          );
-        }
-        return (
-          <Select
-            value={current}
-            onValueChange={(v) => onInlineUpdate(row.original.id, "activationStatus", v)}
-          >
-            <SelectTrigger className={`h-7 w-[100px] text-xs border-dashed ${statusColors[current] || ""}`}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="대기">대기</SelectItem>
-              <SelectItem value="개통완료">개통완료</SelectItem>
-              <SelectItem value="개통취소">개통취소</SelectItem>
-            </SelectContent>
-          </Select>
-        );
-      },
-    },
-    {
       accessorKey: "personInCharge",
       header: "담당자",
       cell: ({ row }) => {
@@ -367,10 +339,10 @@ export function getColumns(options: {
       accessorKey: "workStatus",
       header: "진행상황",
       cell: ({ row }) => {
-        const current = (row.getValue("workStatus") as string) || "개통요청";
+        const current = (row.getValue("workStatus") as string) || "입력중";
         if (!onInlineUpdate) {
           return (
-            <Badge className={workStatusColors[current] || workStatusColors["개통요청"]}>
+            <Badge className={workStatusColors[current] || workStatusColors["입력중"]}>
               {current}
             </Badge>
           );
@@ -386,9 +358,10 @@ export function getColumns(options: {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="입력중">입력중</SelectItem>
               <SelectItem value="개통요청">개통요청</SelectItem>
-              <SelectItem value="작업중">작업중</SelectItem>
-              <SelectItem value="완료">완료</SelectItem>
+              <SelectItem value="진행중">진행중</SelectItem>
+              <SelectItem value="개통완료">개통완료</SelectItem>
               <SelectItem value="보완요청">보완요청</SelectItem>
             </SelectContent>
           </Select>

@@ -39,7 +39,7 @@ export async function getActivations(params: {
     conditions.push(eq(activations.agencyId, agencyId));
   }
   if (status) {
-    conditions.push(eq(activations.activationStatus, status));
+    conditions.push(eq(activations.workStatus, status));
   }
   if (search) {
     conditions.push(ilike(activations.customerName, `%${search}%`));
@@ -208,7 +208,7 @@ export async function getAgencyStats(agencyIds?: string[]) {
       COUNT(*) FILTER (WHERE a.activation_status = '개통완료') as "completed",
       COUNT(*) FILTER (WHERE a.activation_status = '대기') as "pending",
       COUNT(*) FILTER (WHERE a.activation_status = '개통취소') as "cancelled",
-      COUNT(*) FILTER (WHERE a.work_status = '작업중') as "working",
+      COUNT(*) FILTER (WHERE a.work_status = '진행중') as "working",
       COUNT(*) FILTER (WHERE a.autopay_registered = false) as "autopayPending"
     FROM activations a
     LEFT JOIN agencies ag ON a.agency_id = ag.id
@@ -265,8 +265,8 @@ export async function getStaffStats(agencyIds?: string[]) {
       COUNT(*) as "total",
       COUNT(*) FILTER (WHERE a.activation_status = '개통완료') as "completed",
       COUNT(*) FILTER (WHERE a.activation_status = '대기') as "pending",
-      COUNT(*) FILTER (WHERE a.work_status = '작업중') as "working",
-      COUNT(*) FILTER (WHERE a.work_status = '완료') as "done",
+      COUNT(*) FILTER (WHERE a.work_status = '진행중') as "working",
+      COUNT(*) FILTER (WHERE a.work_status = '개통완료') as "done",
       COUNT(*) FILTER (
         WHERE a.arc_supplement_deadline IS NOT NULL
           AND (a.arc_supplement IS NULL OR a.arc_supplement = '')
@@ -325,6 +325,112 @@ export async function getWeeklyStats(agencyId?: string, agencyIds?: string[]) {
     GROUP BY DATE_TRUNC('week', COALESCE(activation_date, entry_date, created_at::date))
     ORDER BY week DESC
     LIMIT 12
+  `);
+  return result.rows;
+}
+
+// ── 보완요청 대기건 통계 ──
+export async function getSupplementRequestStats(agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`AND a.agency_id IN (${inList(agencyIds)})`
+    : sql``;
+
+  const result = await db.execute(sql`
+    SELECT
+      COUNT(*) as "total",
+      COUNT(*) FILTER (WHERE a.work_status = '보완요청') as "workStatusCount",
+      COUNT(*) FILTER (
+        WHERE a.application_docs_review = '보완요청'
+           OR a.name_change_docs_review = '보완요청'
+           OR a.arc_autopay_review = '보완요청'
+      ) as "reviewCount"
+    FROM activations a
+    WHERE (
+      a.work_status = '보완요청'
+      OR a.application_docs_review = '보완요청'
+      OR a.name_change_docs_review = '보완요청'
+      OR a.arc_autopay_review = '보완요청'
+    )
+    ${agencyFilter}
+  `);
+  return result.rows[0] || { total: 0, workStatusCount: 0, reviewCount: 0 };
+}
+
+// 보완요청 대기건 상세 리스트
+export async function getSupplementRequestDetail(agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`AND a.agency_id IN (${inList(agencyIds)})`
+    : sql``;
+
+  const result = await db.execute(sql`
+    SELECT
+      a.id,
+      a.agency_id as "agencyId",
+      COALESCE(ag.name, a.agency_id) as "agencyName",
+      a.customer_name as "customerName",
+      a.new_phone_number as "newPhoneNumber",
+      a.person_in_charge as "personInCharge",
+      a.work_status as "workStatus",
+      a.application_docs_review as "applicationDocsReview",
+      a.name_change_docs_review as "nameChangeDocsReview",
+      a.arc_autopay_review as "arcAutopayReview"
+    FROM activations a
+    LEFT JOIN agencies ag ON a.agency_id = ag.id
+    WHERE (
+      a.work_status = '보완요청'
+      OR a.application_docs_review = '보완요청'
+      OR a.name_change_docs_review = '보완요청'
+      OR a.arc_autopay_review = '보완요청'
+    )
+    ${agencyFilter}
+    ORDER BY a.created_at DESC
+  `);
+  return result.rows;
+}
+
+// ── 개통대기 당월/당일 통계 (담당자 배정+작업중이면 제외) ──
+export async function getPendingByPeriod(agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`AND agency_id IN (${inList(agencyIds)})`
+    : sql``;
+
+  const result = await db.execute(sql`
+    SELECT
+      COUNT(*) as "totalPending",
+      COUNT(*) FILTER (
+        WHERE TO_CHAR(COALESCE(entry_date, created_at::date), 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
+      ) as "monthlyPending",
+      COUNT(*) FILTER (
+        WHERE COALESCE(entry_date, created_at::date) = CURRENT_DATE
+      ) as "todayPending"
+    FROM activations
+    WHERE work_status IN ('입력중', '개통요청')
+      ${agencyFilter}
+  `);
+  return result.rows[0] || { totalPending: 0, monthlyPending: 0, todayPending: 0 };
+}
+
+// 개통대기 당일 상세 리스트 (입국예정일이 오늘인 건)
+export async function getTodayPendingDetail(agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`AND a.agency_id IN (${inList(agencyIds)})`
+    : sql``;
+
+  const result = await db.execute(sql`
+    SELECT
+      a.id,
+      a.agency_id as "agencyId",
+      COALESCE(ag.name, a.agency_id) as "agencyName",
+      a.customer_name as "customerName",
+      a.new_phone_number as "newPhoneNumber",
+      a.entry_date as "entryDate",
+      a.person_in_charge as "personInCharge"
+    FROM activations a
+    LEFT JOIN agencies ag ON a.agency_id = ag.id
+    WHERE a.work_status IN ('입력중', '개통요청')
+      AND COALESCE(a.entry_date, a.created_at::date) = CURRENT_DATE
+      ${agencyFilter}
+    ORDER BY a.entry_date ASC NULLS LAST
   `);
   return result.rows;
 }

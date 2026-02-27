@@ -48,7 +48,7 @@ export function AgencyStatusTable({ data }: { data: AgencyStat[] }) {
               <TableHead className="text-center">개통완료</TableHead>
               <TableHead className="text-center">대기</TableHead>
               <TableHead className="text-center">취소</TableHead>
-              <TableHead className="text-center">작업중</TableHead>
+              <TableHead className="text-center">진행중</TableHead>
               <TableHead className="text-center">자동이체 미등록</TableHead>
             </TableRow>
           </TableHeader>

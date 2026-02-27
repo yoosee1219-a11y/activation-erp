@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
       conditions.push(eq(activations.agencyId, agencyId));
     }
     if (status) {
-      conditions.push(eq(activations.activationStatus, status));
+      conditions.push(eq(activations.workStatus, status));
     }
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;

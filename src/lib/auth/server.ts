@@ -9,6 +9,8 @@ export const auth = betterAuth({
     const origins = [
       "http://localhost:3000",
       "http://localhost:3001",
+      "http://127.0.0.1:3000",
+      "http://127.0.0.1:3001",
     ];
     if (process.env.NEXT_PUBLIC_APP_URL) origins.push(process.env.NEXT_PUBLIC_APP_URL);
     // Vercel 프리뷰 URL: 요청 origin 자체를 신뢰 목록에 추가

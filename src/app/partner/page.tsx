@@ -18,10 +18,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Clock, CheckCircle2, Loader2, RotateCcw, X, RefreshCw } from "lucide-react";
+import { Plus, Clock, CheckCircle2, Loader2, RotateCcw, X, RefreshCw, FileEdit } from "lucide-react";
 import { toast } from "sonner";
 
-type WorkStatusFilter = "개통요청" | "작업중" | "완료" | "보완요청" | null;
+type WorkStatusFilter = "입력중" | "개통요청" | "진행중" | "개통완료" | "보완요청" | null;
 
 export default function PartnerPage() {
   const { user } = useAuth();
@@ -217,28 +217,31 @@ export default function PartnerPage() {
     [handleUpdate]
   );
 
-  // 요약 통계 (workStatus 기준)
+  // 요약 통계 (workStatus 기준 - 5개)
   const stats = useMemo(() => {
+    const drafting = data.filter(
+      (r) => !r.workStatus || r.workStatus === "입력중"
+    ).length;
     const requested = data.filter(
-      (r) => !r.workStatus || r.workStatus === "개통요청"
+      (r) => r.workStatus === "개통요청"
     ).length;
     const working = data.filter(
-      (r) => r.workStatus === "작업중"
+      (r) => r.workStatus === "진행중"
     ).length;
     const completed = data.filter(
-      (r) => r.workStatus === "완료"
+      (r) => r.workStatus === "개통완료"
     ).length;
     const needsFix = data.filter(
       (r) => r.workStatus === "보완요청"
     ).length;
-    return { requested, working, completed, needsFix };
+    return { drafting, requested, working, completed, needsFix };
   }, [data]);
 
   // 필터링된 데이터
   const filteredData = useMemo(() => {
     if (!statusFilter) return data;
     return data.filter((r) => {
-      const ws = r.workStatus || "개통요청";
+      const ws = r.workStatus || "입력중";
       return ws === statusFilter;
     });
   }, [data, statusFilter]);
@@ -291,8 +294,26 @@ export default function PartnerPage() {
         </div>
       </div>
 
-      {/* 요약 카드 (workStatus 기준, 클릭 필터링) */}
-      <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
+      {/* 요약 카드 5개 (workStatus 기준, 클릭 필터링) */}
+      <div className="grid gap-4 grid-cols-2 sm:grid-cols-5">
+        <Card
+          className={`cursor-pointer transition-all hover:shadow-md ${
+            statusFilter === "입력중"
+              ? "ring-2 ring-gray-500 shadow-md"
+              : "hover:ring-1 hover:ring-gray-200"
+          }`}
+          onClick={() => handleCardClick("입력중")}
+        >
+          <CardContent className="flex items-center gap-3 p-4">
+            <div className="rounded-lg bg-gray-100 p-2">
+              <FileEdit className="h-5 w-5 text-gray-700" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">입력중</p>
+              <p className="text-2xl font-bold">{stats.drafting}건</p>
+            </div>
+          </CardContent>
+        </Card>
         <Card
           className={`cursor-pointer transition-all hover:shadow-md ${
             statusFilter === "개통요청"
@@ -313,36 +334,36 @@ export default function PartnerPage() {
         </Card>
         <Card
           className={`cursor-pointer transition-all hover:shadow-md ${
-            statusFilter === "작업중"
+            statusFilter === "진행중"
               ? "ring-2 ring-yellow-500 shadow-md"
               : "hover:ring-1 hover:ring-yellow-200"
           }`}
-          onClick={() => handleCardClick("작업중")}
+          onClick={() => handleCardClick("진행중")}
         >
           <CardContent className="flex items-center gap-3 p-4">
             <div className="rounded-lg bg-yellow-100 p-2">
               <Loader2 className="h-5 w-5 text-yellow-700" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">작업중</p>
+              <p className="text-sm text-gray-500">진행중</p>
               <p className="text-2xl font-bold">{stats.working}건</p>
             </div>
           </CardContent>
         </Card>
         <Card
           className={`cursor-pointer transition-all hover:shadow-md ${
-            statusFilter === "완료"
+            statusFilter === "개통완료"
               ? "ring-2 ring-green-500 shadow-md"
               : "hover:ring-1 hover:ring-green-200"
           }`}
-          onClick={() => handleCardClick("완료")}
+          onClick={() => handleCardClick("개통완료")}
         >
           <CardContent className="flex items-center gap-3 p-4">
             <div className="rounded-lg bg-green-100 p-2">
               <CheckCircle2 className="h-5 w-5 text-green-700" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">완료</p>
+              <p className="text-sm text-gray-500">개통완료</p>
               <p className="text-2xl font-bold">{stats.completed}건</p>
             </div>
           </CardContent>
@@ -463,6 +484,14 @@ export default function PartnerPage() {
           pageSize={200}
           onPageChange={setPage}
           searchPlaceholder="고객명으로 검색..."
+          getRowClassName={(row: PartnerActivationRow) => {
+            const hasSupp =
+              row.workStatus === "보완요청" ||
+              row.applicationDocsReview === "보완요청" ||
+              row.nameChangeDocsReview === "보완요청" ||
+              row.arcAutopayReview === "보완요청";
+            return hasSupp ? "bg-red-50/70" : "";
+          }}
         />
       )}
     </div>

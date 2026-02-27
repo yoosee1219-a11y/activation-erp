@@ -204,11 +204,11 @@ export default function ActivationsPage() {
         agencyGroups[row.agencyId] = {
           name: row.agencyName || row.agencyId,
           rows: [],
-          counts: { "개통요청": 0, "작업중": 0, "완료": 0, "보완요청": 0 },
+          counts: { "입력중": 0, "개통요청": 0, "진행중": 0, "개통완료": 0, "보완요청": 0 },
         };
       }
       agencyGroups[row.agencyId].rows.push(row);
-      const ws = row.workStatus || "개통요청";
+      const ws = row.workStatus || "입력중";
       if (ws in agencyGroups[row.agencyId].counts) {
         agencyGroups[row.agencyId].counts[ws]++;
       }
@@ -283,19 +283,24 @@ export default function ActivationsPage() {
   // 상태 뱃지 렌더링 헬퍼
   const renderStatusBadges = (counts: Record<string, number>) => (
     <>
+      {counts["입력중"] > 0 && (
+        <Badge className="bg-gray-100 text-gray-700 text-[10px]">
+          입력중 {counts["입력중"]}
+        </Badge>
+      )}
       {counts["개통요청"] > 0 && (
         <Badge className="bg-blue-100 text-blue-700 text-[10px]">
           개통요청 {counts["개통요청"]}
         </Badge>
       )}
-      {counts["작업중"] > 0 && (
+      {counts["진행중"] > 0 && (
         <Badge className="bg-yellow-100 text-yellow-700 text-[10px]">
-          작업중 {counts["작업중"]}
+          진행중 {counts["진행중"]}
         </Badge>
       )}
-      {counts["완료"] > 0 && (
+      {counts["개통완료"] > 0 && (
         <Badge className="bg-green-100 text-green-700 text-[10px]">
-          완료 {counts["완료"]}
+          개통완료 {counts["개통완료"]}
         </Badge>
       )}
       {counts["보완요청"] > 0 && (
@@ -395,6 +400,14 @@ export default function ActivationsPage() {
           pageSize={200}
           onPageChange={setPage}
           searchPlaceholder="고객명으로 검색..."
+          getRowClassName={(row: ActivationRow) => {
+            const hasSupp =
+              row.workStatus === "보완요청" ||
+              row.applicationDocsReview === "보완요청" ||
+              row.nameChangeDocsReview === "보완요청" ||
+              row.arcAutopayReview === "보완요청";
+            return hasSupp ? "bg-red-50/70" : "";
+          }}
         />
       ) : (
         <div className="space-y-4">
@@ -504,6 +517,14 @@ export default function ActivationsPage() {
                 page={1}
                 pageSize={999}
                 searchPlaceholder="고객명으로 검색..."
+                getRowClassName={(row: ActivationRow) => {
+                  const hasSupp =
+                    row.workStatus === "보완요청" ||
+                    row.applicationDocsReview === "보완요청" ||
+                    row.nameChangeDocsReview === "보완요청" ||
+                    row.arcAutopayReview === "보완요청";
+                  return hasSupp ? "bg-red-50/70" : "";
+                }}
               />
             </div>
           ))}

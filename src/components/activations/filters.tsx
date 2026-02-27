@@ -94,9 +94,11 @@ export function Filters({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">전체 상태</SelectItem>
-            <SelectItem value="대기">대기</SelectItem>
+            <SelectItem value="입력중">입력중</SelectItem>
+            <SelectItem value="개통요청">개통요청</SelectItem>
+            <SelectItem value="진행중">진행중</SelectItem>
             <SelectItem value="개통완료">개통완료</SelectItem>
-            <SelectItem value="개통취소">개통취소</SelectItem>
+            <SelectItem value="보완요청">보완요청</SelectItem>
           </SelectContent>
         </Select>
 

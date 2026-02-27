@@ -11,6 +11,10 @@ import {
   getKpiTotalByAgency,
   getKpiPendingDetail,
   getKpiAutopayDetail,
+  getSupplementRequestStats,
+  getSupplementRequestDetail,
+  getPendingByPeriod,
+  getTodayPendingDetail,
 } from "@/lib/db/queries/activations";
 import {
   getAgencyIdsByMajorCategory,
@@ -73,6 +77,10 @@ export async function GET(request: NextRequest) {
       kpiTotalByAgency,
       kpiPendingDetail,
       kpiAutopayDetail,
+      supplementRequestStats,
+      supplementRequestDetail,
+      pendingByPeriod,
+      todayPendingDetail,
     ] = await Promise.all([
       getDashboardStats(agencyId, agencyIds),
       getMonthlyStats(agencyId, agencyIds),
@@ -85,6 +93,10 @@ export async function GET(request: NextRequest) {
       getKpiTotalByAgency(agencyIds),
       getKpiPendingDetail(agencyIds),
       getKpiAutopayDetail(agencyIds),
+      getSupplementRequestStats(agencyIds),
+      getSupplementRequestDetail(agencyIds),
+      getPendingByPeriod(agencyIds),
+      getTodayPendingDetail(agencyIds),
     ]);
 
     return NextResponse.json({
@@ -99,6 +111,10 @@ export async function GET(request: NextRequest) {
       kpiTotalByAgency,
       kpiPendingDetail,
       kpiAutopayDetail,
+      supplementRequestStats,
+      supplementRequestDetail,
+      pendingByPeriod,
+      todayPendingDetail,
     });
   } catch (error) {
     console.error("Failed to fetch dashboard:", error);

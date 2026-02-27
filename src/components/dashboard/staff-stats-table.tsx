@@ -54,8 +54,8 @@ export function StaffStatsTable({ data }: { data: StaffStat[] }) {
               <TableHead className="text-center">전체</TableHead>
               <TableHead className="text-center">개통완료</TableHead>
               <TableHead className="text-center">대기</TableHead>
-              <TableHead className="text-center">작업중</TableHead>
-              <TableHead className="text-center">작업완료</TableHead>
+              <TableHead className="text-center">진행중</TableHead>
+              <TableHead className="text-center">개통완료(작업)</TableHead>
               <TableHead className="text-center">보완 미제출</TableHead>
               <TableHead className="text-center">보완 기한초과</TableHead>
             </TableRow>

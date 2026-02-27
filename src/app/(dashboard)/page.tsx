@@ -2,12 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useDashboard } from "./layout";
-import { KpiCards } from "@/components/dashboard/kpi-cards";
-import { ActivationChart } from "@/components/dashboard/monthly-chart";
-
-import { AgencyStatusTable } from "@/components/dashboard/agency-status-table";
-import { StaffStatsTable } from "@/components/dashboard/staff-stats-table";
-import { ArcUrgentPanel } from "@/components/dashboard/arc-urgent-panel";
+import { DashboardTabs } from "@/components/dashboard/dashboard-tabs";
 
 interface TimeSeriesItem {
   label: string;
@@ -90,6 +85,37 @@ interface DashboardData {
     activationDate: string | null;
     daysLeft: number | null;
   }>;
+  supplementRequestStats: {
+    total: number;
+    workStatusCount: number;
+    reviewCount: number;
+  };
+  supplementRequestDetail: Array<{
+    id: string;
+    agencyId: string;
+    agencyName: string | null;
+    customerName: string;
+    newPhoneNumber: string | null;
+    personInCharge: string | null;
+    workStatus: string | null;
+    applicationDocsReview: string | null;
+    nameChangeDocsReview: string | null;
+    arcAutopayReview: string | null;
+  }>;
+  pendingByPeriod: {
+    totalPending: number;
+    monthlyPending: number;
+    todayPending: number;
+  };
+  todayPendingDetail: Array<{
+    id: string;
+    agencyId: string;
+    agencyName: string | null;
+    customerName: string;
+    newPhoneNumber: string | null;
+    entryDate: string | null;
+    personInCharge: string | null;
+  }>;
 }
 
 export default function DashboardPage() {
@@ -144,7 +170,7 @@ export default function DashboardPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">대시보드</h1>
         <div className="rounded-lg bg-gray-900 px-4 py-2 text-white shadow">
@@ -152,29 +178,22 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <KpiCards
+      <DashboardTabs
         stats={data.stats}
-        kpiTotalByAgency={data.kpiTotalByAgency || []}
-        kpiPendingDetail={data.kpiPendingDetail || []}
-        kpiAutopayDetail={data.kpiAutopayDetail || []}
-      />
-
-      <ActivationChart
         monthlyData={monthlyMapped}
         weeklyData={data.weeklyStats || []}
         dailyData={data.dailyStats || []}
-      />
-
-      {/* 거래처별 개통현황 테이블 */}
-      <AgencyStatusTable data={data.agencyStats} />
-
-      {/* 담당자별 현황 */}
-      <StaffStatsTable data={data.staffStats || []} />
-
-      {/* 외국인등록증 보완 - 기한 임박 경고 */}
-      <ArcUrgentPanel
+        agencyStats={data.agencyStats}
+        staffStats={data.staffStats || []}
         arcStats={data.arcStats}
-        urgentList={data.arcUrgentList}
+        arcUrgentList={data.arcUrgentList}
+        kpiTotalByAgency={data.kpiTotalByAgency || []}
+        kpiPendingDetail={data.kpiPendingDetail || []}
+        kpiAutopayDetail={data.kpiAutopayDetail || []}
+        supplementRequestStats={data.supplementRequestStats || { total: 0, workStatusCount: 0, reviewCount: 0 }}
+        supplementRequestDetail={data.supplementRequestDetail || []}
+        pendingByPeriod={data.pendingByPeriod || { totalPending: 0, monthlyPending: 0, todayPending: 0 }}
+        todayPendingDetail={data.todayPendingDetail || []}
       />
     </div>
   );

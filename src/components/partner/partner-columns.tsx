@@ -43,16 +43,11 @@ export type PartnerActivationRow = {
   createdAt: string;
 };
 
-const statusColors: Record<string, string> = {
-  대기: "bg-yellow-100 text-yellow-800",
-  개통완료: "bg-green-100 text-green-800",
-  개통취소: "bg-red-100 text-red-800",
-};
-
 const workStatusColors: Record<string, string> = {
+  입력중: "bg-gray-100 text-gray-700",
   개통요청: "bg-blue-100 text-blue-700",
-  작업중: "bg-yellow-100 text-yellow-700",
-  완료: "bg-green-100 text-green-700",
+  진행중: "bg-yellow-100 text-yellow-700",
+  개통완료: "bg-green-100 text-green-700",
   보완요청: "bg-red-100 text-red-700",
 };
 
@@ -61,6 +56,11 @@ const reviewColors: Record<string, string> = {
   "보완요청": "bg-red-100 text-red-700",
   "개통요청": "bg-blue-100 text-blue-700",
 };
+
+// 파트너가 편집 가능한 상태
+function isEditableStatus(ws: string): boolean {
+  return ws === "입력중" || ws === "보완요청";
+}
 
 export function getPartnerColumns(options: {
   onUpdate: (id: string, field: string, value: string) => void;
@@ -83,8 +83,9 @@ export function getPartnerColumns(options: {
       accessorKey: "workStatus",
       header: "진행상황",
       cell: ({ row }) => {
-        const ws = row.original.workStatus || "개통요청";
-        if (ws === "보완요청") {
+        const ws = row.original.workStatus || "입력중";
+        // 입력중 or 보완요청: Select 표시 (개통요청으로 변경 가능)
+        if (isEditableStatus(ws)) {
           return (
             <Select
               value={ws}
@@ -94,14 +95,14 @@ export function getPartnerColumns(options: {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="보완요청">보완요청</SelectItem>
+                <SelectItem value="입력중">입력중</SelectItem>
                 <SelectItem value="개통요청">개통요청</SelectItem>
               </SelectContent>
             </Select>
           );
         }
         return (
-          <Badge className={workStatusColors[ws] || workStatusColors["개통요청"]}>
+          <Badge className={workStatusColors[ws] || workStatusColors["입력중"]}>
             {ws}
           </Badge>
         );
@@ -120,27 +121,16 @@ export function getPartnerColumns(options: {
       accessorKey: "customerName",
       header: "고객명",
       cell: ({ row }) => {
+        const ws = row.original.workStatus || "입력중";
         return (
           <EditableCell
             value={row.original.customerName}
             rowId={row.original.id}
             field="customerName"
-            isLocked={!!row.original.isLocked}
+            isLocked={!isEditableStatus(ws)}
             onUpdate={onUpdate}
             placeholder="고객명"
           />
-        );
-      },
-    },
-    {
-      accessorKey: "activationStatus",
-      header: "개통상태",
-      cell: ({ row }) => {
-        const status = row.original.activationStatus || "대기";
-        return (
-          <Badge className={statusColors[status] || "bg-gray-100 text-gray-800"}>
-            {status}
-          </Badge>
         );
       },
     },
@@ -159,12 +149,13 @@ export function getPartnerColumns(options: {
       accessorKey: "usimNumber",
       header: "USIM번호",
       cell: ({ row }) => {
+        const ws = row.original.workStatus || "입력중";
         return (
           <EditableCell
             value={row.original.usimNumber}
             rowId={row.original.id}
             field="usimNumber"
-            isLocked={!!row.original.isLocked}
+            isLocked={!isEditableStatus(ws)}
             onUpdate={onUpdate}
             placeholder="USIM번호"
           />
@@ -175,13 +166,14 @@ export function getPartnerColumns(options: {
       accessorKey: "entryDate",
       header: "입국예정일",
       cell: ({ row }) => {
+        const ws = row.original.workStatus || "입력중";
         return (
           <EditableCell
             value={row.original.entryDate}
             rowId={row.original.id}
             field="entryDate"
             type="date"
-            isLocked={!!row.original.isLocked}
+            isLocked={!isEditableStatus(ws)}
             onUpdate={onUpdate}
           />
         );
@@ -191,6 +183,7 @@ export function getPartnerColumns(options: {
       accessorKey: "subscriptionType",
       header: "가입유형",
       cell: ({ row }) => {
+        const ws = row.original.workStatus || "입력중";
         return (
           <EditableCell
             value={row.original.subscriptionType}
@@ -198,7 +191,7 @@ export function getPartnerColumns(options: {
             field="subscriptionType"
             type="select"
             options={["신규", "번호이동", "기기변경"]}
-            isLocked={!!row.original.isLocked}
+            isLocked={!isEditableStatus(ws)}
             onUpdate={onUpdate}
           />
         );
@@ -208,12 +201,13 @@ export function getPartnerColumns(options: {
       accessorKey: "ratePlan",
       header: "요금제",
       cell: ({ row }) => {
+        const ws = row.original.workStatus || "입력중";
         return (
           <EditableCell
             value={row.original.ratePlan}
             rowId={row.original.id}
             field="ratePlan"
-            isLocked={!!row.original.isLocked}
+            isLocked={!isEditableStatus(ws)}
             onUpdate={onUpdate}
             placeholder="요금제"
           />
@@ -267,13 +261,13 @@ export function getPartnerColumns(options: {
       accessorKey: "applicationDocs",
       header: "가입신청서",
       cell: ({ row }) => {
-        const ws = row.original.workStatus || "개통요청";
+        const ws = row.original.workStatus || "입력중";
         return (
           <FileCell
             value={row.original.applicationDocs}
             rowId={row.original.id}
             field="applicationDocs"
-            isLocked={ws !== "보완요청"}
+            isLocked={!isEditableStatus(ws)}
             onUpdate={onUpdate}
           />
         );
@@ -296,13 +290,13 @@ export function getPartnerColumns(options: {
       accessorKey: "nameChangeDocs",
       header: "명의변경서류",
       cell: ({ row }) => {
-        const ws = row.original.workStatus || "개통요청";
+        const ws = row.original.workStatus || "입력중";
         return (
           <FileCell
             value={row.original.nameChangeDocs}
             rowId={row.original.id}
             field="nameChangeDocs"
-            isLocked={ws !== "보완요청"}
+            isLocked={!isEditableStatus(ws)}
             onUpdate={onUpdate}
           />
         );
@@ -325,13 +319,13 @@ export function getPartnerColumns(options: {
       accessorKey: "arcAutopayInfo",
       header: "외국인등록증/자동이체",
       cell: ({ row }) => {
-        const ws = row.original.workStatus || "개통요청";
+        const ws = row.original.workStatus || "입력중";
         return (
           <FileCell
             value={row.original.arcAutopayInfo}
             rowId={row.original.id}
             field="arcAutopayInfo"
-            isLocked={ws !== "보완요청"}
+            isLocked={!isEditableStatus(ws)}
             onUpdate={onUpdate}
           />
         );
@@ -354,13 +348,13 @@ export function getPartnerColumns(options: {
       accessorKey: "arcSupplement",
       header: "외국인등록증보완",
       cell: ({ row }) => {
-        const ws = row.original.workStatus || "개통요청";
+        const ws = row.original.workStatus || "입력중";
         return (
           <FileCell
             value={row.original.arcSupplement}
             rowId={row.original.id}
             field="arcSupplement"
-            isLocked={ws !== "보완요청"}
+            isLocked={!isEditableStatus(ws)}
             onUpdate={onUpdate}
           />
         );
