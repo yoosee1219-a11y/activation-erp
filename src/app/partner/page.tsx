@@ -429,65 +429,67 @@ export default function PartnerPage() {
         </Card>
       </div>
 
-      {/* 유심 재고 현황 */}
-      {usimStats.length > 0 && (
-        <Card className="border-blue-100 bg-blue-50/30">
-          <div
-            className="flex items-center justify-between cursor-pointer px-4 py-3"
-            onClick={() => setUsimExpanded(!usimExpanded)}
-          >
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-blue-100 p-2">
-                <Package className="h-5 w-5 text-blue-700" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-blue-900">유심 재고 현황</p>
+      {/* 유심 재고 현황 (항상 표시) */}
+      <Card className="border-blue-100 bg-blue-50/30">
+        <div
+          className={`flex items-center justify-between px-4 py-3 ${usimStats.length > 1 ? "cursor-pointer" : ""}`}
+          onClick={() => usimStats.length > 1 && setUsimExpanded(!usimExpanded)}
+        >
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-blue-100 p-2">
+              <Package className="h-5 w-5 text-blue-700" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-blue-900">유심 재고 현황</p>
+              {usimTotals.totalAssigned > 0 ? (
                 <p className="text-xs text-blue-600">
                   총 배정 {usimTotals.totalAssigned}장 · 잔여 재고{" "}
                   <span className="font-bold text-blue-800">{usimTotals.currentStock}장</span> · 사용{" "}
                   {usimTotals.used}장 · 취소 {usimTotals.cancelled}장
                 </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {usimStats.length > 1 && (
-                <span className="text-xs text-blue-500">
-                  {usimStats.length}개 거래처
-                </span>
+              ) : (
+                <p className="text-xs text-gray-400">배정된 유심이 없습니다</p>
               )}
-              {usimStats.length > 1 ? (
-                usimExpanded ? (
-                  <ChevronDown className="h-4 w-4 text-blue-500" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 text-blue-500" />
-                )
-              ) : null}
             </div>
           </div>
+          <div className="flex items-center gap-2">
+            {usimStats.length > 1 && (
+              <span className="text-xs text-blue-500">
+                {usimStats.length}개 거래처
+              </span>
+            )}
+            {usimStats.length > 1 ? (
+              usimExpanded ? (
+                <ChevronDown className="h-4 w-4 text-blue-500" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-blue-500" />
+              )
+            ) : null}
+          </div>
+        </div>
 
-          {/* 거래처별 상세 (다중 거래처일 때만 펼침) */}
-          {usimExpanded && usimStats.length > 1 && (
-            <div className="border-t border-blue-100 px-4 py-2">
-              <div className="space-y-1.5">
-                {usimStats.map((s) => (
-                  <div
-                    key={s.agencyId}
-                    className="flex items-center justify-between rounded-md bg-white/60 px-3 py-2 text-sm"
-                  >
-                    <span className="font-medium text-gray-700">{s.agencyName}</span>
-                    <div className="flex items-center gap-4 text-xs text-gray-500">
-                      <span>배정 <span className="font-medium text-gray-700">{s.totalAssigned}</span>장</span>
-                      <span>재고 <span className="font-bold text-blue-700">{s.currentStock}</span>장</span>
-                      <span>사용 <span className="font-medium text-gray-700">{s.used}</span>장</span>
-                      <span>취소 <span className="font-medium text-red-600">{s.cancelled}</span>장</span>
-                    </div>
+        {/* 거래처별 상세 (다중 거래처일 때만 펼침) */}
+        {usimExpanded && usimStats.length > 1 && (
+          <div className="border-t border-blue-100 px-4 py-2">
+            <div className="space-y-1.5">
+              {usimStats.map((s) => (
+                <div
+                  key={s.agencyId}
+                  className="flex items-center justify-between rounded-md bg-white/60 px-3 py-2 text-sm"
+                >
+                  <span className="font-medium text-gray-700">{s.agencyName}</span>
+                  <div className="flex items-center gap-4 text-xs text-gray-500">
+                    <span>배정 <span className="font-medium text-gray-700">{s.totalAssigned}</span>장</span>
+                    <span>재고 <span className="font-bold text-blue-700">{s.currentStock}</span>장</span>
+                    <span>사용 <span className="font-medium text-gray-700">{s.used}</span>장</span>
+                    <span>취소 <span className="font-medium text-red-600">{s.cancelled}</span>장</span>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
-          )}
-        </Card>
-      )}
+          </div>
+        )}
+      </Card>
 
       {/* 헤더 + 필터 */}
       <div className="flex items-center justify-between">
