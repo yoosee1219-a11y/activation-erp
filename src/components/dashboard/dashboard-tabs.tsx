@@ -155,6 +155,9 @@ export function DashboardTabs(props: DashboardTabsProps) {
           supplementRequestDetail={props.supplementRequestDetail}
           pendingByPeriod={props.pendingByPeriod}
           todayPendingDetail={props.todayPendingDetail}
+          categories={props.categories}
+          agencies={props.agencies}
+          agencyStats={props.agencyStats}
         />
         <ActivationChart
           monthlyData={props.monthlyData}

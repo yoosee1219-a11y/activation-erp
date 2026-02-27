@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, Fragment } from "react";
+import { useState, useMemo, Fragment, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -20,8 +20,12 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
 } from "lucide-react";
 import { format } from "date-fns";
+import type { CategoryNode, Agency } from "@/hooks/use-agency-filter";
+
+/* ─── types ─── */
 
 interface KpiCardsProps {
   stats: {
@@ -83,9 +87,450 @@ interface KpiCardsProps {
     entryDate: string | null;
     personInCharge: string | null;
   }>;
+  categories?: CategoryNode[];
+  agencies?: Agency[];
+  agencyStats?: Array<{
+    agencyId: string;
+    agencyName: string | null;
+    total: number;
+    completed: number;
+    pending: number;
+    cancelled: number;
+    working: number;
+    autopayPending: number;
+  }>;
 }
 
 type KpiKey = "total" | "pending" | "completed" | "autopay" | "supplement" | "todayPending";
+
+/* ─── Count hierarchy types ─── */
+
+interface CountItem {
+  agencyId: string;
+  agencyName: string;
+  count: number;
+}
+
+interface CountMedium {
+  mediumId: string;
+  mediumName: string;
+  totalCount: number;
+  agencies: CountItem[];
+}
+
+interface CountMajor {
+  majorId: string;
+  majorName: string;
+  totalCount: number;
+  mediums: CountMedium[];
+}
+
+/* ─── Detail hierarchy types ─── */
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AgencyEntry = [string, { name: string; items: any[] }];
+
+interface DetailMedium {
+  mediumId: string;
+  mediumName: string;
+  totalItems: number;
+  agencies: AgencyEntry[];
+}
+
+interface DetailMajor {
+  majorId: string;
+  majorName: string;
+  totalItems: number;
+  mediums: DetailMedium[];
+}
+
+/* ─── Hierarchy builders ─── */
+
+function buildCountHierarchy(
+  items: CountItem[],
+  categories: CategoryNode[],
+  agencyList: Agency[]
+): { majorGroups: CountMajor[]; uncategorized: CountItem[] } {
+  const itemMap = new Map<string, CountItem>();
+  items.forEach((item) => itemMap.set(item.agencyId, item));
+
+  const categorizedIds = new Set<string>();
+
+  const majorGroups: CountMajor[] = categories
+    .map((major) => {
+      const mediums: CountMedium[] = (major.children || [])
+        .map((medium) => {
+          const medAgencies = agencyList
+            .filter((a) => a.mediumCategory === medium.id)
+            .map((a) => itemMap.get(a.id))
+            .filter(Boolean) as CountItem[];
+          medAgencies.forEach((a) => categorizedIds.add(a.agencyId));
+          return {
+            mediumId: medium.id,
+            mediumName: medium.name,
+            totalCount: medAgencies.reduce((s, a) => s + Number(a.count), 0),
+            agencies: medAgencies.sort((a, b) => b.count - a.count),
+          };
+        })
+        .filter((m) => m.totalCount > 0);
+      return {
+        majorId: major.id,
+        majorName: major.name,
+        totalCount: mediums.reduce((s, m) => s + m.totalCount, 0),
+        mediums,
+      };
+    })
+    .filter((g) => g.totalCount > 0);
+
+  const uncategorized = items
+    .filter((item) => !categorizedIds.has(item.agencyId))
+    .sort((a, b) => b.count - a.count);
+
+  return { majorGroups, uncategorized };
+}
+
+function buildDetailHierarchy(
+  byAgency: AgencyEntry[],
+  agencyCatMap: Map<string, { majorId: string; majorName: string; mediumId: string; mediumName: string }>,
+  categories: CategoryNode[]
+): { majorGroups: DetailMajor[]; uncategorized: AgencyEntry[] } {
+  const majorMap = new Map<
+    string,
+    {
+      majorId: string;
+      majorName: string;
+      mediums: Map<string, { mediumId: string; mediumName: string; totalItems: number; agencies: AgencyEntry[] }>;
+      totalItems: number;
+    }
+  >();
+
+  for (const major of categories) {
+    const mediums = new Map<
+      string,
+      { mediumId: string; mediumName: string; totalItems: number; agencies: AgencyEntry[] }
+    >();
+    for (const medium of major.children || []) {
+      mediums.set(medium.id, { mediumId: medium.id, mediumName: medium.name, totalItems: 0, agencies: [] });
+    }
+    majorMap.set(major.id, { majorId: major.id, majorName: major.name, mediums, totalItems: 0 });
+  }
+
+  const uncategorized: AgencyEntry[] = [];
+
+  for (const entry of byAgency) {
+    const [agencyId] = entry;
+    const catInfo = agencyCatMap.get(agencyId);
+    if (catInfo) {
+      const majorGroup = majorMap.get(catInfo.majorId);
+      if (majorGroup) {
+        const mediumGroup = majorGroup.mediums.get(catInfo.mediumId);
+        if (mediumGroup) {
+          const itemCount = entry[1].items.length;
+          mediumGroup.agencies.push(entry);
+          mediumGroup.totalItems += itemCount;
+          majorGroup.totalItems += itemCount;
+          continue;
+        }
+      }
+    }
+    uncategorized.push(entry);
+  }
+
+  const majorGroups: DetailMajor[] = Array.from(majorMap.values())
+    .filter((g) => g.totalItems > 0)
+    .map((g) => ({
+      majorId: g.majorId,
+      majorName: g.majorName,
+      totalItems: g.totalItems,
+      mediums: Array.from(g.mediums.values()).filter((m) => m.totalItems > 0),
+    }));
+
+  return { majorGroups, uncategorized };
+}
+
+/* ─── Count hierarchy table ─── */
+
+function CountHierarchyTable({
+  hierarchy,
+  total,
+  badgeClass,
+  drillMajors,
+  drillMediums,
+  toggleMajor,
+  toggleMedium,
+}: {
+  hierarchy: { majorGroups: CountMajor[]; uncategorized: CountItem[] };
+  total: number;
+  badgeClass: string;
+  drillMajors: Set<string>;
+  drillMediums: Set<string>;
+  toggleMajor: (id: string) => void;
+  toggleMedium: (id: string) => void;
+}) {
+  const pct = (n: number) => (total > 0 ? ((n / total) * 100).toFixed(1) : "0") + "%";
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="min-w-[180px]">거래처</TableHead>
+          <TableHead className="text-center">건수</TableHead>
+          <TableHead className="text-right">비율</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {hierarchy.majorGroups.map((major) => {
+          const isMajorOpen = drillMajors.has(major.majorId);
+          return (
+            <Fragment key={`m-${major.majorId}`}>
+              <TableRow
+                className="bg-gray-50/80 cursor-pointer hover:bg-gray-100/80"
+                onClick={() => toggleMajor(major.majorId)}
+              >
+                <TableCell className="font-bold">
+                  <div className="flex items-center gap-1">
+                    {isMajorOpen ? (
+                      <ChevronDown className="size-4 text-gray-500" />
+                    ) : (
+                      <ChevronRight className="size-4 text-gray-500" />
+                    )}
+                    {major.majorName}
+                  </div>
+                </TableCell>
+                <TableCell className="text-center">
+                  <Badge className={badgeClass}>{major.totalCount}건</Badge>
+                </TableCell>
+                <TableCell className="text-right text-sm text-gray-500">
+                  {pct(major.totalCount)}
+                </TableCell>
+              </TableRow>
+
+              {isMajorOpen &&
+                major.mediums.map((medium) => {
+                  const isMedOpen = drillMediums.has(medium.mediumId);
+                  return (
+                    <Fragment key={`md-${medium.mediumId}`}>
+                      <TableRow
+                        className="cursor-pointer hover:bg-gray-50"
+                        onClick={() => toggleMedium(medium.mediumId)}
+                      >
+                        <TableCell>
+                          <div className="flex items-center gap-1 pl-6">
+                            {isMedOpen ? (
+                              <ChevronDown className="size-3.5 text-gray-400" />
+                            ) : (
+                              <ChevronRight className="size-3.5 text-gray-400" />
+                            )}
+                            <span className="font-medium text-gray-700">{medium.mediumName}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="secondary">{medium.totalCount}건</Badge>
+                        </TableCell>
+                        <TableCell className="text-right text-sm text-gray-500">
+                          {pct(medium.totalCount)}
+                        </TableCell>
+                      </TableRow>
+
+                      {isMedOpen &&
+                        medium.agencies.map((agency) => (
+                          <TableRow key={`a-${agency.agencyId}`}>
+                            <TableCell>
+                              <div className="pl-12 font-medium">{agency.agencyName}</div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge className={badgeClass}>{agency.count}건</Badge>
+                            </TableCell>
+                            <TableCell className="text-right text-sm text-gray-500">
+                              {pct(Number(agency.count))}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                    </Fragment>
+                  );
+                })}
+            </Fragment>
+          );
+        })}
+
+        {/* 미분류 */}
+        {hierarchy.uncategorized.length > 0 &&
+          (() => {
+            if (hierarchy.uncategorized.length === 1) {
+              const item = hierarchy.uncategorized[0];
+              return (
+                <TableRow key={`unc-${item.agencyId}`}>
+                  <TableCell className="font-medium">{item.agencyName}</TableCell>
+                  <TableCell className="text-center">
+                    <Badge className={badgeClass}>{item.count}건</Badge>
+                  </TableCell>
+                  <TableCell className="text-right text-sm text-gray-500">
+                    {pct(Number(item.count))}
+                  </TableCell>
+                </TableRow>
+              );
+            }
+            const isUncOpen = drillMajors.has("__unc__");
+            const uncTotal = hierarchy.uncategorized.reduce((s, i) => s + Number(i.count), 0);
+            return (
+              <Fragment key="unc-group">
+                <TableRow
+                  className="bg-gray-50/80 cursor-pointer hover:bg-gray-100/80"
+                  onClick={() => toggleMajor("__unc__")}
+                >
+                  <TableCell className="font-bold">
+                    <div className="flex items-center gap-1">
+                      {isUncOpen ? (
+                        <ChevronDown className="size-4 text-gray-400" />
+                      ) : (
+                        <ChevronRight className="size-4 text-gray-400" />
+                      )}
+                      <span className="text-gray-500">미분류</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge className={badgeClass}>{uncTotal}건</Badge>
+                  </TableCell>
+                  <TableCell className="text-right text-sm text-gray-500">
+                    {pct(uncTotal)}
+                  </TableCell>
+                </TableRow>
+                {isUncOpen &&
+                  hierarchy.uncategorized.map((item) => (
+                    <TableRow key={`unc-${item.agencyId}`}>
+                      <TableCell>
+                        <div className="pl-8 font-medium">{item.agencyName}</div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge className={badgeClass}>{item.count}건</Badge>
+                      </TableCell>
+                      <TableCell className="text-right text-sm text-gray-500">
+                        {pct(Number(item.count))}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+              </Fragment>
+            );
+          })()}
+
+        {/* 합계 */}
+        <TableRow className="bg-gray-50 font-bold">
+          <TableCell>합계</TableCell>
+          <TableCell className="text-center">{total}건</TableCell>
+          <TableCell className="text-right">100%</TableCell>
+        </TableRow>
+      </TableBody>
+    </Table>
+  );
+}
+
+/* ─── Detail hierarchy section ─── */
+
+function DetailHierarchySection({
+  hierarchy,
+  drillMajors,
+  drillMediums,
+  toggleMajor,
+  toggleMedium,
+  renderAgencyTable,
+}: {
+  hierarchy: { majorGroups: DetailMajor[]; uncategorized: AgencyEntry[] };
+  drillMajors: Set<string>;
+  drillMediums: Set<string>;
+  toggleMajor: (id: string) => void;
+  toggleMedium: (id: string) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  renderAgencyTable: (agencyId: string, group: { name: string; items: any[] }) => ReactNode;
+}) {
+  return (
+    <div className="space-y-3">
+      {hierarchy.majorGroups.map((major) => {
+        const isMajorOpen = drillMajors.has(major.majorId);
+        return (
+          <div key={major.majorId}>
+            <div
+              className="flex items-center gap-2 py-2 px-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100"
+              onClick={() => toggleMajor(major.majorId)}
+            >
+              {isMajorOpen ? (
+                <ChevronDown className="size-4 text-gray-500" />
+              ) : (
+                <ChevronRight className="size-4 text-gray-500" />
+              )}
+              <span className="font-bold text-sm">{major.majorName}</span>
+              <Badge variant="outline">{major.totalItems}건</Badge>
+            </div>
+
+            {isMajorOpen && (
+              <div className="space-y-2 mt-2 ml-2">
+                {major.mediums.map((medium) => {
+                  const isMedOpen = drillMediums.has(medium.mediumId);
+                  return (
+                    <div key={medium.mediumId}>
+                      <div
+                        className="flex items-center gap-2 py-1.5 px-3 cursor-pointer hover:bg-gray-50 rounded"
+                        onClick={() => toggleMedium(medium.mediumId)}
+                      >
+                        {isMedOpen ? (
+                          <ChevronDown className="size-3.5 text-gray-400" />
+                        ) : (
+                          <ChevronRight className="size-3.5 text-gray-400" />
+                        )}
+                        <span className="font-medium text-sm text-gray-700">{medium.mediumName}</span>
+                        <Badge variant="secondary" className="text-xs">
+                          {medium.totalItems}건
+                        </Badge>
+                      </div>
+
+                      {isMedOpen && (
+                        <div className="space-y-4 mt-2 ml-4">
+                          {medium.agencies.map(([agencyId, group]) =>
+                            renderAgencyTable(agencyId, group)
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* 미분류 */}
+      {hierarchy.uncategorized.length > 0 && (
+        <div>
+          {hierarchy.uncategorized.length > 1 && (
+            <div
+              className="flex items-center gap-2 py-2 px-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 mb-2"
+              onClick={() => toggleMajor("__unc__")}
+            >
+              {drillMajors.has("__unc__") ? (
+                <ChevronDown className="size-4 text-gray-400" />
+              ) : (
+                <ChevronRight className="size-4 text-gray-400" />
+              )}
+              <span className="font-bold text-sm text-gray-500">미분류</span>
+              <Badge variant="outline">
+                {hierarchy.uncategorized.reduce((s, [, g]) => s + g.items.length, 0)}건
+              </Badge>
+            </div>
+          )}
+          {(hierarchy.uncategorized.length === 1 || drillMajors.has("__unc__")) && (
+            <div className={`space-y-4 ${hierarchy.uncategorized.length > 1 ? "ml-2" : ""}`}>
+              {hierarchy.uncategorized.map(([agencyId, group]) =>
+                renderAgencyTable(agencyId, group)
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Main component ─── */
 
 export function KpiCards({
   stats,
@@ -96,65 +541,153 @@ export function KpiCards({
   supplementRequestDetail = [],
   pendingByPeriod = { totalPending: 0, monthlyPending: 0, todayPending: 0 },
   todayPendingDetail = [],
+  categories = [],
+  agencies = [],
+  agencyStats = [],
 }: KpiCardsProps) {
   const [expanded, setExpanded] = useState<KpiKey | null>(null);
+  const [drillMajors, setDrillMajors] = useState<Set<string>>(new Set());
+  const [drillMediums, setDrillMediums] = useState<Set<string>>(new Set());
 
   const toggle = (key: KpiKey) => {
     setExpanded((prev) => (prev === key ? null : key));
   };
 
-  // 대기 중: 거래처별 그룹핑
+  const toggleDrillMajor = (id: string) => {
+    setDrillMajors((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleDrillMedium = (id: string) => {
+    setDrillMediums((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const hasHierarchy = categories.length > 0 && agencies.length > 0;
+
+  // agency → category mapping
+  const agencyCatMap = useMemo(() => {
+    const map = new Map<string, { majorId: string; majorName: string; mediumId: string; mediumName: string }>();
+    if (!hasHierarchy) return map;
+
+    const catMap = new Map<string, CategoryNode>();
+    categories.forEach((major) => {
+      catMap.set(major.id, major);
+      major.children?.forEach((medium) => catMap.set(medium.id, medium));
+    });
+
+    agencies.forEach((agency) => {
+      if (agency.majorCategory && agency.mediumCategory) {
+        const major = catMap.get(agency.majorCategory);
+        const medium = catMap.get(agency.mediumCategory);
+        if (major && medium) {
+          map.set(agency.id, {
+            majorId: major.id,
+            majorName: major.name,
+            mediumId: medium.id,
+            mediumName: medium.name,
+          });
+        }
+      }
+    });
+
+    return map;
+  }, [hasHierarchy, categories, agencies]);
+
+  // 개통완료 거래처별 데이터
+  const completedByAgency = useMemo<CountItem[]>(() => {
+    return agencyStats
+      .filter((a) => Number(a.completed) > 0)
+      .map((a) => ({
+        agencyId: a.agencyId,
+        agencyName: a.agencyName || a.agencyId,
+        count: Number(a.completed),
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [agencyStats]);
+
+  // ─── Count hierarchies ───
+  const totalHierarchy = useMemo(
+    () => (hasHierarchy ? buildCountHierarchy(kpiTotalByAgency, categories, agencies) : null),
+    [hasHierarchy, kpiTotalByAgency, categories, agencies]
+  );
+
+  const completedHierarchy = useMemo(
+    () => (hasHierarchy ? buildCountHierarchy(completedByAgency, categories, agencies) : null),
+    [hasHierarchy, completedByAgency, categories, agencies]
+  );
+
+  // ─── Detail groupings (flat) ───
   const pendingByAgency = useMemo(() => {
     const groups: Record<string, { name: string; items: typeof kpiPendingDetail }> = {};
     kpiPendingDetail.forEach((item) => {
-      if (!groups[item.agencyId]) {
-        groups[item.agencyId] = { name: item.agencyName, items: [] };
-      }
+      if (!groups[item.agencyId]) groups[item.agencyId] = { name: item.agencyName, items: [] };
       groups[item.agencyId].items.push(item);
     });
     return Object.entries(groups).sort((a, b) => b[1].items.length - a[1].items.length);
   }, [kpiPendingDetail]);
 
-  // 자동이체: 거래처별 그룹핑
   const autopayByAgency = useMemo(() => {
     const groups: Record<string, { name: string; items: typeof kpiAutopayDetail }> = {};
     kpiAutopayDetail.forEach((item) => {
-      if (!groups[item.agencyId]) {
-        groups[item.agencyId] = { name: item.agencyName, items: [] };
-      }
+      if (!groups[item.agencyId]) groups[item.agencyId] = { name: item.agencyName, items: [] };
       groups[item.agencyId].items.push(item);
     });
     return Object.entries(groups).sort((a, b) => b[1].items.length - a[1].items.length);
   }, [kpiAutopayDetail]);
 
-  // 보완요청: 거래처별 그룹핑
   const supplementByAgency = useMemo(() => {
     const groups: Record<string, { name: string; items: typeof supplementRequestDetail }> = {};
     supplementRequestDetail.forEach((item) => {
       const key = item.agencyId;
-      if (!groups[key]) {
-        groups[key] = { name: item.agencyName || item.agencyId, items: [] };
-      }
+      if (!groups[key]) groups[key] = { name: item.agencyName || item.agencyId, items: [] };
       groups[key].items.push(item);
     });
     return Object.entries(groups).sort((a, b) => b[1].items.length - a[1].items.length);
   }, [supplementRequestDetail]);
 
-  // 당일대기: 거래처별 그룹핑
   const todayByAgency = useMemo(() => {
     const groups: Record<string, { name: string; items: typeof todayPendingDetail }> = {};
     todayPendingDetail.forEach((item) => {
       const key = item.agencyId;
-      if (!groups[key]) {
-        groups[key] = { name: item.agencyName || item.agencyId, items: [] };
-      }
+      if (!groups[key]) groups[key] = { name: item.agencyName || item.agencyId, items: [] };
       groups[key].items.push(item);
     });
     return Object.entries(groups).sort((a, b) => b[1].items.length - a[1].items.length);
   }, [todayPendingDetail]);
 
-  // 보완요청 항목의 보완 사유 뱃지
-  const getSupplementReasons = (item: typeof supplementRequestDetail[0]) => {
+  // ─── Detail hierarchies ───
+  const pendingHierarchy = useMemo(
+    () => (hasHierarchy ? buildDetailHierarchy(pendingByAgency as AgencyEntry[], agencyCatMap, categories) : null),
+    [hasHierarchy, pendingByAgency, agencyCatMap, categories]
+  );
+
+  const autopayHierarchy = useMemo(
+    () => (hasHierarchy ? buildDetailHierarchy(autopayByAgency as AgencyEntry[], agencyCatMap, categories) : null),
+    [hasHierarchy, autopayByAgency, agencyCatMap, categories]
+  );
+
+  const supplementHierarchy = useMemo(
+    () =>
+      hasHierarchy ? buildDetailHierarchy(supplementByAgency as AgencyEntry[], agencyCatMap, categories) : null,
+    [hasHierarchy, supplementByAgency, agencyCatMap, categories]
+  );
+
+  const todayHierarchy = useMemo(
+    () => (hasHierarchy ? buildDetailHierarchy(todayByAgency as AgencyEntry[], agencyCatMap, categories) : null),
+    [hasHierarchy, todayByAgency, agencyCatMap, categories]
+  );
+
+  // ─── helpers ───
+  const getSupplementReasons = (item: (typeof supplementRequestDetail)[0]) => {
     const reasons: string[] = [];
     if (item.workStatus === "보완요청") reasons.push("진행상황");
     if (item.applicationDocsReview === "보완요청") reasons.push("가입신청서");
@@ -163,6 +696,177 @@ export function KpiCards({
     return reasons;
   };
 
+  // ─── Agency table renderers ───
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const renderPendingAgency = (agencyId: string, group: { name: string; items: any[] }) => (
+    <div key={agencyId}>
+      <div className="flex items-center gap-2 mb-2">
+        <h3 className="font-semibold text-sm">{group.name}</h3>
+        <Badge variant="secondary">{group.items.length}건</Badge>
+      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>고객명</TableHead>
+            <TableHead>번호</TableHead>
+            <TableHead className="text-center">입국예정일</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {group.items.map((item: { id: string; customerName: string; newPhoneNumber: string | null; entryDate: string | null }) => (
+            <TableRow key={item.id}>
+              <TableCell className="font-medium">{item.customerName}</TableCell>
+              <TableCell className="text-sm">{item.newPhoneNumber || "-"}</TableCell>
+              <TableCell className="text-center">
+                {item.entryDate ? (
+                  <Badge className="bg-yellow-100 text-yellow-800">
+                    {format(new Date(item.entryDate), "yyyy-MM-dd")}
+                  </Badge>
+                ) : (
+                  <span className="text-gray-400">미정</span>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const renderTodayAgency = (agencyId: string, group: { name: string; items: any[] }) => (
+    <div key={agencyId}>
+      <div className="flex items-center gap-2 mb-2">
+        <h3 className="font-semibold text-sm">{group.name}</h3>
+        <Badge variant="secondary">{group.items.length}건</Badge>
+      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>고객명</TableHead>
+            <TableHead>번호</TableHead>
+            <TableHead>담당자</TableHead>
+            <TableHead className="text-center">입국예정일</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {group.items.map((item: { id: string; customerName: string; newPhoneNumber: string | null; personInCharge: string | null; entryDate: string | null }) => (
+            <TableRow key={item.id}>
+              <TableCell className="font-medium">{item.customerName}</TableCell>
+              <TableCell className="text-sm">{item.newPhoneNumber || "-"}</TableCell>
+              <TableCell className="text-sm">{item.personInCharge || "-"}</TableCell>
+              <TableCell className="text-center">
+                {item.entryDate ? (
+                  <Badge className="bg-orange-100 text-orange-800">
+                    {format(new Date(item.entryDate), "yyyy-MM-dd")}
+                  </Badge>
+                ) : (
+                  <span className="text-gray-400">미정</span>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const renderSupplementAgency = (agencyId: string, group: { name: string; items: any[] }) => (
+    <div key={agencyId}>
+      <div className="flex items-center gap-2 mb-2">
+        <h3 className="font-semibold text-sm">{group.name}</h3>
+        <Badge variant="secondary">{group.items.length}건</Badge>
+      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>고객명</TableHead>
+            <TableHead>번호</TableHead>
+            <TableHead>담당자</TableHead>
+            <TableHead className="text-center">보완 사유</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {group.items.map((item: { id: string; agencyId: string; agencyName: string | null; customerName: string; newPhoneNumber: string | null; personInCharge: string | null; workStatus: string | null; applicationDocsReview: string | null; nameChangeDocsReview: string | null; arcAutopayReview: string | null }) => {
+            const reasons = getSupplementReasons(item);
+            return (
+              <TableRow key={item.id} className="bg-rose-50/50">
+                <TableCell className="font-medium">{item.customerName}</TableCell>
+                <TableCell className="text-sm">{item.newPhoneNumber || "-"}</TableCell>
+                <TableCell className="text-sm">{item.personInCharge || "-"}</TableCell>
+                <TableCell className="text-center">
+                  <div className="flex flex-wrap gap-1 justify-center">
+                    {reasons.map((r) => (
+                      <Badge key={r} className="bg-rose-100 text-rose-700 text-[10px]">
+                        {r}
+                      </Badge>
+                    ))}
+                  </div>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  );
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const renderAutopayAgency = (agencyId: string, group: { name: string; items: any[] }) => (
+    <div key={agencyId}>
+      <div className="flex items-center gap-2 mb-2">
+        <h3 className="font-semibold text-sm">{group.name}</h3>
+        <Badge variant="secondary">{group.items.length}건</Badge>
+      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>고객명</TableHead>
+            <TableHead>번호</TableHead>
+            <TableHead className="text-center">개통일</TableHead>
+            <TableHead className="text-center">남은 기한</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {group.items.map((item: { id: string; customerName: string; newPhoneNumber: string | null; activationDate: string | null; daysLeft: number | null }) => {
+            const days = item.daysLeft != null ? Number(item.daysLeft) : null;
+            return (
+              <TableRow key={item.id}>
+                <TableCell className="font-medium">{item.customerName}</TableCell>
+                <TableCell className="text-sm">{item.newPhoneNumber || "-"}</TableCell>
+                <TableCell className="text-center text-sm">
+                  {item.activationDate ? format(new Date(item.activationDate), "yyyy-MM-dd") : "-"}
+                </TableCell>
+                <TableCell className="text-center">
+                  {days !== null ? (
+                    <Badge
+                      className={
+                        days < 0
+                          ? "bg-red-600 text-white"
+                          : days <= 7
+                          ? "bg-red-100 text-red-800"
+                          : days <= 14
+                          ? "bg-orange-100 text-orange-800"
+                          : "bg-yellow-100 text-yellow-800"
+                      }
+                    >
+                      {days < 0 ? `${Math.abs(days)}일 초과` : `D-${days}`}
+                    </Badge>
+                  ) : (
+                    <span className="text-gray-400">-</span>
+                  )}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  );
+
+  // ─── cards config ───
   const cards: {
     key: KpiKey;
     title: string;
@@ -214,7 +918,7 @@ export function KpiCards({
       color: "text-green-600",
       bg: "bg-green-50",
       ring: "ring-green-500",
-      expandable: false,
+      expandable: true,
     },
     {
       key: "supplement",
@@ -241,7 +945,7 @@ export function KpiCards({
 
   return (
     <div className="space-y-4">
-      {/* KPI 카드 그리드 - 6개 3x2 */}
+      {/* KPI 카드 그리드 */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {cards.map((card) => {
           const isExpanded = expanded === card.key;
@@ -249,9 +953,7 @@ export function KpiCards({
             <Card
               key={card.key}
               className={`transition-all ${
-                card.expandable
-                  ? "cursor-pointer hover:shadow-md"
-                  : ""
+                card.expandable ? "cursor-pointer hover:shadow-md" : ""
               } ${isExpanded ? `ring-2 ${card.ring}` : ""}`}
               onClick={() => card.expandable && toggle(card.key)}
             >
@@ -265,11 +967,12 @@ export function KpiCards({
                   )}
                 </div>
                 <div className="flex items-center gap-1">
-                  {card.expandable && (
-                    isExpanded
-                      ? <ChevronUp className="h-4 w-4 text-gray-400" />
-                      : <ChevronDown className="h-4 w-4 text-gray-400" />
-                  )}
+                  {card.expandable &&
+                    (isExpanded ? (
+                      <ChevronUp className="h-4 w-4 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-gray-400" />
+                    ))}
                   <div className={`rounded-lg p-2 ${card.bg}`}>
                     <card.icon className={`h-4 w-4 ${card.color}`} />
                   </div>
@@ -283,7 +986,7 @@ export function KpiCards({
         })}
       </div>
 
-      {/* 전체 개통 - 거래처별 건수 */}
+      {/* ──── 전체 개통 drill-down ──── */}
       {expanded === "total" && kpiTotalByAgency.length > 0 && (
         <Card>
           <CardHeader>
@@ -293,40 +996,50 @@ export function KpiCards({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>거래처</TableHead>
-                  <TableHead className="text-center">개통 건수</TableHead>
-                  <TableHead className="text-right">비율</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {kpiTotalByAgency.map((row) => (
-                  <TableRow key={row.agencyId}>
-                    <TableCell className="font-medium">{row.agencyName}</TableCell>
-                    <TableCell className="text-center">
-                      <Badge className="bg-blue-100 text-blue-800">{row.count}건</Badge>
-                    </TableCell>
-                    <TableCell className="text-right text-sm text-gray-500">
-                      {stats.total > 0
-                        ? ((Number(row.count) / stats.total) * 100).toFixed(1)
-                        : 0}%
-                    </TableCell>
+            {totalHierarchy ? (
+              <CountHierarchyTable
+                hierarchy={totalHierarchy}
+                total={stats.total}
+                badgeClass="bg-blue-100 text-blue-800"
+                drillMajors={drillMajors}
+                drillMediums={drillMediums}
+                toggleMajor={toggleDrillMajor}
+                toggleMedium={toggleDrillMedium}
+              />
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>거래처</TableHead>
+                    <TableHead className="text-center">개통 건수</TableHead>
+                    <TableHead className="text-right">비율</TableHead>
                   </TableRow>
-                ))}
-                <TableRow className="bg-gray-50 font-bold">
-                  <TableCell>합계</TableCell>
-                  <TableCell className="text-center">{stats.total}건</TableCell>
-                  <TableCell className="text-right">100%</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {kpiTotalByAgency.map((row) => (
+                    <TableRow key={row.agencyId}>
+                      <TableCell className="font-medium">{row.agencyName}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge className="bg-blue-100 text-blue-800">{row.count}건</Badge>
+                      </TableCell>
+                      <TableCell className="text-right text-sm text-gray-500">
+                        {stats.total > 0 ? ((Number(row.count) / stats.total) * 100).toFixed(1) : 0}%
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="bg-gray-50 font-bold">
+                    <TableCell>합계</TableCell>
+                    <TableCell className="text-center">{stats.total}건</TableCell>
+                    <TableCell className="text-right">100%</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       )}
 
-      {/* 개통대기 당월 - 거래처별 그룹 + 입국예정일 */}
+      {/* ──── 개통대기 당월 drill-down ──── */}
       {expanded === "pending" && pendingByAgency.length > 0 && (
         <Card>
           <CardHeader>
@@ -335,46 +1048,26 @@ export function KpiCards({
               개통대기 상세 (당월 {pendingByPeriod.monthlyPending}건 / 총 {pendingByPeriod.totalPending}건)
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
-            {pendingByAgency.map(([agencyId, group]) => (
-              <div key={agencyId}>
-                <div className="flex items-center gap-2 mb-2">
-                  <h3 className="font-semibold text-sm">{group.name}</h3>
-                  <Badge variant="secondary">{group.items.length}건</Badge>
-                </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>고객명</TableHead>
-                      <TableHead>번호</TableHead>
-                      <TableHead className="text-center">입국예정일</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {group.items.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-medium">{item.customerName}</TableCell>
-                        <TableCell className="text-sm">{item.newPhoneNumber || "-"}</TableCell>
-                        <TableCell className="text-center">
-                          {item.entryDate ? (
-                            <Badge className="bg-yellow-100 text-yellow-800">
-                              {format(new Date(item.entryDate), "yyyy-MM-dd")}
-                            </Badge>
-                          ) : (
-                            <span className="text-gray-400">미정</span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+          <CardContent>
+            {pendingHierarchy ? (
+              <DetailHierarchySection
+                hierarchy={pendingHierarchy}
+                drillMajors={drillMajors}
+                drillMediums={drillMediums}
+                toggleMajor={toggleDrillMajor}
+                toggleMedium={toggleDrillMedium}
+                renderAgencyTable={renderPendingAgency}
+              />
+            ) : (
+              <div className="space-y-6">
+                {pendingByAgency.map(([agencyId, group]) => renderPendingAgency(agencyId, group))}
               </div>
-            ))}
+            )}
           </CardContent>
         </Card>
       )}
 
-      {/* 당일 개통대기 - 오늘 입국예정 건 */}
+      {/* ──── 당일 개통대기 drill-down ──── */}
       {expanded === "todayPending" && (
         <Card>
           <CardHeader>
@@ -388,54 +1081,85 @@ export function KpiCards({
           </CardHeader>
           <CardContent>
             {todayByAgency.length > 0 ? (
-              <div className="space-y-6">
-                {todayByAgency.map(([agencyId, group]) => (
-                  <div key={agencyId}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <h3 className="font-semibold text-sm">{group.name}</h3>
-                      <Badge variant="secondary">{group.items.length}건</Badge>
-                    </div>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>고객명</TableHead>
-                          <TableHead>번호</TableHead>
-                          <TableHead>담당자</TableHead>
-                          <TableHead className="text-center">입국예정일</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {group.items.map((item) => (
-                          <TableRow key={item.id}>
-                            <TableCell className="font-medium">{item.customerName}</TableCell>
-                            <TableCell className="text-sm">{item.newPhoneNumber || "-"}</TableCell>
-                            <TableCell className="text-sm">{item.personInCharge || "-"}</TableCell>
-                            <TableCell className="text-center">
-                              {item.entryDate ? (
-                                <Badge className="bg-orange-100 text-orange-800">
-                                  {format(new Date(item.entryDate), "yyyy-MM-dd")}
-                                </Badge>
-                              ) : (
-                                <span className="text-gray-400">미정</span>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                ))}
-              </div>
+              todayHierarchy ? (
+                <DetailHierarchySection
+                  hierarchy={todayHierarchy}
+                  drillMajors={drillMajors}
+                  drillMediums={drillMediums}
+                  toggleMajor={toggleDrillMajor}
+                  toggleMedium={toggleDrillMedium}
+                  renderAgencyTable={renderTodayAgency}
+                />
+              ) : (
+                <div className="space-y-6">
+                  {todayByAgency.map(([agencyId, group]) => renderTodayAgency(agencyId, group))}
+                </div>
+              )
             ) : (
               <div className="py-8 text-center text-gray-500">
-                오늘 입국예정인 개통대기 건이 없습니다. ✅
+                오늘 입국예정인 개통대기 건이 없습니다.
               </div>
             )}
           </CardContent>
         </Card>
       )}
 
-      {/* 보완요청 대기 - 거래처 보완 대기건 상세 */}
+      {/* ──── 개통 완료 drill-down ──── */}
+      {expanded === "completed" && completedByAgency.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              거래처별 개통 완료 건수
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {completedHierarchy ? (
+              <CountHierarchyTable
+                hierarchy={completedHierarchy}
+                total={stats.completed}
+                badgeClass="bg-green-100 text-green-800"
+                drillMajors={drillMajors}
+                drillMediums={drillMediums}
+                toggleMajor={toggleDrillMajor}
+                toggleMedium={toggleDrillMedium}
+              />
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>거래처</TableHead>
+                    <TableHead className="text-center">개통 건수</TableHead>
+                    <TableHead className="text-right">비율</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {completedByAgency.map((row) => (
+                    <TableRow key={row.agencyId}>
+                      <TableCell className="font-medium">{row.agencyName}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge className="bg-green-100 text-green-800">{row.count}건</Badge>
+                      </TableCell>
+                      <TableCell className="text-right text-sm text-gray-500">
+                        {stats.completed > 0
+                          ? ((Number(row.count) / stats.completed) * 100).toFixed(1)
+                          : 0}%
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow className="bg-gray-50 font-bold">
+                    <TableCell>합계</TableCell>
+                    <TableCell className="text-center">{stats.completed}건</TableCell>
+                    <TableCell className="text-right">100%</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ──── 보완요청 대기 drill-down ──── */}
       {expanded === "supplement" && (
         <Card>
           <CardHeader>
@@ -446,57 +1170,32 @@ export function KpiCards({
           </CardHeader>
           <CardContent>
             {supplementByAgency.length > 0 ? (
-              <div className="space-y-6">
-                {supplementByAgency.map(([agencyId, group]) => (
-                  <div key={agencyId}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <h3 className="font-semibold text-sm">{group.name}</h3>
-                      <Badge variant="secondary">{group.items.length}건</Badge>
-                    </div>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>고객명</TableHead>
-                          <TableHead>번호</TableHead>
-                          <TableHead>담당자</TableHead>
-                          <TableHead className="text-center">보완 사유</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {group.items.map((item) => {
-                          const reasons = getSupplementReasons(item);
-                          return (
-                            <TableRow key={item.id} className="bg-rose-50/50">
-                              <TableCell className="font-medium">{item.customerName}</TableCell>
-                              <TableCell className="text-sm">{item.newPhoneNumber || "-"}</TableCell>
-                              <TableCell className="text-sm">{item.personInCharge || "-"}</TableCell>
-                              <TableCell className="text-center">
-                                <div className="flex flex-wrap gap-1 justify-center">
-                                  {reasons.map((r) => (
-                                    <Badge key={r} className="bg-rose-100 text-rose-700 text-[10px]">
-                                      {r}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                ))}
-              </div>
+              supplementHierarchy ? (
+                <DetailHierarchySection
+                  hierarchy={supplementHierarchy}
+                  drillMajors={drillMajors}
+                  drillMediums={drillMediums}
+                  toggleMajor={toggleDrillMajor}
+                  toggleMedium={toggleDrillMedium}
+                  renderAgencyTable={renderSupplementAgency}
+                />
+              ) : (
+                <div className="space-y-6">
+                  {supplementByAgency.map(([agencyId, group]) =>
+                    renderSupplementAgency(agencyId, group)
+                  )}
+                </div>
+              )
             ) : (
               <div className="py-8 text-center text-gray-500">
-                보완요청 대기 건이 없습니다. ✅
+                보완요청 대기 건이 없습니다.
               </div>
             )}
           </CardContent>
         </Card>
       )}
 
-      {/* 자동이체 미등록 - 거래처별 그룹 + 남은기한 */}
+      {/* ──── 자동이체 미등록 drill-down ──── */}
       {expanded === "autopay" && autopayByAgency.length > 0 && (
         <Card>
           <CardHeader>
@@ -505,76 +1204,37 @@ export function KpiCards({
               자동이체 미등록 상세 ({stats.autopayPending}건)
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
-            {autopayByAgency.map(([agencyId, group]) => (
-              <div key={agencyId}>
-                <div className="flex items-center gap-2 mb-2">
-                  <h3 className="font-semibold text-sm">{group.name}</h3>
-                  <Badge variant="secondary">{group.items.length}건</Badge>
-                </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>고객명</TableHead>
-                      <TableHead>번호</TableHead>
-                      <TableHead className="text-center">개통일</TableHead>
-                      <TableHead className="text-center">남은 기한</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {group.items.map((item) => {
-                      const days = item.daysLeft != null ? Number(item.daysLeft) : null;
-                      return (
-                        <TableRow key={item.id}>
-                          <TableCell className="font-medium">{item.customerName}</TableCell>
-                          <TableCell className="text-sm">{item.newPhoneNumber || "-"}</TableCell>
-                          <TableCell className="text-center text-sm">
-                            {item.activationDate
-                              ? format(new Date(item.activationDate), "yyyy-MM-dd")
-                              : "-"}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {days !== null ? (
-                              <Badge
-                                className={
-                                  days < 0
-                                    ? "bg-red-600 text-white"
-                                    : days <= 7
-                                    ? "bg-red-100 text-red-800"
-                                    : days <= 14
-                                    ? "bg-orange-100 text-orange-800"
-                                    : "bg-yellow-100 text-yellow-800"
-                                }
-                              >
-                                {days < 0 ? `${Math.abs(days)}일 초과` : `D-${days}`}
-                              </Badge>
-                            ) : (
-                              <span className="text-gray-400">-</span>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+          <CardContent>
+            {autopayHierarchy ? (
+              <DetailHierarchySection
+                hierarchy={autopayHierarchy}
+                drillMajors={drillMajors}
+                drillMediums={drillMediums}
+                toggleMajor={toggleDrillMajor}
+                toggleMedium={toggleDrillMedium}
+                renderAgencyTable={renderAutopayAgency}
+              />
+            ) : (
+              <div className="space-y-6">
+                {autopayByAgency.map(([agencyId, group]) => renderAutopayAgency(agencyId, group))}
               </div>
-            ))}
+            )}
           </CardContent>
         </Card>
       )}
 
       {/* 데이터 없을 때 */}
-      {expanded && !["completed", "supplement", "todayPending"].includes(expanded) && (
-        (expanded === "total" && kpiTotalByAgency.length === 0) ||
-        (expanded === "pending" && pendingByAgency.length === 0) ||
-        (expanded === "autopay" && autopayByAgency.length === 0)
-      ) && (
-        <Card>
-          <CardContent className="py-8 text-center text-gray-500">
-            해당하는 건이 없습니다.
-          </CardContent>
-        </Card>
-      )}
+      {expanded &&
+        ((expanded === "total" && kpiTotalByAgency.length === 0) ||
+          (expanded === "pending" && pendingByAgency.length === 0) ||
+          (expanded === "completed" && completedByAgency.length === 0) ||
+          (expanded === "autopay" && autopayByAgency.length === 0)) && (
+          <Card>
+            <CardContent className="py-8 text-center text-gray-500">
+              해당하는 건이 없습니다.
+            </CardContent>
+          </Card>
+        )}
     </div>
   );
 }
