@@ -117,7 +117,25 @@ export const documentFiles = pgTable("document_files", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
-// 5. activation_status_config (상태값 설정)
+// 5. usims (유심 재고 관리)
+export const usims = pgTable("usims", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  usimSerialNumber: text("usim_serial_number").unique().notNull(), // 유심 일련번호 (고유)
+  agencyId: text("agency_id")
+    .notNull()
+    .references(() => agencies.id),
+  status: text("status").notNull().default("ASSIGNED"), // ASSIGNED | USED | CANCELLED | RESET_READY
+  assignedDate: date("assigned_date").notNull(), // 배정일자
+  usedDate: date("used_date"), // 사용(개통)일자
+  cancelledDate: date("cancelled_date"), // 개통취소일자
+  resetDate: date("reset_date"), // 유심초기화 완료일자
+  usedActivationId: uuid("used_activation_id").references(() => activations.id), // 사용된 개통건 ID
+  notes: text("notes"), // 메모
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+// 6. activation_status_config (상태값 설정)
 export const activationStatusConfig = pgTable("activation_status_config", {
   id: serial("id").primaryKey(),
   statusKey: text("status_key").unique().notNull(),

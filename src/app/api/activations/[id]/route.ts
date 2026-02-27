@@ -6,6 +6,7 @@ import {
 } from "@/lib/db/queries/activations";
 import { getSessionUser } from "@/lib/auth/session";
 import { canAccessAgency } from "@/lib/db/queries/users";
+import { markUsimUsed, markUsimCancelled } from "@/lib/db/queries/usims";
 
 // 거래처(PARTNER)가 편집할 수 있는 필드 (전체 목록)
 const PARTNER_EDITABLE_FIELDS = new Set([
@@ -201,6 +202,43 @@ export async function PATCH(
     }
 
     const activation = await updateActivation(id, updateData);
+
+    // ─── 유심 재고 자동 연동 ───
+    try {
+      // 1) 개통완료 시 유심번호가 있으면 자동 USED 처리
+      const newUsimNumber = body.usimNumber || existing.usimNumber;
+      const isBecomingComplete =
+        body.workStatus === "개통완료" ||
+        body.activationStatus === "개통완료";
+      const wasNotComplete =
+        existing.workStatus !== "개통완료" &&
+        existing.activationStatus !== "개통완료";
+
+      if (isBecomingComplete && wasNotComplete && newUsimNumber) {
+        await markUsimUsed(newUsimNumber, existing.agencyId, id);
+      }
+
+      // 2) usimNumber가 새로 입력되고 이미 개통완료 상태면 자동 USED
+      if (
+        body.usimNumber &&
+        body.usimNumber !== existing.usimNumber &&
+        (existing.workStatus === "개통완료" || existing.activationStatus === "개통완료")
+      ) {
+        await markUsimUsed(body.usimNumber, existing.agencyId, id);
+      }
+
+      // 3) 개통취소 시 유심 CANCELLED 처리
+      if (
+        body.activationStatus === "개통취소" &&
+        existing.activationStatus !== "개통취소"
+      ) {
+        await markUsimCancelled(id);
+      }
+    } catch (usimError) {
+      // 유심 연동 실패해도 개통 업데이트는 성공 처리 (로그만 남김)
+      console.warn("USIM auto-link failed (non-critical):", usimError);
+    }
+
     return NextResponse.json({ activation });
   } catch (error) {
     console.error("Failed to update activation:", error);
