@@ -9,6 +9,7 @@ import { AgencyStatusTable } from "@/components/dashboard/agency-status-table";
 import { AgencyChart } from "@/components/dashboard/agency-chart";
 import { StaffStatsTable } from "@/components/dashboard/staff-stats-table";
 import { ArcUrgentPanel } from "@/components/dashboard/arc-urgent-panel";
+import type { CategoryNode, Agency } from "@/hooks/use-agency-filter";
 
 interface TimeSeriesItem {
   label: string;
@@ -117,6 +118,8 @@ interface DashboardTabsProps {
     entryDate: string | null;
     personInCharge: string | null;
   }>;
+  categories: CategoryNode[];
+  agencies: Agency[];
 }
 
 export function DashboardTabs(props: DashboardTabsProps) {
@@ -163,7 +166,7 @@ export function DashboardTabs(props: DashboardTabsProps) {
       {/* 거래처 분석 */}
       <TabsContent value="agencies" className="mt-4 space-y-6">
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-          <AgencyStatusTable data={props.agencyStats} />
+          <AgencyStatusTable data={props.agencyStats} categories={props.categories} agencies={props.agencies} />
           <AgencyChart data={props.agencyStats} />
         </div>
       </TabsContent>

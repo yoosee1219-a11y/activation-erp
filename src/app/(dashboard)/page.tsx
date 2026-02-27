@@ -119,7 +119,7 @@ interface DashboardData {
 }
 
 export default function DashboardPage() {
-  const { getFilterParams, selectedMajors, selectedMediums, selectedAgencies } = useDashboard();
+  const { getFilterParams, selectedMajors, selectedMediums, selectedAgencies, categories, agencies } = useDashboard();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -194,6 +194,8 @@ export default function DashboardPage() {
         supplementRequestDetail={data.supplementRequestDetail || []}
         pendingByPeriod={data.pendingByPeriod || { totalPending: 0, monthlyPending: 0, todayPending: 0 }}
         todayPendingDetail={data.todayPendingDetail || []}
+        categories={categories}
+        agencies={agencies}
       />
     </div>
   );
