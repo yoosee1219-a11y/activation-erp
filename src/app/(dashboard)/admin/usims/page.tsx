@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useAgencyFilter, type Agency, type CategoryNode } from "@/hooks/use-agency-filter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,11 +66,6 @@ interface UsimRow {
   notes: string | null;
 }
 
-interface Agency {
-  id: string;
-  name: string;
-}
-
 // ─── Status Badge ───
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; className: string }> = {
@@ -82,38 +78,137 @@ function StatusBadge({ status }: { status: string }) {
   return <Badge className={className}>{label}</Badge>;
 }
 
+// ─── 카테고리 캐스케이드 셀렉트 공통 컴포넌트 ───
+function CategoryCascadeFilter({
+  categories,
+  agencies,
+  selectedMajor,
+  selectedMedium,
+  selectedAgency,
+  onMajorChange,
+  onMediumChange,
+  onAgencyChange,
+  showAllOption = false,
+  majorLabel = "대분류",
+  mediumLabel = "중분류",
+  agencyLabel = "소분류 (업체)",
+  showAgency = true,
+}: {
+  categories: CategoryNode[];
+  agencies: Agency[];
+  selectedMajor: string;
+  selectedMedium: string;
+  selectedAgency: string;
+  onMajorChange: (v: string) => void;
+  onMediumChange: (v: string) => void;
+  onAgencyChange: (v: string) => void;
+  showAllOption?: boolean;
+  majorLabel?: string;
+  mediumLabel?: string;
+  agencyLabel?: string;
+  showAgency?: boolean;
+}) {
+  const allValue = showAllOption ? "all" : "";
+  const placeholder = showAllOption ? "전체" : "선택";
+
+  const mediumCats = useMemo(() => {
+    if (!selectedMajor || selectedMajor === "all") return [];
+    const major = categories.find((c) => c.id === selectedMajor);
+    return major?.children || [];
+  }, [selectedMajor, categories]);
+
+  const filteredAgencies = useMemo(() => {
+    if (!selectedMedium || selectedMedium === "all") {
+      if (!selectedMajor || selectedMajor === "all") return agencies;
+      const mediumIds = mediumCats.map((c) => c.id);
+      return agencies.filter((a) => mediumIds.includes(a.mediumCategory || ""));
+    }
+    return agencies.filter((a) => a.mediumCategory === selectedMedium);
+  }, [selectedMajor, selectedMedium, agencies, mediumCats]);
+
+  return (
+    <>
+      <div className="space-y-1">
+        <Label className="text-xs">{majorLabel}</Label>
+        <Select
+          value={selectedMajor}
+          onValueChange={(v) => {
+            onMajorChange(v);
+            onMediumChange(allValue);
+            onAgencyChange(allValue);
+          }}
+        >
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder={`${placeholder}`} />
+          </SelectTrigger>
+          <SelectContent>
+            {showAllOption && <SelectItem value="all">전체</SelectItem>}
+            {categories.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-1">
+        <Label className="text-xs">{mediumLabel}</Label>
+        <Select
+          value={selectedMedium}
+          onValueChange={(v) => {
+            onMediumChange(v);
+            onAgencyChange(allValue);
+          }}
+          disabled={!selectedMajor || selectedMajor === "all"}
+        >
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder={mediumCats.length === 0 ? "대분류 먼저 선택" : `${placeholder}`} />
+          </SelectTrigger>
+          <SelectContent>
+            {showAllOption && <SelectItem value="all">전체</SelectItem>}
+            {mediumCats.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {showAgency && (
+        <div className="space-y-1">
+          <Label className="text-xs">{agencyLabel}</Label>
+          <Select
+            value={selectedAgency}
+            onValueChange={onAgencyChange}
+            disabled={filteredAgencies.length === 0}
+          >
+            <SelectTrigger className="w-52">
+              <SelectValue placeholder={filteredAgencies.length === 0 ? "상위 분류 먼저 선택" : `${placeholder}`} />
+            </SelectTrigger>
+            <SelectContent>
+              {showAllOption && <SelectItem value="all">전체</SelectItem>}
+              {filteredAgencies.map((a) => (
+                <SelectItem key={a.id} value={a.id}>
+                  {a.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ─── Main Page ───
 export default function UsimManagementPage() {
   const [activeTab, setActiveTab] = useState("overview");
-  const [stats, setStats] = useState<UsimAgencyStats[]>([]);
-  const [agencies, setAgencies] = useState<Agency[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { agencies, categories } = useAgencyFilter();
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  // 업체 목록 로드
-  useEffect(() => {
-    fetch("/api/agencies")
-      .then((r) => r.json())
-      .then((data) => setAgencies(data.agencies || data || []))
-      .catch(console.error);
-  }, []);
-
-  // 통계 로드
-  const loadStats = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await fetch("/api/usims/stats");
-      const data = await res.json();
-      setStats(data.stats || []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadStats();
-  }, [loadStats]);
+  const triggerRefresh = useCallback(() => setRefreshKey((k) => k + 1), []);
 
   return (
     <div className="space-y-6 p-6">
@@ -142,17 +237,17 @@ export default function UsimManagementPage() {
 
         {/* ─── Tab 1: 재고 현황 ─── */}
         <TabsContent value="overview" className="space-y-4">
-          <OverviewTab stats={stats} loading={loading} agencies={agencies} />
+          <OverviewTab agencies={agencies} categories={categories} refreshKey={refreshKey} />
         </TabsContent>
 
         {/* ─── Tab 2: 유심 배정 ─── */}
         <TabsContent value="assign" className="space-y-4">
-          <AssignTab agencies={agencies} onAssigned={loadStats} />
+          <AssignTab agencies={agencies} categories={categories} onAssigned={triggerRefresh} />
         </TabsContent>
 
         {/* ─── Tab 3: 취소/초기화 관리 ─── */}
         <TabsContent value="cancelled" className="space-y-4">
-          <CancelledTab agencies={agencies} onReset={loadStats} />
+          <CancelledTab agencies={agencies} categories={categories} onReset={triggerRefresh} />
         </TabsContent>
       </Tabs>
     </div>
@@ -163,18 +258,47 @@ export default function UsimManagementPage() {
 // Tab 1: 재고 현황
 // ═══════════════════════════════════════════
 function OverviewTab({
-  stats,
-  loading,
   agencies,
+  categories,
+  refreshKey,
 }: {
-  stats: UsimAgencyStats[];
-  loading: boolean;
   agencies: Agency[];
+  categories: CategoryNode[];
+  refreshKey: number;
 }) {
+  const [selectedMajor, setSelectedMajor] = useState("all");
+  const [selectedMedium, setSelectedMedium] = useState("all");
+  const [stats, setStats] = useState<UsimAgencyStats[]>([]);
+  const [loading, setLoading] = useState(true);
   const [expandedAgency, setExpandedAgency] = useState<string | null>(null);
   const [agencyUsims, setAgencyUsims] = useState<UsimRow[]>([]);
   const [loadingUsims, setLoadingUsims] = useState(false);
 
+  // 통계 로드 (카테고리 필터 적용)
+  const loadStats = useCallback(async () => {
+    try {
+      setLoading(true);
+      const params = new URLSearchParams();
+      if (selectedMedium !== "all") {
+        params.set("mediumCategories", selectedMedium);
+      } else if (selectedMajor !== "all") {
+        params.set("majorCategories", selectedMajor);
+      }
+      const res = await fetch(`/api/usims/stats?${params}`);
+      const data = await res.json();
+      setStats(data.stats || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedMajor, selectedMedium]);
+
+  useEffect(() => {
+    loadStats();
+  }, [loadStats, refreshKey]);
+
+  // 업체 클릭 시 유심 목록 펼치기
   const toggleAgency = async (agencyId: string) => {
     if (expandedAgency === agencyId) {
       setExpandedAgency(null);
@@ -206,17 +330,28 @@ function OverviewTab({
     { totalAssigned: 0, currentStock: 0, used: 0, cancelled: 0, resetReady: 0 }
   );
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-        <span className="ml-2 text-gray-500">로딩 중...</span>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
+      {/* 카테고리 필터 */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-wrap gap-3 items-end">
+            <CategoryCascadeFilter
+              categories={categories}
+              agencies={agencies}
+              selectedMajor={selectedMajor}
+              selectedMedium={selectedMedium}
+              selectedAgency="all"
+              onMajorChange={setSelectedMajor}
+              onMediumChange={setSelectedMedium}
+              onAgencyChange={() => {}}
+              showAllOption
+              showAgency={false}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* 전체 요약 카드 */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Card>
@@ -252,7 +387,12 @@ function OverviewTab({
       </div>
 
       {/* 업체별 테이블 */}
-      {stats.length === 0 ? (
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+          <span className="ml-2 text-gray-500">로딩 중...</span>
+        </div>
+      ) : stats.length === 0 ? (
         <Card>
           <CardContent className="p-8 text-center text-gray-500">
             배정된 유심이 없습니다. &quot;유심 배정&quot; 탭에서 유심을 배정해 주세요.
@@ -358,11 +498,15 @@ function OverviewTab({
 // ═══════════════════════════════════════════
 function AssignTab({
   agencies,
+  categories,
   onAssigned,
 }: {
   agencies: Agency[];
+  categories: CategoryNode[];
   onAssigned: () => void;
 }) {
+  const [selectedMajor, setSelectedMajor] = useState("");
+  const [selectedMedium, setSelectedMedium] = useState("");
   const [agencyId, setAgencyId] = useState("");
   const [assignedDate, setAssignedDate] = useState(new Date().toISOString().split("T")[0]);
   const [serialInput, setSerialInput] = useState("");
@@ -373,7 +517,6 @@ function AssignTab({
 
   // 범위에서 일련번호 배열 생성
   const generateRange = (start: string, end: string): string[] => {
-    // 숫자 부분 추출
     const numStart = parseInt(start);
     const numEnd = parseInt(end);
     if (isNaN(numStart) || isNaN(numEnd) || numEnd < numStart) return [];
@@ -390,7 +533,6 @@ function AssignTab({
     if (inputMode === "range") {
       return generateRange(rangeStart, rangeEnd);
     }
-    // 목록 모드: 줄바꿈, 쉼표, 탭 구분
     return serialInput
       .split(/[\n,\t]+/)
       .map((s) => s.trim())
@@ -401,7 +543,7 @@ function AssignTab({
 
   const handleSubmit = async () => {
     if (!agencyId) {
-      toast.error("업체를 선택해 주세요.");
+      toast.error("업체(소분류)를 선택해 주세요.");
       return;
     }
     const serials = getSerialNumbers();
@@ -420,7 +562,6 @@ function AssignTab({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       toast.success(data.message);
-      // 초기화
       setSerialInput("");
       setRangeStart("");
       setRangeEnd("");
@@ -438,35 +579,34 @@ function AssignTab({
         <CardTitle className="text-base">유심 일괄 배정</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* 업체 선택 */}
-          <div className="space-y-2">
-            <Label>배정 업체 *</Label>
-            <Select value={agencyId} onValueChange={setAgencyId}>
-              <SelectTrigger>
-                <SelectValue placeholder="업체 선택" />
-              </SelectTrigger>
-              <SelectContent>
-                {agencies.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        {/* 대분류 → 중분류 → 소분류 캐스케이드 */}
+        <div className="flex flex-wrap gap-3 items-end">
+          <CategoryCascadeFilter
+            categories={categories}
+            agencies={agencies}
+            selectedMajor={selectedMajor}
+            selectedMedium={selectedMedium}
+            selectedAgency={agencyId}
+            onMajorChange={setSelectedMajor}
+            onMediumChange={setSelectedMedium}
+            onAgencyChange={setAgencyId}
+            showAllOption={false}
+            majorLabel="대분류 *"
+            mediumLabel="중분류 *"
+            agencyLabel="배정 업체 (소분류) *"
+          />
 
           {/* 배정일 */}
-          <div className="space-y-2">
-            <Label>배정일 *</Label>
-            <Input type="date" value={assignedDate} onChange={(e) => setAssignedDate(e.target.value)} />
+          <div className="space-y-1">
+            <Label className="text-xs">배정일 *</Label>
+            <Input type="date" className="w-44" value={assignedDate} onChange={(e) => setAssignedDate(e.target.value)} />
           </div>
 
           {/* 입력 모드 */}
-          <div className="space-y-2">
-            <Label>입력 방식</Label>
+          <div className="space-y-1">
+            <Label className="text-xs">입력 방식</Label>
             <Select value={inputMode} onValueChange={(v) => setInputMode(v as "list" | "range")}>
-              <SelectTrigger>
+              <SelectTrigger className="w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -538,25 +678,42 @@ function AssignTab({
 // ═══════════════════════════════════════════
 function CancelledTab({
   agencies,
+  categories,
   onReset,
 }: {
   agencies: Agency[];
+  categories: CategoryNode[];
   onReset: () => void;
 }) {
   const [cancelledUsims, setCancelledUsims] = useState<UsimRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [resetting, setResetting] = useState(false);
-  const [filterAgency, setFilterAgency] = useState("all");
   const [search, setSearch] = useState("");
+
+  // 카테고리 캐스케이드 필터
+  const [filterMajor, setFilterMajor] = useState("all");
+  const [filterMedium, setFilterMedium] = useState("all");
+  const [filterAgency, setFilterAgency] = useState("all");
 
   const loadCancelled = useCallback(async () => {
     setLoading(true);
     try {
-      let url = "/api/usims?status=CANCELLED&pageSize=500";
-      if (filterAgency !== "all") url += `&agencyId=${filterAgency}`;
-      if (search) url += `&search=${encodeURIComponent(search)}`;
-      const res = await fetch(url);
+      const params = new URLSearchParams();
+      params.set("status", "CANCELLED");
+      params.set("pageSize", "500");
+
+      if (filterAgency !== "all") {
+        params.set("agencyId", filterAgency);
+      } else if (filterMedium !== "all") {
+        params.set("mediumCategories", filterMedium);
+      } else if (filterMajor !== "all") {
+        params.set("majorCategories", filterMajor);
+      }
+
+      if (search) params.set("search", search);
+
+      const res = await fetch(`/api/usims?${params}`);
       const data = await res.json();
       setCancelledUsims(data.data || []);
       setSelectedIds(new Set());
@@ -565,7 +722,7 @@ function CancelledTab({
     } finally {
       setLoading(false);
     }
-  }, [filterAgency, search]);
+  }, [filterMajor, filterMedium, filterAgency, search]);
 
   useEffect(() => {
     loadCancelled();
@@ -615,22 +772,17 @@ function CancelledTab({
       <Card>
         <CardContent className="p-4">
           <div className="flex flex-wrap gap-3 items-end">
-            <div className="space-y-1">
-              <Label className="text-xs">업체</Label>
-              <Select value={filterAgency} onValueChange={setFilterAgency}>
-                <SelectTrigger className="w-44">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">전체 업체</SelectItem>
-                  {agencies.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <CategoryCascadeFilter
+              categories={categories}
+              agencies={agencies}
+              selectedMajor={filterMajor}
+              selectedMedium={filterMedium}
+              selectedAgency={filterAgency}
+              onMajorChange={setFilterMajor}
+              onMediumChange={setFilterMedium}
+              onAgencyChange={setFilterAgency}
+              showAllOption
+            />
             <div className="space-y-1 flex-1 min-w-[200px]">
               <Label className="text-xs">유심번호 검색</Label>
               <div className="relative">
