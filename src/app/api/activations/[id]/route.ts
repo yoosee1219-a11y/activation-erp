@@ -23,6 +23,15 @@ const PARTNER_EDITABLE_FIELDS = new Set([
   "arcSupplement",
   // 진행상황 (입력중→개통요청, 보완요청→개통요청)
   "workStatus",
+  // 고객 추가메모
+  "customerMemo",
+  // 명의변경 정보
+  "combinedUnitNameChange",
+  "billingAccountNameChange",
+  "existingBillingAccount",
+  "newBillingAccount",
+  // 보류 사유
+  "holdReason",
 ]);
 
 // 서류 필드

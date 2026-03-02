@@ -89,6 +89,18 @@ export const activations = pgTable("activations", {
   arcSupplementDeadline: date("arc_supplement_deadline"), // 외국인등록증보완기한
   autopayRegistered: boolean("autopay_registered").default(false), // 자동이체등록여부
 
+  // 고객 추가메모 (특이사항/상세사유)
+  customerMemo: text("customer_memo"),
+
+  // 명의변경 정보 (결합단위 명의변경)
+  combinedUnitNameChange: boolean("combined_unit_name_change").default(false), // 결합단위 명의변경
+  billingAccountNameChange: boolean("billing_account_name_change").default(false), // 청구계정결합단위 명의변경
+  existingBillingAccount: text("existing_billing_account"), // 기존 청구계정
+  newBillingAccount: text("new_billing_account"), // 새로 생성된 청구계정
+
+  // 보류 사유 (보류-서류/체납/신분증/계좌정보)
+  holdReason: text("hold_reason"),
+
   // 기타
   notes: text("notes"), // 비고
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),

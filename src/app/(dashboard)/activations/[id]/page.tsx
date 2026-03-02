@@ -161,6 +161,13 @@ export default function ActivationDetailPage() {
               label="약정일자"
               value={formatDate(activation.commitmentDate)}
             />
+            {typeof activation.holdReason === "string" &&
+              activation.holdReason && (
+                <DetailRow
+                  label="보류 사유"
+                  value={activation.holdReason}
+                />
+              )}
           </CardContent>
         </Card>
 
@@ -200,6 +207,57 @@ export default function ActivationDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* 명의변경 정보 */}
+      {(!!activation.combinedUnitNameChange ||
+        !!activation.billingAccountNameChange) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>명의변경 정보</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <DetailRow
+              label="결합단위 명의변경"
+              value={activation.combinedUnitNameChange ? "예" : "아니오"}
+            />
+            <DetailRow
+              label="청구계정결합단위 명의변경"
+              value={
+                activation.billingAccountNameChange ? "예" : "아니오"
+              }
+            />
+            {typeof activation.existingBillingAccount === "string" &&
+              activation.existingBillingAccount && (
+                <DetailRow
+                  label="기존 청구계정"
+                  value={activation.existingBillingAccount}
+                />
+              )}
+            {typeof activation.newBillingAccount === "string" &&
+              activation.newBillingAccount && (
+                <DetailRow
+                  label="새 청구계정"
+                  value={activation.newBillingAccount}
+                />
+              )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 고객 특이사항 */}
+      {typeof activation.customerMemo === "string" &&
+        activation.customerMemo && (
+          <Card>
+            <CardHeader>
+              <CardTitle>고객 특이사항 (추가메모)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="whitespace-pre-wrap text-gray-700">
+                {activation.customerMemo as string}
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
       {typeof activation.notes === "string" && activation.notes && (
         <Card>

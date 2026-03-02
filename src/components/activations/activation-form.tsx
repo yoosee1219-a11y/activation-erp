@@ -72,6 +72,18 @@ export function ActivationForm({
       (initialData?.arcSupplementDeadline as string) || "",
     autopayRegistered:
       (initialData?.autopayRegistered as boolean) || false,
+    // 고객 추가메모
+    customerMemo: (initialData?.customerMemo as string) || "",
+    // 명의변경 정보
+    combinedUnitNameChange:
+      (initialData?.combinedUnitNameChange as boolean) || false,
+    billingAccountNameChange:
+      (initialData?.billingAccountNameChange as boolean) || false,
+    existingBillingAccount:
+      (initialData?.existingBillingAccount as string) || "",
+    newBillingAccount: (initialData?.newBillingAccount as string) || "",
+    // 보류 사유
+    holdReason: (initialData?.holdReason as string) || "",
     notes: (initialData?.notes as string) || "",
   });
 
@@ -314,6 +326,27 @@ export function ActivationForm({
             />
             <Label htmlFor="selectedCommitment">선택약정</Label>
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="holdReason">보류 사유</Label>
+            <Select
+              value={formData.holdReason}
+              onValueChange={(v) =>
+                updateField("holdReason", v === "없음" ? "" : v)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="보류 사유 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="없음">없음</SelectItem>
+                <SelectItem value="보류-서류">보류-서류</SelectItem>
+                <SelectItem value="보류-체납">보류-체납</SelectItem>
+                <SelectItem value="보류-신분증">보류-신분증</SelectItem>
+                <SelectItem value="보류-계좌정보">보류-계좌정보</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
 
@@ -415,6 +448,90 @@ export function ActivationForm({
             />
             <Label htmlFor="autopayRegistered">자동이체 등록</Label>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* 명의변경 정보 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>명의변경 정보</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="combinedUnitNameChange"
+                checked={formData.combinedUnitNameChange}
+                onCheckedChange={(v) =>
+                  updateField("combinedUnitNameChange", !!v)
+                }
+              />
+              <Label htmlFor="combinedUnitNameChange">
+                결합단위 명의변경
+              </Label>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="billingAccountNameChange"
+                checked={formData.billingAccountNameChange}
+                onCheckedChange={(v) =>
+                  updateField("billingAccountNameChange", !!v)
+                }
+              />
+              <Label htmlFor="billingAccountNameChange">
+                청구계정결합단위 명의변경
+              </Label>
+            </div>
+          </div>
+
+          {(formData.combinedUnitNameChange ||
+            formData.billingAccountNameChange) && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="existingBillingAccount">
+                  기존 청구계정
+                </Label>
+                <Input
+                  id="existingBillingAccount"
+                  value={formData.existingBillingAccount}
+                  onChange={(e) =>
+                    updateField("existingBillingAccount", e.target.value)
+                  }
+                  placeholder="기존 청구계정 번호"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="newBillingAccount">
+                  새로 생성된 청구계정
+                </Label>
+                <Input
+                  id="newBillingAccount"
+                  value={formData.newBillingAccount}
+                  onChange={(e) =>
+                    updateField("newBillingAccount", e.target.value)
+                  }
+                  placeholder="새 청구계정 번호"
+                />
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 고객 특이사항 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>고객 특이사항 (추가메모)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Textarea
+            value={formData.customerMemo}
+            onChange={(e) => updateField("customerMemo", e.target.value)}
+            rows={3}
+            placeholder="고객 특이사항, 상세사유, 추가 메모 등..."
+          />
         </CardContent>
       </Card>
 
