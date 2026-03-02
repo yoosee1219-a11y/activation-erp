@@ -15,6 +15,8 @@ import {
   getSupplementRequestDetail,
   getPendingByPeriod,
   getTodayPendingDetail,
+  getSupplementStats,
+  getSupplementList,
 } from "@/lib/db/queries/activations";
 import {
   getAgencyIdsByMajorCategory,
@@ -81,6 +83,8 @@ export async function GET(request: NextRequest) {
       supplementRequestDetail,
       pendingByPeriod,
       todayPendingDetail,
+      supplementStats,
+      supplementList,
     ] = await Promise.all([
       getDashboardStats(agencyId, agencyIds),
       getMonthlyStats(agencyId, agencyIds),
@@ -97,6 +101,8 @@ export async function GET(request: NextRequest) {
       getSupplementRequestDetail(agencyIds),
       getPendingByPeriod(agencyIds),
       getTodayPendingDetail(agencyIds),
+      getSupplementStats(agencyIds),
+      getSupplementList(agencyIds),
     ]);
 
     return NextResponse.json({
@@ -115,6 +121,8 @@ export async function GET(request: NextRequest) {
       supplementRequestDetail,
       pendingByPeriod,
       todayPendingDetail,
+      supplementStats,
+      supplementList,
     });
   } catch (error) {
     console.error("Failed to fetch dashboard:", error);

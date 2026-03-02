@@ -9,6 +9,8 @@ import { AgencyStatusTable } from "@/components/dashboard/agency-status-table";
 import { AgencyChart } from "@/components/dashboard/agency-chart";
 import { StaffStatsTable } from "@/components/dashboard/staff-stats-table";
 import { ArcUrgentPanel } from "@/components/dashboard/arc-urgent-panel";
+import { SupplementPanel } from "@/components/dashboard/supplement-panel";
+import type { SupplementStat, SupplementItem } from "@/components/dashboard/supplement-panel";
 import type { CategoryNode, Agency } from "@/hooks/use-agency-filter";
 
 interface TimeSeriesItem {
@@ -118,6 +120,8 @@ interface DashboardTabsProps {
     entryDate: string | null;
     personInCharge: string | null;
   }>;
+  supplementStats: SupplementStat[];
+  supplementList: SupplementItem[];
   categories: CategoryNode[];
   agencies: Agency[];
 }
@@ -181,9 +185,9 @@ export function DashboardTabs(props: DashboardTabsProps) {
 
       {/* 서류 보완 */}
       <TabsContent value="arc" className="mt-4">
-        <ArcUrgentPanel
-          arcStats={props.arcStats}
-          urgentList={props.arcUrgentList}
+        <SupplementPanel
+          supplementStats={props.supplementStats}
+          supplementList={props.supplementList}
         />
       </TabsContent>
     </Tabs>

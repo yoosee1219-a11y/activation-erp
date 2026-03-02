@@ -20,6 +20,8 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Clock, CheckCircle2, Loader2, RotateCcw, X, RefreshCw, FileEdit, Package, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
+import { SupplementPanel } from "@/components/dashboard/supplement-panel";
+import type { SupplementStat, SupplementItem } from "@/components/dashboard/supplement-panel";
 
 type WorkStatusFilter = "입력중" | "개통요청" | "진행중" | "개통완료" | "보완요청" | null;
 
@@ -47,6 +49,10 @@ export default function PartnerPage() {
   // 유심 재고 현황
   const [usimStats, setUsimStats] = useState<UsimAgencyStats[]>([]);
   const [usimExpanded, setUsimExpanded] = useState(false);
+
+  // 서류 보완 현황
+  const [supplementStats, setSupplementStats] = useState<SupplementStat[]>([]);
+  const [supplementList, setSupplementList] = useState<SupplementItem[]>([]);
 
   // 카테고리 기반 필터 상태
   const [selectedMediumCategories, setSelectedMediumCategories] = useState<string[]>([]);
@@ -103,6 +109,29 @@ export default function PartnerPage() {
     }
   }, []);
 
+  // 서류 보완 통계 fetch
+  const fetchSupplementData = useCallback(async () => {
+    try {
+      const params = new URLSearchParams();
+      if (hasCategoryAccess) {
+        if (selectedMediumCategories.length > 0 && selectedMediumCategories.length < allowedMediumCats.length) {
+          params.set("mediumCategories", selectedMediumCategories.join(","));
+        }
+      } else if (selectedAgency !== "all") {
+        params.set("agencyIds", selectedAgency);
+      }
+
+      const res = await fetch(`/api/dashboard?${params}`);
+      if (res.ok) {
+        const result = await res.json();
+        setSupplementStats(result.supplementStats || []);
+        setSupplementList(result.supplementList || []);
+      }
+    } catch {
+      // 보완 통계 실패해도 무시
+    }
+  }, [hasCategoryAccess, selectedMediumCategories, allowedMediumCats.length, selectedAgency]);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -148,7 +177,8 @@ export default function PartnerPage() {
     if (hasCategoryAccess && !categoryFilterInitialized) return; // 초기화 전에는 fetch하지 않음
     fetchData();
     fetchUsimStats();
-  }, [fetchData, fetchUsimStats, hasCategoryAccess, categoryFilterInitialized]);
+    fetchSupplementData();
+  }, [fetchData, fetchUsimStats, fetchSupplementData, hasCategoryAccess, categoryFilterInitialized]);
 
   // handleUpdate를 ref로 감싸서 stale closure 방지
   const fetchDataRef = useRef(fetchData);
@@ -490,6 +520,17 @@ export default function PartnerPage() {
           </div>
         )}
       </Card>
+
+      {/* 서류 보완 현황 */}
+      {(supplementStats.length > 0 || supplementList.length > 0) && (
+        <div>
+          <h2 className="text-lg font-bold mb-3">서류 보완 현황</h2>
+          <SupplementPanel
+            supplementStats={supplementStats}
+            supplementList={supplementList}
+          />
+        </div>
+      )}
 
       {/* 헤더 + 필터 */}
       <div className="flex items-center justify-between">

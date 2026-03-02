@@ -531,3 +531,106 @@ export async function getArcUrgentList(agencyId?: string, agencyIds?: string[]) 
   `);
   return result.rows;
 }
+
+// ── 서류 보완 패널: 모바일보완/명의변경보완 분리 통계 ──
+export async function getSupplementStats(agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`WHERE a.agency_id IN (${inList(agencyIds)})`
+    : sql``;
+
+  const result = await db.execute(sql`
+    SELECT
+      a.agency_id as "agencyId",
+      ag.name as "agencyName",
+      -- 모바일보완: workStatus='보완요청'
+      COUNT(*) FILTER (WHERE a.work_status = '보완요청') as "mobileTotal",
+      COUNT(*) FILTER (WHERE a.work_status = '보완요청'
+        AND a.arc_supplement_deadline IS NOT NULL
+        AND a.arc_supplement_deadline < CURRENT_DATE) as "mobileOverdue",
+      COUNT(*) FILTER (WHERE a.work_status = '보완요청'
+        AND a.arc_supplement_deadline IS NOT NULL
+        AND a.arc_supplement_deadline >= CURRENT_DATE
+        AND a.arc_supplement_deadline <= CURRENT_DATE + INTERVAL '30 days') as "mobileWithin30",
+      COUNT(*) FILTER (WHERE a.work_status = '보완요청'
+        AND a.arc_supplement_deadline IS NOT NULL
+        AND a.arc_supplement_deadline > CURRENT_DATE + INTERVAL '30 days'
+        AND a.arc_supplement_deadline <= CURRENT_DATE + INTERVAL '60 days') as "mobileWithin60",
+      -- 명의변경보완: workStatus='개통완료' AND (명의변경서류검수 or 외국인등록증/자동이체검수가 완료가 아닌 건)
+      COUNT(*) FILTER (WHERE a.work_status = '개통완료'
+        AND (COALESCE(a.name_change_docs_review, '') != '완료'
+             OR COALESCE(a.arc_autopay_review, '') != '완료')) as "nameChangeTotal",
+      COUNT(*) FILTER (WHERE a.work_status = '개통완료'
+        AND (COALESCE(a.name_change_docs_review, '') != '완료'
+             OR COALESCE(a.arc_autopay_review, '') != '완료')
+        AND a.arc_supplement_deadline IS NOT NULL
+        AND a.arc_supplement_deadline < CURRENT_DATE) as "nameChangeOverdue",
+      COUNT(*) FILTER (WHERE a.work_status = '개통완료'
+        AND (COALESCE(a.name_change_docs_review, '') != '완료'
+             OR COALESCE(a.arc_autopay_review, '') != '완료')
+        AND a.arc_supplement_deadline IS NOT NULL
+        AND a.arc_supplement_deadline >= CURRENT_DATE
+        AND a.arc_supplement_deadline <= CURRENT_DATE + INTERVAL '30 days') as "nameChangeWithin30",
+      COUNT(*) FILTER (WHERE a.work_status = '개통완료'
+        AND (COALESCE(a.name_change_docs_review, '') != '완료'
+             OR COALESCE(a.arc_autopay_review, '') != '완료')
+        AND a.arc_supplement_deadline IS NOT NULL
+        AND a.arc_supplement_deadline > CURRENT_DATE + INTERVAL '30 days'
+        AND a.arc_supplement_deadline <= CURRENT_DATE + INTERVAL '60 days') as "nameChangeWithin60"
+    FROM activations a
+    LEFT JOIN agencies ag ON a.agency_id = ag.id
+    ${agencyFilter}
+    GROUP BY a.agency_id, ag.name
+    HAVING COUNT(*) FILTER (WHERE a.work_status = '보완요청') > 0
+        OR COUNT(*) FILTER (WHERE a.work_status = '개통완료'
+           AND (COALESCE(a.name_change_docs_review, '') != '완료'
+                OR COALESCE(a.arc_autopay_review, '') != '완료')) > 0
+    ORDER BY ag.name
+  `);
+  return result.rows;
+}
+
+// ── 서류 보완 패널: 모바일보완/명의변경보완 전체 리스트 ──
+export async function getSupplementList(agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`AND a.agency_id IN (${inList(agencyIds)})`
+    : sql``;
+
+  const result = await db.execute(sql`
+    SELECT
+      a.id,
+      a.agency_id as "agencyId",
+      COALESCE(ag.name, a.agency_id) as "agencyName",
+      a.customer_name as "customerName",
+      a.new_phone_number as "newPhoneNumber",
+      a.person_in_charge as "personInCharge",
+      a.work_status as "workStatus",
+      a.name_change_docs_review as "nameChangeDocsReview",
+      a.arc_autopay_review as "arcAutopayReview",
+      a.arc_supplement_deadline as "arcSupplementDeadline",
+      CASE
+        WHEN a.arc_supplement_deadline IS NOT NULL
+        THEN (a.arc_supplement_deadline - CURRENT_DATE)
+        ELSE NULL
+      END as "daysLeft",
+      CASE
+        WHEN a.work_status = '보완요청' THEN 'mobile'
+        WHEN a.work_status = '개통완료'
+          AND (COALESCE(a.name_change_docs_review, '') != '완료'
+               OR COALESCE(a.arc_autopay_review, '') != '완료')
+        THEN 'nameChange'
+      END as "supplementType"
+    FROM activations a
+    LEFT JOIN agencies ag ON a.agency_id = ag.id
+    WHERE (
+      a.work_status = '보완요청'
+      OR (
+        a.work_status = '개통완료'
+        AND (COALESCE(a.name_change_docs_review, '') != '완료'
+             OR COALESCE(a.arc_autopay_review, '') != '완료')
+      )
+    )
+    ${agencyFilter}
+    ORDER BY a.arc_supplement_deadline ASC NULLS LAST
+  `);
+  return result.rows;
+}

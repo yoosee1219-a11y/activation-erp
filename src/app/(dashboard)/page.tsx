@@ -116,6 +116,32 @@ interface DashboardData {
     entryDate: string | null;
     personInCharge: string | null;
   }>;
+  supplementStats: Array<{
+    agencyId: string;
+    agencyName: string | null;
+    mobileTotal: number;
+    mobileOverdue: number;
+    mobileWithin30: number;
+    mobileWithin60: number;
+    nameChangeTotal: number;
+    nameChangeOverdue: number;
+    nameChangeWithin30: number;
+    nameChangeWithin60: number;
+  }>;
+  supplementList: Array<{
+    id: string;
+    agencyId: string;
+    agencyName: string | null;
+    customerName: string;
+    newPhoneNumber: string | null;
+    personInCharge: string | null;
+    workStatus: string | null;
+    nameChangeDocsReview: string | null;
+    arcAutopayReview: string | null;
+    arcSupplementDeadline: string | null;
+    daysLeft: number | null;
+    supplementType: "mobile" | "nameChange";
+  }>;
 }
 
 export default function DashboardPage() {
@@ -194,6 +220,8 @@ export default function DashboardPage() {
         supplementRequestDetail={data.supplementRequestDetail || []}
         pendingByPeriod={data.pendingByPeriod || { totalPending: 0, monthlyPending: 0, todayPending: 0 }}
         todayPendingDetail={data.todayPendingDetail || []}
+        supplementStats={data.supplementStats || []}
+        supplementList={data.supplementList || []}
         categories={categories}
         agencies={agencies}
       />
