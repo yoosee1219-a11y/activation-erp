@@ -69,6 +69,15 @@ export default function ActivationsPage() {
     return map;
   }, [categories]);
 
+  // 거래처 → 대분류 매핑
+  const agencyMajorMap = useMemo(() => {
+    const map: Record<string, string | null> = {};
+    agencies.forEach((a) => {
+      map[a.id] = a.majorCategory || null;
+    });
+    return map;
+  }, [agencies]);
+
   // 거래처 → 중분류 매핑
   const agencyMediumMap = useMemo(() => {
     const map: Record<string, string | null> = {};
@@ -111,6 +120,8 @@ export default function ActivationsPage() {
       const rows = (result.data || []).map((row: ActivationRow) => ({
         ...row,
         agencyName: agencyMap[row.agencyId] || row.agencyId,
+        majorCategoryName: categoryNameMap[agencyMajorMap[row.agencyId] || ""] || "미분류",
+        mediumCategoryName: categoryNameMap[agencyMediumMap[row.agencyId] || ""] || "미분류",
       }));
       setData(rows);
       setTotal(result.total || 0);
@@ -119,7 +130,7 @@ export default function ActivationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [getFilterParams, selectedMajors, selectedMediums, agencyMap, status, dateFrom, dateTo, month, page]);
+  }, [getFilterParams, selectedMajors, selectedMediums, agencyMap, agencyMajorMap, agencyMediumMap, categoryNameMap, status, dateFrom, dateTo, month, page]);
 
   useEffect(() => {
     fetchData();
@@ -195,44 +206,47 @@ export default function ActivationsPage() {
     staffList: STAFF_LIST,
   });
 
-  // 2단계 그룹핑: 중분류 → 거래처
+  // 2단계 그룹핑: 대분류 → 중분류
   const twoLevelGrouped = useMemo(() => {
-    // 1단계: 거래처별 그룹
-    const agencyGroups: Record<string, AgencyGroup> = {};
+    // 1단계: 중분류별 그룹
+    const mediumGroups: Record<string, AgencyGroup> = {};
     data.forEach((row) => {
-      if (!agencyGroups[row.agencyId]) {
-        agencyGroups[row.agencyId] = {
-          name: row.agencyName || row.agencyId,
+      const mediumCat = agencyMediumMap[row.agencyId] || "__uncategorized__";
+      if (!mediumGroups[mediumCat]) {
+        mediumGroups[mediumCat] = {
+          name: categoryNameMap[mediumCat] || "미분류",
           rows: [],
           counts: { "입력중": 0, "개통요청": 0, "진행중": 0, "개통완료": 0, "보완요청": 0 },
         };
       }
-      agencyGroups[row.agencyId].rows.push(row);
+      mediumGroups[mediumCat].rows.push(row);
       const ws = row.workStatus || "입력중";
-      if (ws in agencyGroups[row.agencyId].counts) {
-        agencyGroups[row.agencyId].counts[ws]++;
+      if (ws in mediumGroups[mediumCat].counts) {
+        mediumGroups[mediumCat].counts[ws]++;
       }
     });
 
-    // 2단계: 중분류별 거래처 그룹
+    // 2단계: 대분류별 중분류 그룹
     const catGroups: Record<string, CategoryGroup> = {};
-    Object.entries(agencyGroups).forEach(([agencyId, group]) => {
-      const mediumCat = agencyMediumMap[agencyId] || "__uncategorized__";
-      if (!catGroups[mediumCat]) {
-        catGroups[mediumCat] = {
+    Object.entries(mediumGroups).forEach(([mediumId, group]) => {
+      // 중분류에서 대분류 찾기: agencies 중 해당 mediumCategory를 가진 agency의 majorCategory
+      const sampleAgency = agencies.find((a) => a.mediumCategory === mediumId);
+      const majorCat = sampleAgency?.majorCategory || "__uncategorized__";
+      if (!catGroups[majorCat]) {
+        catGroups[majorCat] = {
           categoryName:
-            mediumCat === "__uncategorized__"
+            majorCat === "__uncategorized__"
               ? "미분류"
-              : categoryNameMap[mediumCat] || mediumCat,
+              : categoryNameMap[majorCat] || majorCat,
           agencies: [],
           totalRows: 0,
         };
       }
-      catGroups[mediumCat].agencies.push([agencyId, group]);
-      catGroups[mediumCat].totalRows += group.rows.length;
+      catGroups[majorCat].agencies.push([mediumId, group]);
+      catGroups[majorCat].totalRows += group.rows.length;
     });
 
-    // 거래처 이름순 정렬
+    // 중분류 이름순 정렬
     Object.values(catGroups).forEach((g) =>
       g.agencies.sort((a, b) => a[1].name.localeCompare(b[1].name))
     );
@@ -243,7 +257,7 @@ export default function ActivationsPage() {
       if (b[0] === "__uncategorized__") return -1;
       return a[1].categoryName.localeCompare(b[1].categoryName);
     });
-  }, [data, agencyMediumMap, categoryNameMap]);
+  }, [data, agencyMediumMap, categoryNameMap, agencies]);
 
   // 카테고리 존재 여부 (카테고리가 없으면 기존 flat 그룹 뷰)
   const hasCategories = categories.length > 0;
@@ -415,7 +429,7 @@ export default function ActivationsPage() {
           {selectedAgency && (
             <div className="flex items-center gap-2">
               <Badge variant="default" className="text-sm px-3 py-1">
-                {agencyMap[selectedAgency] || selectedAgency}
+                {categoryNameMap[selectedAgency] || agencyMap[selectedAgency] || selectedAgency}
               </Badge>
               <Button
                 variant="ghost"
@@ -428,11 +442,11 @@ export default function ActivationsPage() {
             </div>
           )}
 
-          {/* 2단계 그룹 카드: 중분류 → 거래처 */}
+          {/* 2단계 그룹 카드: 대분류 → 중분류 */}
           {hasCategories ? (
             twoLevelGrouped.map(([catId, catGroup]) => (
               <div key={catId}>
-                {/* 중분류 헤더 */}
+                {/* 대분류 헤더 */}
                 <div className="flex items-center gap-2 mb-2">
                   <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">
                     {catGroup.categoryName}
@@ -441,7 +455,7 @@ export default function ActivationsPage() {
                     {catGroup.totalRows}건
                   </Badge>
                 </div>
-                {/* 해당 중분류의 거래처 카드들 */}
+                {/* 해당 대분류의 중분류 카드들 */}
                 <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 mb-3">
                   {catGroup.agencies.map(([agencyId, group]) => (
                     <Card
@@ -502,7 +516,7 @@ export default function ActivationsPage() {
             </div>
           )}
 
-          {/* 거래처별 테이블 (선택된 거래처만 or 전체) */}
+          {/* 중분류별 테이블 (선택된 중분류만 or 전체) */}
           {filteredFlat.map(([agencyId, group]) => (
             <div key={agencyId}>
               <div className="flex items-center gap-3 mb-2 mt-4">

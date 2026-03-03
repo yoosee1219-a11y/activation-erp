@@ -24,6 +24,8 @@ export type ActivationRow = {
   id: string;
   agencyId: string;
   agencyName?: string;
+  majorCategoryName?: string;
+  mediumCategoryName?: string;
   customerName: string;
   usimNumber: string | null;
   entryDate: string | null;
@@ -117,11 +119,20 @@ export function getColumns(options: {
         ]
       : []),
     {
-      accessorKey: "agencyId",
+      id: "majorCategory",
       header: "거래처",
       cell: ({ row }) => (
         <span className="font-medium text-sm">
-          {row.original.agencyName || row.getValue("agencyId")}
+          {row.original.majorCategoryName || "-"}
+        </span>
+      ),
+    },
+    {
+      id: "mediumCategory",
+      header: "상세",
+      cell: ({ row }) => (
+        <span className="text-sm text-gray-600">
+          {row.original.mediumCategoryName || "-"}
         </span>
       ),
     },
@@ -385,7 +396,7 @@ export function getColumns(options: {
     },
     {
       id: "actions",
-      header: "상세",
+      header: "관리",
       cell: ({ row }) => {
         const id = row.original.id;
         return (
