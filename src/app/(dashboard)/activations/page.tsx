@@ -15,7 +15,7 @@ import { Plus, List, LayoutGrid, X } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 
-const STAFF_LIST = ["Admin", "김대리", "박과장", "이사원", "최주임"];
+const STAFF_LIST = ["권보미", "박서연", "김유림", "이아라"];
 
 interface MonthSummary {
   month: string;
