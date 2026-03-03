@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import {
   Popover,
   PopoverContent,
@@ -12,22 +12,12 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronDown, X } from "lucide-react";
 import type { CategoryNode } from "@/hooks/use-agency-filter";
 
-interface Agency {
-  id: string;
-  name: string;
-  majorCategory?: string | null;
-  mediumCategory?: string | null;
-}
-
 interface CascadingFilterProps {
   categories: CategoryNode[];
-  agencies: Agency[];
   selectedMajors: string[];
   selectedMediums: string[];
-  selectedAgencies: string[];
   onMajorsChange: (ids: string[]) => void;
   onMediumsChange: (ids: string[]) => void;
-  onAgenciesChange: (ids: string[]) => void;
 }
 
 function FilterDropdown({
@@ -139,13 +129,10 @@ function FilterDropdown({
 
 export function CascadingFilter({
   categories,
-  agencies,
   selectedMajors,
   selectedMediums,
-  selectedAgencies,
   onMajorsChange,
   onMediumsChange,
-  onAgenciesChange,
 }: CascadingFilterProps) {
   // 대분류 목록
   const majorItems = useMemo(
@@ -168,32 +155,6 @@ export function CascadingFilter({
       );
   }, [categories, selectedMajors]);
 
-  // 소분류(거래처): 선택된 대분류+중분류에 해당하는 것만
-  const agencyItems = useMemo(() => {
-    let filtered = agencies;
-
-    // 대분류 필터
-    if (selectedMajors.length > 0) {
-      filtered = filtered.filter(
-        (a) => a.majorCategory && selectedMajors.includes(a.majorCategory)
-      );
-    }
-
-    // 중분류 필터
-    if (selectedMediums.length > 0) {
-      filtered = filtered.filter(
-        (a) => a.mediumCategory && selectedMediums.includes(a.mediumCategory)
-      );
-    }
-
-    // 미분류 거래처도 대분류가 선택 안된 경우 포함
-    if (selectedMajors.length === 0 && selectedMediums.length === 0) {
-      filtered = agencies;
-    }
-
-    return filtered.map((a) => ({ id: a.id, name: a.name }));
-  }, [agencies, selectedMajors, selectedMediums]);
-
   // 대분류 변경 시 → 하위 선택 정리
   const handleMajorsChange = (ids: string[]) => {
     onMajorsChange(ids);
@@ -209,48 +170,21 @@ export function CascadingFilter({
       if (newMediums.length !== selectedMediums.length) {
         onMediumsChange(newMediums);
       }
-
-      // 선택된 대분류에 속하지 않는 소분류 제거
-      const validAgencyIds = agencies
-        .filter((a) => a.majorCategory && ids.includes(a.majorCategory))
-        .map((a) => a.id);
-      const newAgencies = selectedAgencies.filter((a) =>
-        validAgencyIds.includes(a)
-      );
-      if (newAgencies.length !== selectedAgencies.length) {
-        onAgenciesChange(newAgencies);
-      }
     }
   };
 
-  // 중분류 변경 시 → 소분류 정리
   const handleMediumsChange = (ids: string[]) => {
     onMediumsChange(ids);
-
-    // 선택된 중분류에 속하지 않는 소분류 제거
-    if (ids.length > 0) {
-      const validAgencyIds = agencies
-        .filter((a) => a.mediumCategory && ids.includes(a.mediumCategory))
-        .map((a) => a.id);
-      const newAgencies = selectedAgencies.filter((a) =>
-        validAgencyIds.includes(a)
-      );
-      if (newAgencies.length !== selectedAgencies.length) {
-        onAgenciesChange(newAgencies);
-      }
-    }
   };
 
   // 필터 초기화
   const hasAnyFilter =
     selectedMajors.length > 0 ||
-    selectedMediums.length > 0 ||
-    selectedAgencies.length > 0;
+    selectedMediums.length > 0;
 
   const handleClearAll = () => {
     onMajorsChange([]);
     onMediumsChange([]);
-    onAgenciesChange([]);
   };
 
   return (
@@ -271,17 +205,6 @@ export function CascadingFilter({
           selectedMajors.length > 0
             ? "해당 대분류에 중분류가 없습니다"
             : "중분류 없음"
-        }
-      />
-      <FilterDropdown
-        label="거래처"
-        items={agencyItems}
-        selectedIds={selectedAgencies}
-        onChange={onAgenciesChange}
-        emptyText={
-          selectedMediums.length > 0 || selectedMajors.length > 0
-            ? "해당 분류에 거래처가 없습니다"
-            : "거래처 없음"
         }
       />
       {hasAnyFilter && (

@@ -38,7 +38,7 @@ type CategoryGroup = {
 };
 
 export default function ActivationsPage() {
-  const { getFilterParams, selectedMajors, selectedMediums, selectedAgencies: dashboardSelectedAgencies, agencies, categories, user } = useDashboard();
+  const { getFilterParams, selectedMajors, selectedMediums, agencies, categories, user } = useDashboard();
   const [data, setData] = useState<ActivationRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -119,7 +119,7 @@ export default function ActivationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [getFilterParams, selectedMajors, selectedMediums, dashboardSelectedAgencies, agencyMap, status, dateFrom, dateTo, month, page]);
+  }, [getFilterParams, selectedMajors, selectedMediums, agencyMap, status, dateFrom, dateTo, month, page]);
 
   useEffect(() => {
     fetchData();

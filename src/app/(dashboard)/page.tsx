@@ -145,7 +145,7 @@ interface DashboardData {
 }
 
 export default function DashboardPage() {
-  const { getFilterParams, selectedMajors, selectedMediums, selectedAgencies, categories, agencies } = useDashboard();
+  const { getFilterParams, selectedMajors, selectedMediums, categories, agencies } = useDashboard();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -161,7 +161,7 @@ export default function DashboardPage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [getFilterParams, selectedMajors, selectedMediums, selectedAgencies]);
+  }, [getFilterParams, selectedMajors, selectedMediums]);
 
   if (loading) {
     return (

@@ -782,6 +782,7 @@ function CancelledTab({
               onMediumChange={setFilterMedium}
               onAgencyChange={setFilterAgency}
               showAllOption
+              showAgency={false}
             />
             <div className="space-y-1 flex-1 min-w-[200px]">
               <Label className="text-xs">유심번호 검색</Label>

@@ -3,18 +3,15 @@
 import { Badge } from "@/components/ui/badge";
 import { CascadingFilter } from "@/components/layout/cascading-filter";
 import type { SessionUser } from "@/types";
-import type { CategoryNode, Agency } from "@/hooks/use-agency-filter";
+import type { CategoryNode } from "@/hooks/use-agency-filter";
 
 interface HeaderProps {
   user: SessionUser | null;
-  agencies: Agency[];
   categories: CategoryNode[];
   selectedMajors: string[];
   selectedMediums: string[];
-  selectedAgencies: string[];
   onMajorsChange: (ids: string[]) => void;
   onMediumsChange: (ids: string[]) => void;
-  onAgenciesChange: (ids: string[]) => void;
 }
 
 const roleLabels: Record<string, string> = {
@@ -33,14 +30,11 @@ const roleColors: Record<string, string> = {
 
 export function Header({
   user,
-  agencies,
   categories,
   selectedMajors,
   selectedMediums,
-  selectedAgencies,
   onMajorsChange,
   onMediumsChange,
-  onAgenciesChange,
 }: HeaderProps) {
   const showAgencyFilter =
     user?.role === "ADMIN" || user?.role === "SUB_ADMIN";
@@ -51,13 +45,10 @@ export function Header({
         {showAgencyFilter && (
           <CascadingFilter
             categories={categories}
-            agencies={agencies}
             selectedMajors={selectedMajors}
             selectedMediums={selectedMediums}
-            selectedAgencies={selectedAgencies}
             onMajorsChange={onMajorsChange}
             onMediumsChange={onMediumsChange}
-            onAgenciesChange={onAgenciesChange}
           />
         )}
       </div>

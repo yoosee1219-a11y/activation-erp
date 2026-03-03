@@ -25,7 +25,6 @@ export function useAgencyFilter() {
   // 멀티셀렉트 상태
   const [selectedMajors, setSelectedMajors] = useState<string[]>([]);
   const [selectedMediums, setSelectedMediums] = useState<string[]>([]);
-  const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
 
   const fetchData = useCallback(() => {
     Promise.all([
@@ -58,8 +57,6 @@ export function useAgencyFilter() {
     setSelectedMajors,
     selectedMediums,
     setSelectedMediums,
-    selectedAgencies,
-    setSelectedAgencies,
     loading,
     refreshCategories,
   };

@@ -14,8 +14,6 @@ interface DashboardContextType {
   setSelectedMajors: (ids: string[]) => void;
   selectedMediums: string[];
   setSelectedMediums: (ids: string[]) => void;
-  selectedAgencies: string[];
-  setSelectedAgencies: (ids: string[]) => void;
   agencies: Agency[];
   categories: CategoryNode[];
   /** 선택된 값을 API 쿼리 파라미터로 변환 */
@@ -29,8 +27,6 @@ const DashboardContext = createContext<DashboardContextType>({
   setSelectedMajors: () => {},
   selectedMediums: [],
   setSelectedMediums: () => {},
-  selectedAgencies: [],
-  setSelectedAgencies: () => {},
   agencies: [],
   categories: [],
   getFilterParams: () => ({}),
@@ -53,18 +49,13 @@ export default function DashboardLayout({
     setSelectedMajors,
     selectedMediums,
     setSelectedMediums,
-    selectedAgencies,
-    setSelectedAgencies,
     refreshCategories,
   } = useAgencyFilter();
 
   // 멀티셀렉트 → API 파라미터 변환
-  // 우선순위: 소분류(거래처) > 중분류 > 대분류
+  // 우선순위: 중분류 > 대분류
   const getFilterParams = useMemo(() => {
     return (): Record<string, string> => {
-      if (selectedAgencies.length > 0) {
-        return { agencyIds: selectedAgencies.join(",") };
-      }
       if (selectedMediums.length > 0) {
         return { mediumCategories: selectedMediums.join(",") };
       }
@@ -73,7 +64,7 @@ export default function DashboardLayout({
       }
       return {};
     };
-  }, [selectedMajors, selectedMediums, selectedAgencies]);
+  }, [selectedMajors, selectedMediums]);
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -107,8 +98,6 @@ export default function DashboardLayout({
         setSelectedMajors,
         selectedMediums,
         setSelectedMediums,
-        selectedAgencies,
-        setSelectedAgencies,
         agencies,
         categories,
         getFilterParams,
@@ -120,14 +109,11 @@ export default function DashboardLayout({
         <div className="flex flex-1 flex-col overflow-hidden">
           <Header
             user={user}
-            agencies={agencies}
             categories={categories}
             selectedMajors={selectedMajors}
             selectedMediums={selectedMediums}
-            selectedAgencies={selectedAgencies}
             onMajorsChange={setSelectedMajors}
             onMediumsChange={setSelectedMediums}
-            onAgenciesChange={setSelectedAgencies}
           />
           <main className="flex-1 overflow-auto bg-gray-50 p-6">
             {children}
