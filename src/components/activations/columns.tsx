@@ -19,6 +19,7 @@ import {
 import { MoreHorizontal, Eye, Pencil, Trash2, Lock, Unlock } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
+import { NoteIndicator } from "@/components/activations/note-indicator";
 
 export type ActivationRow = {
   id: string;
@@ -46,6 +47,13 @@ export type ActivationRow = {
   arcAutopayInfo: string | null;
   arcAutopayReview: string | null;
   arcSupplement: string | null;
+  arcInfo: string | null;
+  arcReview: string | null;
+  autopayInfo: string | null;
+  autopayReview: string | null;
+  arcSupplementDeadline: string | null;
+  supplementStatus: string | null;
+  noteCount?: number;
   createdAt: string;
 };
 
@@ -67,6 +75,7 @@ const reviewColors: Record<string, string> = {
   "완료": "bg-green-100 text-green-700",
   "보완요청": "bg-red-100 text-red-700",
   "개통요청": "bg-blue-100 text-blue-700",
+  "진행요청": "bg-orange-100 text-orange-700",
 };
 
 export function getColumns(options: {
@@ -89,6 +98,18 @@ export function getColumns(options: {
         <span className="text-sm text-gray-500 font-medium">
           {row.index + 1}
         </span>
+      ),
+    },
+    {
+      id: "noteIndicator",
+      header: "특이사항",
+      size: 60,
+      cell: ({ row }: { row: { original: ActivationRow } }) => (
+        <NoteIndicator
+          activationId={row.original.id}
+          customerName={row.original.customerName}
+          noteCount={row.original.noteCount || 0}
+        />
       ),
     },
     ...(canLock && onToggleLock
@@ -203,6 +224,7 @@ export function getColumns(options: {
               <SelectItem value="완료">완료</SelectItem>
               <SelectItem value="보완요청">보완요청</SelectItem>
               <SelectItem value="개통요청">개통요청</SelectItem>
+              <SelectItem value="진행요청">진행요청</SelectItem>
             </SelectContent>
           </Select>
         );
@@ -246,16 +268,18 @@ export function getColumns(options: {
               <SelectItem value="완료">완료</SelectItem>
               <SelectItem value="보완요청">보완요청</SelectItem>
               <SelectItem value="개통요청">개통요청</SelectItem>
+              <SelectItem value="진행요청">진행요청</SelectItem>
             </SelectContent>
           </Select>
         );
       },
     },
+    // 외국인등록증
     {
-      accessorKey: "arcAutopayInfo",
-      header: "외국인등록증/자동이체",
+      accessorKey: "arcInfo",
+      header: "외국인등록증",
       cell: ({ row }) => {
-        const v = row.original.arcAutopayInfo;
+        const v = row.original.arcInfo;
         if (!v) return <span className="text-xs text-gray-400">-</span>;
         return (
           <a href={v} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
@@ -264,11 +288,12 @@ export function getColumns(options: {
         );
       },
     },
+    // 검수 (외국인등록증)
     {
-      accessorKey: "arcAutopayReview",
+      accessorKey: "arcReview",
       header: "검수",
       cell: ({ row }) => {
-        const current = row.original.arcAutopayReview || "";
+        const current = row.original.arcReview || "";
         if (!onInlineUpdate) {
           if (!current) return <span className="text-xs text-gray-400">-</span>;
           return (
@@ -280,7 +305,7 @@ export function getColumns(options: {
         return (
           <Select
             value={current}
-            onValueChange={(v) => onInlineUpdate(row.original.id, "arcAutopayReview", v)}
+            onValueChange={(v) => onInlineUpdate(row.original.id, "arcReview", v)}
           >
             <SelectTrigger className={`h-7 w-[90px] text-[10px] border-dashed ${reviewColors[current] || ""}`}>
               <SelectValue placeholder="검수" />
@@ -289,22 +314,75 @@ export function getColumns(options: {
               <SelectItem value="완료">완료</SelectItem>
               <SelectItem value="보완요청">보완요청</SelectItem>
               <SelectItem value="개통요청">개통요청</SelectItem>
+              <SelectItem value="진행요청">진행요청</SelectItem>
             </SelectContent>
           </Select>
         );
       },
     },
+    // 자동이체 서류
     {
-      accessorKey: "arcSupplement",
-      header: "외국인등록증보완",
+      accessorKey: "autopayInfo",
+      header: "자동이체",
       cell: ({ row }) => {
-        const v = row.original.arcSupplement;
+        const v = row.original.autopayInfo;
         if (!v) return <span className="text-xs text-gray-400">-</span>;
         return (
           <a href={v} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
             보기
           </a>
         );
+      },
+    },
+    // 검수 (자동이체)
+    {
+      accessorKey: "autopayReview",
+      header: "검수",
+      cell: ({ row }) => {
+        const current = row.original.autopayReview || "";
+        if (!onInlineUpdate) {
+          if (!current) return <span className="text-xs text-gray-400">-</span>;
+          return (
+            <Badge className={`text-[10px] ${reviewColors[current] || "bg-gray-100 text-gray-600"}`}>
+              {current}
+            </Badge>
+          );
+        }
+        return (
+          <Select
+            value={current}
+            onValueChange={(v) => onInlineUpdate(row.original.id, "autopayReview", v)}
+          >
+            <SelectTrigger className={`h-7 w-[90px] text-[10px] border-dashed ${reviewColors[current] || ""}`}>
+              <SelectValue placeholder="검수" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="완료">완료</SelectItem>
+              <SelectItem value="보완요청">보완요청</SelectItem>
+              <SelectItem value="개통요청">개통요청</SelectItem>
+              <SelectItem value="진행요청">진행요청</SelectItem>
+            </SelectContent>
+          </Select>
+        );
+      },
+    },
+    // 보완기한
+    {
+      id: "supplementDeadline",
+      header: "보완기한",
+      cell: ({ row }) => {
+        const r = row.original;
+        // 3가지 검수 모두 완료면 "완료"
+        if (r.nameChangeDocsReview === "완료" && r.arcReview === "완료" && r.autopayReview === "완료") {
+          return <Badge className="bg-green-100 text-green-700 text-[10px]">완료</Badge>;
+        }
+        const deadline = r.arcSupplementDeadline;
+        if (!deadline) return <span className="text-xs text-gray-400">-</span>;
+        const daysLeft = Math.ceil((new Date(deadline).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+        if (daysLeft < 0) return <Badge className="bg-red-100 text-red-700 text-[10px]">기한초과</Badge>;
+        if (daysLeft <= 30) return <Badge className="bg-red-100 text-red-700 text-[10px]">D-{daysLeft}</Badge>;
+        if (daysLeft <= 60) return <Badge className="bg-orange-100 text-orange-700 text-[10px]">D-{daysLeft}</Badge>;
+        return <Badge className="bg-gray-100 text-gray-600 text-[10px]">D-{daysLeft}</Badge>;
       },
     },
 
@@ -381,7 +459,7 @@ export function getColumns(options: {
     },
     {
       accessorKey: "autopayRegistered",
-      header: "자동이체",
+      header: "자동이체등록",
       cell: ({ row }) => {
         const registered = row.getValue("autopayRegistered") as boolean;
         return (

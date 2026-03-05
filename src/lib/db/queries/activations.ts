@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { activations, agencies } from "@/lib/db/schema";
+import { activations, activationNotes, agencies } from "@/lib/db/schema";
 import { eq, and, desc, sql, count, ilike, gte, lte, inArray } from "drizzle-orm";
 
 // neon-http 드라이버에서 ANY(${array})가 배열 직렬화 실패하므로
@@ -69,8 +69,23 @@ export async function getActivations(params: {
     db.select({ count: count() }).from(activations).where(where),
   ]);
 
+  // Get note counts for fetched activations
+  let noteCounts: Record<string, number> = {};
+  if (data.length > 0) {
+    const ids = data.map(d => d.id);
+    const noteResult = await db.execute(sql`
+      SELECT activation_id, COUNT(*)::int as cnt
+      FROM activation_notes
+      WHERE activation_id IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})
+      GROUP BY activation_id
+    `);
+    noteResult.rows.forEach((r: any) => {
+      noteCounts[r.activation_id] = Number(r.cnt);
+    });
+  }
+
   return {
-    data,
+    data: data.map(d => ({ ...d, noteCount: noteCounts[d.id] || 0 })),
     total: totalResult[0]?.count ?? 0,
     page,
     pageSize,
@@ -342,14 +357,16 @@ export async function getSupplementRequestStats(agencyIds?: string[]) {
       COUNT(*) FILTER (
         WHERE a.application_docs_review = '보완요청'
            OR a.name_change_docs_review = '보완요청'
-           OR a.arc_autopay_review = '보완요청'
+           OR a.arc_review = '보완요청'
+           OR a.autopay_review = '보완요청'
       ) as "reviewCount"
     FROM activations a
     WHERE (
       a.work_status = '보완요청'
       OR a.application_docs_review = '보완요청'
       OR a.name_change_docs_review = '보완요청'
-      OR a.arc_autopay_review = '보완요청'
+      OR a.arc_review = '보완요청'
+      OR a.autopay_review = '보완요청'
     )
     ${agencyFilter}
   `);
@@ -373,14 +390,16 @@ export async function getSupplementRequestDetail(agencyIds?: string[]) {
       a.work_status as "workStatus",
       a.application_docs_review as "applicationDocsReview",
       a.name_change_docs_review as "nameChangeDocsReview",
-      a.arc_autopay_review as "arcAutopayReview"
+      a.arc_review as "arcReview",
+      a.autopay_review as "autopayReview"
     FROM activations a
     LEFT JOIN agencies ag ON a.agency_id = ag.id
     WHERE (
       a.work_status = '보완요청'
       OR a.application_docs_review = '보완요청'
       OR a.name_change_docs_review = '보완요청'
-      OR a.arc_autopay_review = '보완요청'
+      OR a.arc_review = '보완요청'
+      OR a.autopay_review = '보완요청'
     )
     ${agencyFilter}
     ORDER BY a.created_at DESC
@@ -555,24 +574,28 @@ export async function getSupplementStats(agencyIds?: string[]) {
         AND a.arc_supplement_deadline IS NOT NULL
         AND a.arc_supplement_deadline > CURRENT_DATE + INTERVAL '30 days'
         AND a.arc_supplement_deadline <= CURRENT_DATE + INTERVAL '60 days') as "mobileWithin60",
-      -- 명의변경보완: workStatus='개통완료' AND (명의변경서류검수 or 외국인등록증/자동이체검수가 완료가 아닌 건)
+      -- 명의변경보완: workStatus='개통완료' AND (명의변경서류검수 or 외국인등록증검수 or 자동이체검수가 완료가 아닌 건)
       COUNT(*) FILTER (WHERE a.work_status = '개통완료'
         AND (COALESCE(a.name_change_docs_review, '') != '완료'
-             OR COALESCE(a.arc_autopay_review, '') != '완료')) as "nameChangeTotal",
+             OR COALESCE(a.arc_review, '') != '완료'
+             OR COALESCE(a.autopay_review, '') != '완료')) as "nameChangeTotal",
       COUNT(*) FILTER (WHERE a.work_status = '개통완료'
         AND (COALESCE(a.name_change_docs_review, '') != '완료'
-             OR COALESCE(a.arc_autopay_review, '') != '완료')
+             OR COALESCE(a.arc_review, '') != '완료'
+             OR COALESCE(a.autopay_review, '') != '완료')
         AND a.arc_supplement_deadline IS NOT NULL
         AND a.arc_supplement_deadline < CURRENT_DATE) as "nameChangeOverdue",
       COUNT(*) FILTER (WHERE a.work_status = '개통완료'
         AND (COALESCE(a.name_change_docs_review, '') != '완료'
-             OR COALESCE(a.arc_autopay_review, '') != '완료')
+             OR COALESCE(a.arc_review, '') != '완료'
+             OR COALESCE(a.autopay_review, '') != '완료')
         AND a.arc_supplement_deadline IS NOT NULL
         AND a.arc_supplement_deadline >= CURRENT_DATE
         AND a.arc_supplement_deadline <= CURRENT_DATE + INTERVAL '30 days') as "nameChangeWithin30",
       COUNT(*) FILTER (WHERE a.work_status = '개통완료'
         AND (COALESCE(a.name_change_docs_review, '') != '완료'
-             OR COALESCE(a.arc_autopay_review, '') != '완료')
+             OR COALESCE(a.arc_review, '') != '완료'
+             OR COALESCE(a.autopay_review, '') != '완료')
         AND a.arc_supplement_deadline IS NOT NULL
         AND a.arc_supplement_deadline > CURRENT_DATE + INTERVAL '30 days'
         AND a.arc_supplement_deadline <= CURRENT_DATE + INTERVAL '60 days') as "nameChangeWithin60"
@@ -583,7 +606,8 @@ export async function getSupplementStats(agencyIds?: string[]) {
     HAVING COUNT(*) FILTER (WHERE a.work_status = '보완요청') > 0
         OR COUNT(*) FILTER (WHERE a.work_status = '개통완료'
            AND (COALESCE(a.name_change_docs_review, '') != '완료'
-                OR COALESCE(a.arc_autopay_review, '') != '완료')) > 0
+                OR COALESCE(a.arc_review, '') != '완료'
+                OR COALESCE(a.autopay_review, '') != '완료')) > 0
     ORDER BY ag.name
   `);
   return result.rows;
@@ -605,7 +629,8 @@ export async function getSupplementList(agencyIds?: string[]) {
       a.person_in_charge as "personInCharge",
       a.work_status as "workStatus",
       a.name_change_docs_review as "nameChangeDocsReview",
-      a.arc_autopay_review as "arcAutopayReview",
+      a.arc_review as "arcReview",
+      a.autopay_review as "autopayReview",
       a.arc_supplement_deadline as "arcSupplementDeadline",
       CASE
         WHEN a.arc_supplement_deadline IS NOT NULL
@@ -616,7 +641,8 @@ export async function getSupplementList(agencyIds?: string[]) {
         WHEN a.work_status = '보완요청' THEN 'mobile'
         WHEN a.work_status = '개통완료'
           AND (COALESCE(a.name_change_docs_review, '') != '완료'
-               OR COALESCE(a.arc_autopay_review, '') != '완료')
+               OR COALESCE(a.arc_review, '') != '완료'
+               OR COALESCE(a.autopay_review, '') != '완료')
         THEN 'nameChange'
       END as "supplementType"
     FROM activations a
@@ -626,7 +652,8 @@ export async function getSupplementList(agencyIds?: string[]) {
       OR (
         a.work_status = '개통완료'
         AND (COALESCE(a.name_change_docs_review, '') != '완료'
-             OR COALESCE(a.arc_autopay_review, '') != '완료')
+             OR COALESCE(a.arc_review, '') != '완료'
+             OR COALESCE(a.autopay_review, '') != '완료')
       )
     )
     ${agencyFilter}

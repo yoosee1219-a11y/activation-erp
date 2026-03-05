@@ -17,11 +17,16 @@ const PARTNER_EDITABLE_FIELDS = new Set([
   "entryDate",
   "subscriptionType",
   "ratePlan",
-  // 서류 (입력중/보완요청 상태에서만)
+  // 서류 (입력중/보완요청 상태에서만, 개통완료 후에도 보완 서류는 개별 검수 기준)
   "applicationDocs",
   "nameChangeDocs",
-  "arcAutopayInfo",
-  "arcSupplement",
+  "arcInfo",
+  "autopayInfo",
+  // 검수 상태 (파트너가 "진행요청"으로 변경 가능)
+  "applicationDocsReview",
+  "nameChangeDocsReview",
+  "arcReview",
+  "autopayReview",
   // 진행상황 (입력중→개통요청, 보완요청→개통요청)
   "workStatus",
   // 고객 추가메모
@@ -33,15 +38,35 @@ const PARTNER_EDITABLE_FIELDS = new Set([
   "newBillingAccount",
   // 보류 사유
   "holdReason",
-]);
-
-// 서류 필드
-const DOCUMENT_FIELDS = new Set([
-  "applicationDocs",
-  "nameChangeDocs",
+  // 하위호환: 기존 필드 유지
   "arcAutopayInfo",
   "arcSupplement",
 ]);
+
+// 서류 필드 (문서 파일 업로드 필드)
+const DOCUMENT_FIELDS = new Set([
+  "applicationDocs",
+  "nameChangeDocs",
+  "arcInfo",
+  "autopayInfo",
+  "arcAutopayInfo", // 하위호환
+]);
+
+// 검수 필드 (파트너가 "진행요청"으로만 변경 가능)
+const REVIEW_FIELDS = new Set([
+  "applicationDocsReview",
+  "nameChangeDocsReview",
+  "arcReview",
+  "autopayReview",
+]);
+
+// 서류 → 검수 필드 매핑 (서류별 잠금 판단용)
+const DOC_TO_REVIEW_MAP: Record<string, string> = {
+  applicationDocs: "applicationDocsReview",
+  nameChangeDocs: "nameChangeDocsReview",
+  arcInfo: "arcReview",
+  autopayInfo: "autopayReview",
+};
 
 // 기본 정보 필드
 const PARTNER_BASIC_FIELDS = new Set([
@@ -132,6 +157,7 @@ export async function PATCH(
       const requestedFields = Object.keys(body);
       const currentWorkStatus = existing.workStatus || "입력중";
       const isEditable = PARTNER_EDITABLE_STATUSES.has(currentWorkStatus);
+      const isPostSubmission = ["개통요청", "진행중", "개통완료"].includes(currentWorkStatus);
 
       // 1) 관리자 전용 필드 수정 시도 → 거부
       const forbiddenFields = requestedFields.filter(
@@ -170,13 +196,44 @@ export async function PATCH(
         );
       }
 
-      // 4) 서류 필드: 입력중/보완요청 상태에서만 편집 가능
-      const docAttempt = requestedFields.filter((f) => DOCUMENT_FIELDS.has(f));
-      if (docAttempt.length > 0 && !isEditable) {
-        return NextResponse.json(
-          { error: "현재 상태에서는 서류를 수정할 수 없습니다." },
-          { status: 403 }
-        );
+      // 4) 검수 필드: 파트너는 "진행요청"으로만 변경 가능
+      for (const field of requestedFields) {
+        if (REVIEW_FIELDS.has(field)) {
+          const newValue = (body as Record<string, unknown>)[field];
+          if (newValue !== "진행요청") {
+            return NextResponse.json(
+              { error: `검수 상태는 "진행요청"으로만 변경할 수 있습니다.` },
+              { status: 403 }
+            );
+          }
+        }
+      }
+
+      // 5) 서류 필드: 서류별 잠금 로직
+      for (const field of requestedFields) {
+        if (DOCUMENT_FIELDS.has(field)) {
+          if (isPostSubmission) {
+            // 개통요청/진행중/개통완료 후: 검수 상태 기반 잠금
+            const reviewField = DOC_TO_REVIEW_MAP[field];
+            if (reviewField) {
+              const reviewValue = (existing as Record<string, unknown>)[reviewField] as string | null;
+              // "진행요청" 또는 "완료"이면 해당 서류 잠금
+              if (reviewValue === "진행요청" || reviewValue === "완료") {
+                return NextResponse.json(
+                  { error: `해당 서류는 검수 ${reviewValue} 상태이므로 수정할 수 없습니다.` },
+                  { status: 403 }
+                );
+              }
+              // "보완요청"이면 편집 가능 (continue)
+            }
+          } else if (!isEditable) {
+            // 입력중/보완요청 외 상태에서 서류 수정 불가
+            return NextResponse.json(
+              { error: "현재 상태에서는 서류를 수정할 수 없습니다." },
+              { status: 403 }
+            );
+          }
+        }
       }
     }
 
@@ -210,6 +267,13 @@ export async function PATCH(
           updateData.lockedAt = new Date();
           updateData.lockedBy = user.id;
           updateData.activationStatus = "개통완료";
+
+          // 개통완료 시 보완기한 자동 설정 (90일)
+          if (!existing.arcSupplementDeadline) {
+            const deadline = new Date();
+            deadline.setDate(deadline.getDate() + 90);
+            updateData.arcSupplementDeadline = deadline.toISOString().split("T")[0];
+          }
         }
       }
 
@@ -218,6 +282,35 @@ export async function PATCH(
         updateData.isLocked = true;
         updateData.lockedAt = new Date();
         updateData.lockedBy = user.id;
+
+        // 보완기한 자동 설정
+        if (!existing.arcSupplementDeadline) {
+          const deadline = new Date();
+          deadline.setDate(deadline.getDate() + 90);
+          updateData.arcSupplementDeadline = deadline.toISOString().split("T")[0];
+        }
+      }
+    }
+
+    // 3개 검수(nameChangeDocsReview, arcReview, autopayReview) 모두 "완료" → supplementStatus 자동 완료
+    const finalNameChangeReview = (body.nameChangeDocsReview ?? existing.nameChangeDocsReview) as string | null;
+    const finalArcReview = (body.arcReview ?? existing.arcReview) as string | null;
+    const finalAutopayReview = (body.autopayReview ?? existing.autopayReview) as string | null;
+
+    if (
+      finalNameChangeReview === "완료" &&
+      finalArcReview === "완료" &&
+      finalAutopayReview === "완료"
+    ) {
+      updateData.supplementStatus = "완료";
+    } else if (existing.supplementStatus === "완료") {
+      // 이전에 완료였는데 검수가 변경되면 완료 해제
+      if (
+        finalNameChangeReview !== "완료" ||
+        finalArcReview !== "완료" ||
+        finalAutopayReview !== "완료"
+      ) {
+        updateData.supplementStatus = null;
       }
     }
 

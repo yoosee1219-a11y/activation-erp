@@ -637,7 +637,8 @@ export default function PartnerPage() {
               row.workStatus === "보완요청" ||
               row.applicationDocsReview === "보완요청" ||
               row.nameChangeDocsReview === "보완요청" ||
-              row.arcAutopayReview === "보완요청";
+              row.arcReview === "보완요청" ||
+              row.autopayReview === "보완요청";
             return hasSupp ? "bg-red-50/70" : "";
           }}
         />

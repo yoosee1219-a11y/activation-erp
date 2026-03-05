@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import { EditableCell } from "./editable-cell";
 import { FileCell } from "./file-cell";
+import { NoteIndicator } from "@/components/activations/note-indicator";
 import { format } from "date-fns";
 
 export type PartnerActivationRow = {
@@ -38,6 +39,13 @@ export type PartnerActivationRow = {
   arcAutopayInfo: string | null;
   arcAutopayReview: string | null;
   arcSupplement: string | null;
+  arcInfo: string | null;
+  arcReview: string | null;
+  autopayInfo: string | null;
+  autopayReview: string | null;
+  arcSupplementDeadline: string | null;
+  supplementStatus: string | null;
+  noteCount?: number;
   // 잠금
   isLocked: boolean | null;
   createdAt: string;
@@ -55,11 +63,17 @@ const reviewColors: Record<string, string> = {
   "완료": "bg-green-100 text-green-700",
   "보완요청": "bg-red-100 text-red-700",
   "개통요청": "bg-blue-100 text-blue-700",
+  "진행요청": "bg-orange-100 text-orange-700",
 };
 
 // 파트너가 편집 가능한 상태
 function isEditableStatus(ws: string): boolean {
   return ws === "입력중" || ws === "보완요청";
+}
+
+// 서류별 잠금: 해당 검수가 "진행요청" 또는 "완료"이면 서류 수정 불가
+function isDocLocked(review: string | null): boolean {
+  return review === "진행요청" || review === "완료";
 }
 
 export function getPartnerColumns(options: {
@@ -77,6 +91,18 @@ export function getPartnerColumns(options: {
         <span className="text-sm text-gray-500 font-medium">
           {row.index + 1}
         </span>
+      ),
+    },
+    {
+      id: "noteIndicator",
+      header: "특이사항",
+      size: 60,
+      cell: ({ row }: { row: { original: PartnerActivationRow } }) => (
+        <NoteIndicator
+          activationId={row.original.id}
+          customerName={row.original.customerName}
+          noteCount={row.original.noteCount || 0}
+        />
       ),
     },
     {
@@ -262,12 +288,16 @@ export function getPartnerColumns(options: {
       header: "가입신청서",
       cell: ({ row }) => {
         const ws = row.original.workStatus || "입력중";
+        const review = row.original.applicationDocsReview;
+        const locked = ws === "개통완료" || ws === "진행중" || ws === "개통요청"
+          ? isDocLocked(review)
+          : !isEditableStatus(ws);
         return (
           <FileCell
             value={row.original.applicationDocs}
             rowId={row.original.id}
             field="applicationDocs"
-            isLocked={!isEditableStatus(ws)}
+            isLocked={locked}
             onUpdate={onUpdate}
           />
         );
@@ -278,6 +308,24 @@ export function getPartnerColumns(options: {
       header: "검수",
       cell: ({ row }) => {
         const v = row.original.applicationDocsReview;
+        const hasDoc = !!row.original.applicationDocs;
+        // 파트너는 서류가 있고 검수가 비어있거나 보완요청일 때만 "진행요청" 설정 가능
+        if (hasDoc && (!v || v === "보완요청")) {
+          return (
+            <Select
+              value={v || ""}
+              onValueChange={(val) => onUpdate(row.original.id, "applicationDocsReview", val)}
+            >
+              <SelectTrigger className={`h-7 w-[90px] text-[10px] border-dashed ${v ? reviewColors[v] || "" : ""}`}>
+                <SelectValue placeholder="검수" />
+              </SelectTrigger>
+              <SelectContent>
+                {v === "보완요청" && <SelectItem value="보완요청">보완요청</SelectItem>}
+                <SelectItem value="진행요청">진행요청</SelectItem>
+              </SelectContent>
+            </Select>
+          );
+        }
         if (!v) return <span className="text-xs text-gray-400">-</span>;
         return (
           <Badge className={`text-[10px] ${reviewColors[v] || "bg-gray-100 text-gray-600"}`}>
@@ -291,12 +339,16 @@ export function getPartnerColumns(options: {
       header: "명의변경서류",
       cell: ({ row }) => {
         const ws = row.original.workStatus || "입력중";
+        const review = row.original.nameChangeDocsReview;
+        const locked = ws === "개통완료" || ws === "진행중" || ws === "개통요청"
+          ? isDocLocked(review)
+          : !isEditableStatus(ws);
         return (
           <FileCell
             value={row.original.nameChangeDocs}
             rowId={row.original.id}
             field="nameChangeDocs"
-            isLocked={!isEditableStatus(ws)}
+            isLocked={locked}
             onUpdate={onUpdate}
           />
         );
@@ -307,6 +359,24 @@ export function getPartnerColumns(options: {
       header: "검수",
       cell: ({ row }) => {
         const v = row.original.nameChangeDocsReview;
+        const hasDoc = !!row.original.nameChangeDocs;
+        // 파트너는 서류가 있고 검수가 비어있거나 보완요청일 때만 "진행요청" 설정 가능
+        if (hasDoc && (!v || v === "보완요청")) {
+          return (
+            <Select
+              value={v || ""}
+              onValueChange={(val) => onUpdate(row.original.id, "nameChangeDocsReview", val)}
+            >
+              <SelectTrigger className={`h-7 w-[90px] text-[10px] border-dashed ${v ? reviewColors[v] || "" : ""}`}>
+                <SelectValue placeholder="검수" />
+              </SelectTrigger>
+              <SelectContent>
+                {v === "보완요청" && <SelectItem value="보완요청">보완요청</SelectItem>}
+                <SelectItem value="진행요청">진행요청</SelectItem>
+              </SelectContent>
+            </Select>
+          );
+        }
         if (!v) return <span className="text-xs text-gray-400">-</span>;
         return (
           <Badge className={`text-[10px] ${reviewColors[v] || "bg-gray-100 text-gray-600"}`}>
@@ -316,26 +386,49 @@ export function getPartnerColumns(options: {
       },
     },
     {
-      accessorKey: "arcAutopayInfo",
-      header: "외국인등록증/자동이체",
+      accessorKey: "arcInfo",
+      header: "외국인등록증",
       cell: ({ row }) => {
         const ws = row.original.workStatus || "입력중";
+        const review = row.original.arcReview;
+        // 보완 서류: 개통완료 후에도 검수 완료 전까지 편집 가능
+        const locked = ws === "개통완료" || ws === "진행중" || ws === "개통요청"
+          ? isDocLocked(review)
+          : !isEditableStatus(ws);
         return (
           <FileCell
-            value={row.original.arcAutopayInfo}
+            value={row.original.arcInfo}
             rowId={row.original.id}
-            field="arcAutopayInfo"
-            isLocked={!isEditableStatus(ws)}
+            field="arcInfo"
+            isLocked={locked}
             onUpdate={onUpdate}
           />
         );
       },
     },
     {
-      accessorKey: "arcAutopayReview",
+      accessorKey: "arcReview",
       header: "검수",
       cell: ({ row }) => {
-        const v = row.original.arcAutopayReview;
+        const v = row.original.arcReview;
+        const hasDoc = !!row.original.arcInfo;
+        // 파트너는 서류가 있고 검수가 비어있거나 보완요청일 때만 "진행요청" 설정 가능
+        if (hasDoc && (!v || v === "보완요청")) {
+          return (
+            <Select
+              value={v || ""}
+              onValueChange={(val) => onUpdate(row.original.id, "arcReview", val)}
+            >
+              <SelectTrigger className={`h-7 w-[90px] text-[10px] border-dashed ${v ? reviewColors[v] || "" : ""}`}>
+                <SelectValue placeholder="검수" />
+              </SelectTrigger>
+              <SelectContent>
+                {v === "보완요청" && <SelectItem value="보완요청">보완요청</SelectItem>}
+                <SelectItem value="진행요청">진행요청</SelectItem>
+              </SelectContent>
+            </Select>
+          );
+        }
         if (!v) return <span className="text-xs text-gray-400">-</span>;
         return (
           <Badge className={`text-[10px] ${reviewColors[v] || "bg-gray-100 text-gray-600"}`}>
@@ -345,19 +438,71 @@ export function getPartnerColumns(options: {
       },
     },
     {
-      accessorKey: "arcSupplement",
-      header: "외국인등록증보완",
+      accessorKey: "autopayInfo",
+      header: "자동이체",
       cell: ({ row }) => {
         const ws = row.original.workStatus || "입력중";
+        const review = row.original.autopayReview;
+        const locked = ws === "개통완료" || ws === "진행중" || ws === "개통요청"
+          ? isDocLocked(review)
+          : !isEditableStatus(ws);
         return (
           <FileCell
-            value={row.original.arcSupplement}
+            value={row.original.autopayInfo}
             rowId={row.original.id}
-            field="arcSupplement"
-            isLocked={!isEditableStatus(ws)}
+            field="autopayInfo"
+            isLocked={locked}
             onUpdate={onUpdate}
           />
         );
+      },
+    },
+    {
+      accessorKey: "autopayReview",
+      header: "검수",
+      cell: ({ row }) => {
+        const v = row.original.autopayReview;
+        const hasDoc = !!row.original.autopayInfo;
+        // 파트너는 서류가 있고 검수가 비어있거나 보완요청일 때만 "진행요청" 설정 가능
+        if (hasDoc && (!v || v === "보완요청")) {
+          return (
+            <Select
+              value={v || ""}
+              onValueChange={(val) => onUpdate(row.original.id, "autopayReview", val)}
+            >
+              <SelectTrigger className={`h-7 w-[90px] text-[10px] border-dashed ${v ? reviewColors[v] || "" : ""}`}>
+                <SelectValue placeholder="검수" />
+              </SelectTrigger>
+              <SelectContent>
+                {v === "보완요청" && <SelectItem value="보완요청">보완요청</SelectItem>}
+                <SelectItem value="진행요청">진행요청</SelectItem>
+              </SelectContent>
+            </Select>
+          );
+        }
+        if (!v) return <span className="text-xs text-gray-400">-</span>;
+        return (
+          <Badge className={`text-[10px] ${reviewColors[v] || "bg-gray-100 text-gray-600"}`}>
+            {v}
+          </Badge>
+        );
+      },
+    },
+    {
+      id: "supplementDeadline",
+      header: "보완기한",
+      cell: ({ row }) => {
+        const r = row.original;
+        if (r.nameChangeDocsReview === "완료" && r.arcReview === "완료" && r.autopayReview === "완료") {
+          return <Badge className="bg-green-100 text-green-700 text-[10px]">완료</Badge>;
+        }
+        const deadline = r.arcSupplementDeadline;
+        if (!deadline) return <span className="text-xs text-gray-400">-</span>;
+        const daysLeft = Math.ceil((new Date(deadline).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+        if (daysLeft < 0) return <Badge className="bg-red-100 text-red-700 text-[10px]">기한초과</Badge>;
+        if (daysLeft <= 30) return <Badge className="bg-red-100 text-red-700 text-[10px]">D-{daysLeft}</Badge>;
+        if (daysLeft <= 60) return <Badge className="bg-orange-100 text-orange-700 text-[10px]">D-{daysLeft}</Badge>;
+        return <Badge className="bg-gray-100 text-gray-600 text-[10px]">D-{daysLeft}</Badge>;
       },
     },
   ];

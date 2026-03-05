@@ -29,12 +29,20 @@ const HEADER_MAP: Record<string, string> = {
 // 멀티라인 헤더를 정규화하는 매핑
 const MULTILINE_HEADER_MAP: Record<string, string> = {
   "서류\n검수": "_reviewField", // 순서에 따라 다른 필드로 매핑
-  "외국인등록증\n+ 자동이체 정보": "arcAutopayInfo",
+  "외국인등록증\n+ 자동이체 정보": "arcInfo", // 기존 합본 → 외국인등록증으로 매핑
+  "외국인등록증 정보": "arcInfo",
+  "외국인등록증": "arcInfo",
+  "자동이체 정보": "autopayInfo",
+  "자동이체": "autopayInfo",
   "외국인등록증\n보완": "arcSupplement",
   "외국인등록증\n보완기한": "arcSupplementDeadline",
+  "보완기한": "arcSupplementDeadline",
   "자동이체\n등록여부": "autopayRegistered",
   "확정기변\n선택약정\n날짜": "commitmentDate",
   "가입신청서류\n(여권,사증발급확인서,입학허가서,가입서류)": "applicationDocs",
+  "외국인등록증 검수": "arcReview",
+  "자동이체 검수": "autopayReview",
+  "보완상태": "supplementStatus",
 };
 
 // 날짜 변환: 25/12/03 → 2025-12-03, 2025. 12. 18 → 2025-12-18
@@ -173,10 +181,15 @@ export async function POST(request: NextRequest) {
           applicationDocsReview: row.applicationDocsReview || null,
           nameChangeDocs: row.nameChangeDocs || null,
           nameChangeDocsReview: row.nameChangeDocsReview || null,
-          arcAutopayInfo: row.arcAutopayInfo || null,
-          arcAutopayReview: row.arcAutopayReview || null,
+          arcAutopayInfo: row.arcAutopayInfo || row.arcInfo || null,
+          arcAutopayReview: row.arcAutopayReview || row.arcReview || null,
+          arcInfo: row.arcInfo || row.arcAutopayInfo || null,
+          arcReview: row.arcReview || row.arcAutopayReview || null,
+          autopayInfo: row.autopayInfo || null,
+          autopayReview: row.autopayReview || null,
           arcSupplement: row.arcSupplement || null,
           arcSupplementDeadline: parseDate(row.arcSupplementDeadline || ""),
+          supplementStatus: row.supplementStatus || null,
           autopayRegistered: parseBool(row.autopayRegistered || ""),
           notes: row.notes || null,
           commitmentDate: parseDate(row.commitmentDate || ""),

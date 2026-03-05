@@ -32,6 +32,11 @@ export const createActivationSchema = z.object({
   arcAutopayReview: z.string().max(200).optional().nullable(),
   arcSupplement: z.string().max(200).optional().nullable(),
   arcSupplementDeadline: z.string().optional().nullable(),
+  arcInfo: z.string().max(500).optional().nullable(),
+  arcReview: z.string().max(200).optional().nullable(),
+  autopayInfo: z.string().max(500).optional().nullable(),
+  autopayReview: z.string().max(200).optional().nullable(),
+  supplementStatus: z.string().max(20).optional().nullable(),
   autopayRegistered: z.boolean().optional(),
 
   // 추가 필드

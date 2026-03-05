@@ -87,6 +87,11 @@ export const activations = pgTable("activations", {
   arcAutopayReview: text("arc_autopay_review"), // 서류검수 3
   arcSupplement: text("arc_supplement"), // 외국인등록증보완
   arcSupplementDeadline: date("arc_supplement_deadline"), // 외국인등록증보완기한
+  arcInfo: text("arc_info"), // 외국인등록증 서류
+  arcReview: text("arc_review"), // 외국인등록증 검수결과
+  autopayInfo: text("autopay_info"), // 자동이체 서류
+  autopayReview: text("autopay_review"), // 자동이체 검수결과
+  supplementStatus: text("supplement_status"), // 보완기한 상태
   autopayRegistered: boolean("autopay_registered").default(false), // 자동이체등록여부
 
   // 고객 추가메모 (특이사항/상세사유)
@@ -110,6 +115,19 @@ export const activations = pgTable("activations", {
   isLocked: boolean("is_locked").default(false),
   lockedAt: timestamp("locked_at", { withTimezone: true }),
   lockedBy: text("locked_by"),
+});
+
+// 4-1. activation_notes (특이사항 댓글)
+export const activationNotes = pgTable("activation_notes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  activationId: uuid("activation_id")
+    .notNull()
+    .references(() => activations.id, { onDelete: "cascade" }),
+  authorId: text("author_id").notNull(),
+  authorName: text("author_name").notNull(),
+  authorRole: text("author_role").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
 // 4. document_files (서류 파일 메타데이터)
