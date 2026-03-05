@@ -46,6 +46,10 @@ export const createActivationSchema = z.object({
   existingBillingAccount: z.string().max(50).optional().nullable(),
   newBillingAccount: z.string().max(50).optional().nullable(),
   holdReason: z.string().max(200).optional().nullable(),
+  // 해지 정보
+  terminationDate: z.string().optional().nullable(),
+  terminationReason: z.string().max(50).optional().nullable(),
+  terminationAlertDate: z.string().optional().nullable(),
   notes: z.string().max(500).optional().nullable(),
 });
 

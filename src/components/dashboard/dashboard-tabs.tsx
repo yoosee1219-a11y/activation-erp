@@ -122,6 +122,10 @@ interface DashboardTabsProps {
   }>;
   supplementStats: SupplementStat[];
   supplementList: SupplementItem[];
+  terminationStats: {
+    monthlyCount: number;
+    alertCount: number;
+  };
   categories: CategoryNode[];
   agencies: Agency[];
 }
@@ -159,6 +163,7 @@ export function DashboardTabs(props: DashboardTabsProps) {
           supplementRequestDetail={props.supplementRequestDetail}
           pendingByPeriod={props.pendingByPeriod}
           todayPendingDetail={props.todayPendingDetail}
+          terminationStats={props.terminationStats}
           categories={props.categories}
           agencies={props.agencies}
           agencyStats={props.agencyStats}

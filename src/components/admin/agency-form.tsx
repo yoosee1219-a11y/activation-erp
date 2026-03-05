@@ -32,6 +32,7 @@ interface AgencyFormProps {
     contactPhone: string | null;
     majorCategory?: string | null;
     mediumCategory?: string | null;
+    commissionRate?: number | null;
   };
 }
 
@@ -51,6 +52,7 @@ export function AgencyForm({
     contactPhone: initialData?.contactPhone || "",
     majorCategory: initialData?.majorCategory || "",
     mediumCategory: initialData?.mediumCategory || "",
+    commissionRate: initialData?.commissionRate ?? "",
   });
 
   // 선택된 대분류의 중분류 목록
@@ -72,6 +74,7 @@ export function AgencyForm({
           ...formData,
           majorCategory: formData.majorCategory || null,
           mediumCategory: formData.mediumCategory || null,
+          commissionRate: formData.commissionRate ? Number(formData.commissionRate) : null,
         }),
       });
 
@@ -201,6 +204,18 @@ export function AgencyForm({
                 setFormData((p) => ({ ...p, contactPhone: e.target.value }))
               }
               placeholder="010-0000-0000"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>개통 수수료 (건당, 원)</Label>
+            <Input
+              type="number"
+              value={formData.commissionRate}
+              onChange={(e) =>
+                setFormData((p) => ({ ...p, commissionRate: e.target.value }))
+              }
+              placeholder="예: 149000"
             />
           </div>
 

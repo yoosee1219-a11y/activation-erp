@@ -7,7 +7,11 @@ import {
 import { getSessionUser } from "@/lib/auth/session";
 import { canAccessAgency } from "@/lib/db/queries/users";
 import { markUsimUsed, markUsimCancelled } from "@/lib/db/queries/usims";
+import { addActivationLog } from "@/lib/db/queries/activation-logs";
 import { updateActivationSchema } from "@/lib/validations/activation";
+import { db } from "@/lib/db";
+import { agencies } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 
 // 거래처(PARTNER)가 편집할 수 있는 필드 (전체 목록)
 const PARTNER_EDITABLE_FIELDS = new Set([
@@ -274,6 +278,13 @@ export async function PATCH(
             deadline.setDate(deadline.getDate() + 90);
             updateData.arcSupplementDeadline = deadline.toISOString().split("T")[0];
           }
+        } else if (body.workStatus === "해지") {
+          // 해지 → 잠금 + 해지일 + 해지사유 설정
+          updateData.isLocked = true;
+          updateData.lockedAt = new Date();
+          updateData.lockedBy = user.id;
+          updateData.terminationDate = new Date().toISOString().split("T")[0];
+          updateData.terminationReason = body.terminationReason || "수동해지";
         }
       }
 
@@ -316,6 +327,81 @@ export async function PATCH(
 
     const activation = await updateActivation(id, updateData);
 
+    // ─── 작업이력 자동 기록 ───
+    try {
+      const changes: string[] = [];
+
+      if (body.workStatus && body.workStatus !== existing.workStatus) {
+        changes.push(`작업상태를 '${body.workStatus}'(으)로 변경`);
+      }
+      if (body.personInCharge && body.personInCharge !== existing.personInCharge) {
+        changes.push(`담당자를 '${body.personInCharge}'(으)로 배정`);
+      }
+      if (body.customerName && body.customerName !== existing.customerName) {
+        changes.push(`고객정보 업데이트`);
+      }
+      if (body.usimNumber && body.usimNumber !== existing.usimNumber) {
+        changes.push(`유심번호 변경`);
+      }
+      if (body.activationStatus && body.activationStatus !== existing.activationStatus) {
+        changes.push(`개통상태를 '${body.activationStatus}'(으)로 변경`);
+      }
+      // 서류 업로드 감지
+      const docFields = [
+        { key: "applicationDocs", label: "가입신청서류" },
+        { key: "nameChangeDocs", label: "명의변경서류" },
+        { key: "arcInfo", label: "외국인등록증" },
+        { key: "autopayInfo", label: "자동이체" },
+      ];
+      for (const { key, label } of docFields) {
+        const bodyVal = (body as Record<string, unknown>)[key];
+        const existVal = (existing as Record<string, unknown>)[key];
+        if (bodyVal && bodyVal !== existVal) {
+          changes.push(`${label} 서류 업데이트`);
+        }
+      }
+      // 검수 변경 감지
+      const reviewFields = [
+        { key: "applicationDocsReview", label: "가입신청서류 검수" },
+        { key: "nameChangeDocsReview", label: "명의변경서류 검수" },
+        { key: "arcReview", label: "외국인등록증 검수" },
+        { key: "autopayReview", label: "자동이체 검수" },
+      ];
+      for (const { key, label } of reviewFields) {
+        const bodyVal = (body as Record<string, unknown>)[key];
+        const existVal = (existing as Record<string, unknown>)[key];
+        if (bodyVal && bodyVal !== existVal) {
+          changes.push(`${label}를 '${bodyVal}'(으)로 변경`);
+        }
+      }
+
+      if (changes.length > 0) {
+        // Find agency name
+        const agencyRecord = await db
+          .select({ name: agencies.name })
+          .from(agencies)
+          .where(eq(agencies.id, existing.agencyId))
+          .limit(1);
+        const agencyName = agencyRecord[0]?.name || existing.agencyId;
+        const roleLabel =
+          user.role === "ADMIN" || user.role === "SUB_ADMIN"
+            ? "admin"
+            : agencyName;
+
+        await addActivationLog({
+          activationId: id,
+          userId: user.id,
+          userName: user.name,
+          userRole: user.role,
+          agencyName,
+          action: "update",
+          details: `${roleLabel} [${user.name}] 님이 ${changes.join(", ")}하였습니다.`,
+        });
+      }
+    } catch (logError) {
+      console.warn("Activity log failed (non-critical):", logError);
+    }
+
     // ─── 유심 재고 자동 연동 ───
     try {
       // 1) 개통완료 시 유심번호가 있으면 자동 USED 처리
@@ -350,6 +436,15 @@ export async function PATCH(
     } catch (usimError) {
       // 유심 연동 실패해도 개통 업데이트는 성공 처리 (로그만 남김)
       console.warn("USIM auto-link failed (non-critical):", usimError);
+    }
+
+    // 해지 시 유심 취소 처리
+    if (body.workStatus === "해지" && existing.workStatus !== "해지") {
+      try {
+        await markUsimCancelled(id);
+      } catch (usimError) {
+        console.warn("USIM cancellation on termination failed (non-critical):", usimError);
+      }
     }
 
     return NextResponse.json({ activation });

@@ -53,6 +53,9 @@ export type ActivationRow = {
   autopayReview: string | null;
   arcSupplementDeadline: string | null;
   supplementStatus: string | null;
+  terminationDate: string | null;
+  terminationReason: string | null;
+  terminationAlertDate: string | null;
   noteCount?: number;
   createdAt: string;
 };
@@ -69,6 +72,7 @@ const workStatusColors: Record<string, string> = {
   진행중: "bg-yellow-100 text-yellow-700",
   개통완료: "bg-green-100 text-green-700",
   보완요청: "bg-red-100 text-red-700",
+  해지: "bg-gray-900 text-white",
 };
 
 const reviewColors: Record<string, string> = {
@@ -372,6 +376,21 @@ export function getColumns(options: {
       header: "보완기한",
       cell: ({ row }) => {
         const r = row.original;
+        // 해지 완료
+        if (r.workStatus === "해지") {
+          return <Badge variant="destructive" className="bg-gray-900 text-white text-[10px]">해지완료</Badge>;
+        }
+        // 해지예고
+        if (r.terminationAlertDate && !r.terminationDate) {
+          const alertDate = new Date(r.terminationAlertDate);
+          const today = new Date();
+          const graceDaysLeft = 7 - Math.floor((today.getTime() - alertDate.getTime()) / (1000 * 60 * 60 * 24));
+          return (
+            <Badge variant="destructive" className="animate-pulse text-[10px]">
+              해지예고 D-{Math.max(graceDaysLeft, 0)}
+            </Badge>
+          );
+        }
         // 3가지 검수 모두 완료면 "완료"
         if (r.nameChangeDocsReview === "완료" && r.arcReview === "완료" && r.autopayReview === "완료") {
           return <Badge className="bg-green-100 text-green-700 text-[10px]">완료</Badge>;
@@ -452,6 +471,7 @@ export function getColumns(options: {
               <SelectItem value="진행중">진행중</SelectItem>
               <SelectItem value="개통완료">개통완료</SelectItem>
               <SelectItem value="보완요청">보완요청</SelectItem>
+              <SelectItem value="해지">해지</SelectItem>
             </SelectContent>
           </Select>
         );

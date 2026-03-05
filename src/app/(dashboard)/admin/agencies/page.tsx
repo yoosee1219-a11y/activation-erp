@@ -25,6 +25,7 @@ interface Agency {
   isActive: boolean | null;
   majorCategory?: string | null;
   mediumCategory?: string | null;
+  commissionRate?: number | null;
 }
 
 export default function AgenciesPage() {
@@ -111,6 +112,7 @@ export default function AgenciesPage() {
                 <TableHead>중분류</TableHead>
                 <TableHead>담당자</TableHead>
                 <TableHead>연락처</TableHead>
+                <TableHead>수수료</TableHead>
                 <TableHead>상태</TableHead>
                 <TableHead className="w-[60px]"></TableHead>
               </TableRow>
@@ -136,6 +138,11 @@ export default function AgenciesPage() {
                   </TableCell>
                   <TableCell>{agency.contactName || "-"}</TableCell>
                   <TableCell>{agency.contactPhone || "-"}</TableCell>
+                  <TableCell className="text-sm">
+                    {agency.commissionRate
+                      ? `${agency.commissionRate.toLocaleString()}원/건`
+                      : <span className="text-gray-400">-</span>}
+                  </TableCell>
                   <TableCell>
                     <Badge
                       variant={agency.isActive ? "default" : "secondary"}
@@ -167,7 +174,7 @@ export default function AgenciesPage() {
               {agencies.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={8}
+                    colSpan={9}
                     className="h-24 text-center text-gray-500"
                   >
                     등록된 거래처가 없습니다.

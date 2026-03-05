@@ -28,6 +28,7 @@ export const agencies = pgTable("agencies", {
   mediumCategory: text("medium_category"), // 중분류: 'DOD_키르기스스탄'
   contactName: text("contact_name"),
   contactPhone: text("contact_phone"),
+  commissionRate: integer("commission_rate"), // 건당 개통수수료 (원)
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
@@ -106,6 +107,11 @@ export const activations = pgTable("activations", {
   // 보류 사유 (보류-서류/체납/신분증/계좌정보)
   holdReason: text("hold_reason"),
 
+  // 해지 정보
+  terminationDate: date("termination_date"),
+  terminationReason: text("termination_reason"), // "보완기한초과"|"6개월해지"|"수동해지"
+  terminationAlertDate: date("termination_alert_date"), // 해지예고일
+
   // 기타
   notes: text("notes"), // 비고
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
@@ -127,6 +133,21 @@ export const activationNotes = pgTable("activation_notes", {
   authorName: text("author_name").notNull(),
   authorRole: text("author_role").notNull(),
   content: text("content").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+// 4-2. activation_logs (작업이력)
+export const activationLogs = pgTable("activation_logs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  activationId: uuid("activation_id")
+    .notNull()
+    .references(() => activations.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull(),
+  userName: text("user_name").notNull(),
+  userRole: text("user_role").notNull(),
+  agencyName: text("agency_name"),
+  action: text("action").notNull(),
+  details: text("details").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 

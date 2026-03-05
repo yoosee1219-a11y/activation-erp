@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { activations, activationNotes, agencies } from "@/lib/db/schema";
-import { eq, and, desc, sql, count, ilike, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, count, ilike, gte, lte, lt, ne, inArray, isNotNull } from "drizzle-orm";
 
 // neon-http 드라이버에서 ANY(${array})가 배열 직렬화 실패하므로
 // IN (...) + sql.join()으로 안전하게 처리
@@ -660,4 +660,45 @@ export async function getSupplementList(agencyIds?: string[]) {
     ORDER BY a.arc_supplement_deadline ASC NULLS LAST
   `);
   return result.rows;
+}
+
+// ── 해지 통계 (당월 해지 건수 + 해지예고 건수) ──
+export async function getTerminationStats(filters?: {
+  agencyId?: string;
+  agencyIds?: string[];
+}) {
+  const conditions = [];
+  if (filters?.agencyId) {
+    conditions.push(eq(activations.agencyId, filters.agencyId));
+  }
+  if (filters?.agencyIds && filters.agencyIds.length > 0) {
+    conditions.push(inArray(activations.agencyId, filters.agencyIds));
+  }
+
+  const now = new Date();
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const monthEnd = nextMonth.toISOString().split("T")[0];
+
+  // Monthly termination count
+  const monthlyResult = await db.select({ count: count() }).from(activations)
+    .where(and(
+      eq(activations.workStatus, "해지"),
+      gte(activations.terminationDate, monthStart),
+      lt(activations.terminationDate, monthEnd),
+      ...(conditions.length > 0 ? conditions : [])
+    ));
+
+  // Alert count (해지예고 중)
+  const alertResult = await db.select({ count: count() }).from(activations)
+    .where(and(
+      isNotNull(activations.terminationAlertDate),
+      ne(activations.workStatus, "해지"),
+      ...(conditions.length > 0 ? conditions : [])
+    ));
+
+  return {
+    monthlyCount: Number(monthlyResult[0]?.count || 0),
+    alertCount: Number(alertResult[0]?.count || 0),
+  };
 }

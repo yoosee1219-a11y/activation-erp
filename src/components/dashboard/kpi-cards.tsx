@@ -21,6 +21,7 @@ import {
   ChevronDown,
   ChevronUp,
   ChevronRight,
+  XCircle,
 } from "lucide-react";
 import { format } from "date-fns";
 import type { CategoryNode, Agency } from "@/hooks/use-agency-filter";
@@ -87,6 +88,10 @@ interface KpiCardsProps {
     entryDate: string | null;
     personInCharge: string | null;
   }>;
+  terminationStats?: {
+    monthlyCount: number;
+    alertCount: number;
+  };
   categories?: CategoryNode[];
   agencies?: Agency[];
   agencyStats?: Array<{
@@ -101,7 +106,7 @@ interface KpiCardsProps {
   }>;
 }
 
-type KpiKey = "total" | "pending" | "completed" | "autopay" | "supplement" | "todayPending";
+type KpiKey = "total" | "pending" | "completed" | "autopay" | "supplement" | "todayPending" | "termination";
 
 /* ─── Count hierarchy types ─── */
 
@@ -541,6 +546,7 @@ export function KpiCards({
   supplementRequestDetail = [],
   pendingByPeriod = { totalPending: 0, monthlyPending: 0, todayPending: 0 },
   todayPendingDetail = [],
+  terminationStats = { monthlyCount: 0, alertCount: 0 },
   categories = [],
   agencies = [],
   agencyStats = [],
@@ -940,6 +946,17 @@ export function KpiCards({
       bg: "bg-red-50",
       ring: "ring-red-500",
       expandable: true,
+    },
+    {
+      key: "termination",
+      title: "당월 해지",
+      value: terminationStats.monthlyCount,
+      subtitle: terminationStats.alertCount > 0 ? `해지예고 ${terminationStats.alertCount}건` : undefined,
+      icon: XCircle,
+      color: "text-gray-900",
+      bg: "bg-red-100",
+      ring: "ring-gray-900",
+      expandable: false,
     },
   ];
 

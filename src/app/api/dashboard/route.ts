@@ -17,6 +17,7 @@ import {
   getTodayPendingDetail,
   getSupplementStats,
   getSupplementList,
+  getTerminationStats,
 } from "@/lib/db/queries/activations";
 import {
   getAgencyIdsByMajorCategory,
@@ -85,6 +86,7 @@ export async function GET(request: NextRequest) {
       todayPendingDetail,
       supplementStats,
       supplementList,
+      terminationStats,
     ] = await Promise.all([
       getDashboardStats(agencyId, agencyIds),
       getMonthlyStats(agencyId, agencyIds),
@@ -103,6 +105,7 @@ export async function GET(request: NextRequest) {
       getTodayPendingDetail(agencyIds),
       getSupplementStats(agencyIds),
       getSupplementList(agencyIds),
+      getTerminationStats({ agencyId, agencyIds }),
     ]);
 
     return NextResponse.json({
@@ -123,6 +126,7 @@ export async function GET(request: NextRequest) {
       todayPendingDetail,
       supplementStats,
       supplementList,
+      terminationStats,
     });
   } catch (error) {
     console.error("Failed to fetch dashboard:", error);

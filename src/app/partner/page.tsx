@@ -18,12 +18,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Clock, CheckCircle2, Loader2, RotateCcw, X, RefreshCw, FileEdit, Package, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Clock, CheckCircle2, Loader2, RotateCcw, X, RefreshCw, FileEdit, Package, ChevronDown, ChevronRight, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { SupplementPanel } from "@/components/dashboard/supplement-panel";
 import type { SupplementStat, SupplementItem } from "@/components/dashboard/supplement-panel";
 
-type WorkStatusFilter = "입력중" | "개통요청" | "진행중" | "개통완료" | "보완요청" | null;
+type WorkStatusFilter = "입력중" | "개통요청" | "진행중" | "개통완료" | "보완요청" | "해지" | null;
 
 interface UsimAgencyStats {
   agencyId: string;
@@ -275,7 +275,7 @@ export default function PartnerPage() {
     [handleUpdate]
   );
 
-  // 요약 통계 (workStatus 기준 - 5개)
+  // 요약 통계 (workStatus 기준 - 6개)
   const stats = useMemo(() => {
     const drafting = data.filter(
       (r) => !r.workStatus || r.workStatus === "입력중"
@@ -292,7 +292,10 @@ export default function PartnerPage() {
     const needsFix = data.filter(
       (r) => r.workStatus === "보완요청"
     ).length;
-    return { drafting, requested, working, completed, needsFix };
+    const terminated = data.filter(
+      (r) => r.workStatus === "해지"
+    ).length;
+    return { drafting, requested, working, completed, needsFix, terminated };
   }, [data]);
 
   // 유심 합산 통계
@@ -365,8 +368,8 @@ export default function PartnerPage() {
         </div>
       </div>
 
-      {/* 요약 카드 5개 (workStatus 기준, 클릭 필터링) */}
-      <div className="grid gap-3 grid-cols-2 sm:grid-cols-5">
+      {/* 요약 카드 6개 (workStatus 기준, 클릭 필터링) */}
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
         <Card
           className={`cursor-pointer transition-all hover:shadow-md ${
             statusFilter === "입력중"
@@ -454,6 +457,24 @@ export default function PartnerPage() {
             <div>
               <p className="text-xs text-gray-500">보완요청</p>
               <p className="text-xl font-bold">{stats.needsFix}건</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card
+          className={`cursor-pointer transition-all hover:shadow-md ${
+            statusFilter === "해지"
+              ? "ring-2 ring-gray-900 shadow-md"
+              : "hover:ring-1 hover:ring-gray-300"
+          }`}
+          onClick={() => handleCardClick("해지")}
+        >
+          <CardContent className="flex items-center gap-2.5 p-3">
+            <div className="rounded-md bg-red-100 p-1.5">
+              <XCircle className="h-4 w-4 text-gray-900" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">해지</p>
+              <p className="text-xl font-bold">{stats.terminated}건</p>
             </div>
           </CardContent>
         </Card>

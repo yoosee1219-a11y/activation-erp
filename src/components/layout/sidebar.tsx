@@ -12,6 +12,7 @@ import {
   LogOut,
   FileSpreadsheet,
   CardSim,
+  Calculator,
 } from "lucide-react";
 import { signOut } from "@/lib/auth/client";
 import { useRouter } from "next/navigation";
@@ -44,6 +45,11 @@ const adminNavItems = [
     label: "유심 관리",
     href: "/admin/usims",
     icon: CardSim,
+  },
+  {
+    label: "정산 관리",
+    href: "/admin/settlement",
+    icon: Calculator,
   },
   {
     label: "사용자 관리",

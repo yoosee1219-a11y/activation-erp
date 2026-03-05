@@ -142,6 +142,10 @@ interface DashboardData {
     daysLeft: number | null;
     supplementType: "mobile" | "nameChange";
   }>;
+  terminationStats: {
+    monthlyCount: number;
+    alertCount: number;
+  };
 }
 
 export default function DashboardPage() {
@@ -222,6 +226,7 @@ export default function DashboardPage() {
         todayPendingDetail={data.todayPendingDetail || []}
         supplementStats={data.supplementStats || []}
         supplementList={data.supplementList || []}
+        terminationStats={data.terminationStats || { monthlyCount: 0, alertCount: 0 }}
         categories={categories}
         agencies={agencies}
       />
