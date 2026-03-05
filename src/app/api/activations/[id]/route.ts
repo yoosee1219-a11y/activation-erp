@@ -7,6 +7,7 @@ import {
 import { getSessionUser } from "@/lib/auth/session";
 import { canAccessAgency } from "@/lib/db/queries/users";
 import { markUsimUsed, markUsimCancelled } from "@/lib/db/queries/usims";
+import { updateActivationSchema } from "@/lib/validations/activation";
 
 // 거래처(PARTNER)가 편집할 수 있는 필드 (전체 목록)
 const PARTNER_EDITABLE_FIELDS = new Set([
@@ -114,7 +115,17 @@ export async function PATCH(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const body = await request.json();
+    const rawBody = await request.json();
+
+    // 입력값 검증 (zod)
+    const parsed = updateActivationSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "입력값이 올바르지 않습니다", details: parsed.error.issues },
+        { status: 400 }
+      );
+    }
+    const body = parsed.data;
 
     // PARTNER 역할 제한 (workStatus 기반 통합 권한)
     if (user.role === "PARTNER") {

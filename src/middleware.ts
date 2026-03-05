@@ -8,7 +8,7 @@ export function middleware(request: NextRequest) {
   const isPublic = publicPaths.some((path) => pathname.startsWith(path));
 
   if (isPublic) {
-    return NextResponse.next();
+    return addSecurityHeaders(NextResponse.next());
   }
 
   // Check for session cookie (Better Auth uses "__Secure-" prefix on HTTPS)
@@ -22,21 +22,24 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // API 경로는 세션만 체크 (역할 검증은 각 handler에서)
+  // API 경로는 세션만 체크 (역할 검증은 각 handler에서 getSessionUser()로 서버사이드 검증)
   if (pathname.startsWith("/api/")) {
-    return NextResponse.next();
+    return addSecurityHeaders(NextResponse.next());
   }
 
-  // 역할 기반 리다이렉트
+  // 역할 기반 리다이렉트 (httpOnly 쿠키 — JS 조작 불가)
   const userRole = request.cookies.get("user-role")?.value;
 
-  // 쿠키가 없으면 /api/users/me를 통해 쿠키가 설정될 때까지 허용
-  // (클라이언트 사이드 useAuth 훅이 /api/users/me 호출 → 쿠키 설정 → 이후 정상 동작)
-  if (!userRole) {
-    return NextResponse.next();
+  // 유효한 역할 값만 허용 (쿠키 위조 방지)
+  const validRoles = ["ADMIN", "SUB_ADMIN", "PARTNER", "GUEST"];
+  const safeRole = userRole && validRoles.includes(userRole) ? userRole : null;
+
+  // 쿠키가 없거나 유효하지 않으면 허용 (클라이언트가 /api/users/me 호출 후 쿠키 설정)
+  if (!safeRole) {
+    return addSecurityHeaders(NextResponse.next());
   }
 
-  if (userRole === "PARTNER" || userRole === "GUEST") {
+  if (safeRole === "PARTNER" || safeRole === "GUEST") {
     // 거래처/게스트가 관리자 페이지 접근 시 → /partner로 리다이렉트
     const adminPaths = ["/activations", "/admin"];
     const isAdminPage =
@@ -50,7 +53,15 @@ export function middleware(request: NextRequest) {
 
   // ADMIN/SUB_ADMIN → 모든 경로 접근 가능 (/partner 포함)
 
-  return NextResponse.next();
+  return addSecurityHeaders(NextResponse.next());
+}
+
+/** 모든 응답에 보안 헤더 추가 */
+function addSecurityHeaders(response: NextResponse): NextResponse {
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("X-XSS-Protection", "1; mode=block");
+  return response;
 }
 
 export const config = {

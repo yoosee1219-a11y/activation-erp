@@ -9,6 +9,7 @@ import {
   getAgencyIdsByMediumCategories,
   getAgencyIdsByMajorCategory,
 } from "@/lib/db/queries/categories";
+import { createActivationSchema } from "@/lib/validations/activation";
 
 export async function GET(request: NextRequest) {
   try {
@@ -130,16 +131,26 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
+    // 입력값 검증 (zod)
+    const parsed = createActivationSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "입력값이 올바르지 않습니다", details: parsed.error.issues },
+        { status: 400 }
+      );
+    }
+    const validated = parsed.data;
+
     // 에이전시 접근 권한 확인
     if (
-      !canAccessAgency(user.role, user.allowedAgencies, body.agencyId)
+      !canAccessAgency(user.role, user.allowedAgencies, validated.agencyId)
     ) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const activation = await createActivation({
-      ...body,
-      workStatus: body.workStatus || "입력중",
+      ...validated,
+      workStatus: validated.workStatus || "입력중",
     });
     return NextResponse.json({ activation }, { status: 201 });
   } catch (error) {
