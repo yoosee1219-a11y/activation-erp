@@ -114,7 +114,7 @@ export default function UsersPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>이름</TableHead>
-                <TableHead>이메일</TableHead>
+                <TableHead>로그인 ID</TableHead>
                 <TableHead>역할</TableHead>
                 <TableHead>접근 거래처</TableHead>
                 <TableHead className="w-[100px]"></TableHead>
@@ -124,7 +124,7 @@ export default function UsersPage() {
               {users.map((u) => (
                 <TableRow key={u.id}>
                   <TableCell className="font-medium">{u.name}</TableCell>
-                  <TableCell>{u.email}</TableCell>
+                  <TableCell>{u.email?.replace(/@activation-erp\.local$/, "")}</TableCell>
                   <TableCell>
                     <Badge className={roleColors[u.role] || ""}>
                       {roleLabels[u.role] || u.role}

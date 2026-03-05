@@ -222,9 +222,6 @@ export function UserForm({
               placeholder="4글자 이상 (예: dreamhigh01)"
               minLength={4}
             />
-            <p className="text-xs text-gray-500">
-              내부적으로 @activation-erp.local이 자동 추가됩니다
-            </p>
           </div>
 
           {!isEdit && (
