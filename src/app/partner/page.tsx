@@ -357,16 +357,16 @@ export default function PartnerPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">개통 현황</h1>
-        <div className="rounded-lg bg-gray-900 px-4 py-2 text-white shadow">
-          <span className="text-sm font-medium">{dateStr}</span>
+        <div className="rounded-lg bg-gray-900 px-3 py-1.5 text-white shadow">
+          <span className="text-xs font-medium">{dateStr}</span>
         </div>
       </div>
 
       {/* 요약 카드 5개 (workStatus 기준, 클릭 필터링) */}
-      <div className="grid gap-4 grid-cols-2 sm:grid-cols-5">
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-5">
         <Card
           className={`cursor-pointer transition-all hover:shadow-md ${
             statusFilter === "입력중"
@@ -375,13 +375,13 @@ export default function PartnerPage() {
           }`}
           onClick={() => handleCardClick("입력중")}
         >
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="rounded-lg bg-gray-100 p-2">
-              <FileEdit className="h-5 w-5 text-gray-700" />
+          <CardContent className="flex items-center gap-2.5 p-3">
+            <div className="rounded-md bg-gray-100 p-1.5">
+              <FileEdit className="h-4 w-4 text-gray-700" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">입력중</p>
-              <p className="text-2xl font-bold">{stats.drafting}건</p>
+              <p className="text-xs text-gray-500">입력중</p>
+              <p className="text-xl font-bold">{stats.drafting}건</p>
             </div>
           </CardContent>
         </Card>
@@ -393,13 +393,13 @@ export default function PartnerPage() {
           }`}
           onClick={() => handleCardClick("개통요청")}
         >
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="rounded-lg bg-blue-100 p-2">
-              <Clock className="h-5 w-5 text-blue-700" />
+          <CardContent className="flex items-center gap-2.5 p-3">
+            <div className="rounded-md bg-blue-100 p-1.5">
+              <Clock className="h-4 w-4 text-blue-700" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">개통요청</p>
-              <p className="text-2xl font-bold">{stats.requested}건</p>
+              <p className="text-xs text-gray-500">개통요청</p>
+              <p className="text-xl font-bold">{stats.requested}건</p>
             </div>
           </CardContent>
         </Card>
@@ -411,13 +411,13 @@ export default function PartnerPage() {
           }`}
           onClick={() => handleCardClick("진행중")}
         >
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="rounded-lg bg-yellow-100 p-2">
-              <Loader2 className="h-5 w-5 text-yellow-700" />
+          <CardContent className="flex items-center gap-2.5 p-3">
+            <div className="rounded-md bg-yellow-100 p-1.5">
+              <Loader2 className="h-4 w-4 text-yellow-700" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">진행중</p>
-              <p className="text-2xl font-bold">{stats.working}건</p>
+              <p className="text-xs text-gray-500">진행중</p>
+              <p className="text-xl font-bold">{stats.working}건</p>
             </div>
           </CardContent>
         </Card>
@@ -429,13 +429,13 @@ export default function PartnerPage() {
           }`}
           onClick={() => handleCardClick("개통완료")}
         >
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="rounded-lg bg-green-100 p-2">
-              <CheckCircle2 className="h-5 w-5 text-green-700" />
+          <CardContent className="flex items-center gap-2.5 p-3">
+            <div className="rounded-md bg-green-100 p-1.5">
+              <CheckCircle2 className="h-4 w-4 text-green-700" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">개통완료</p>
-              <p className="text-2xl font-bold">{stats.completed}건</p>
+              <p className="text-xs text-gray-500">개통완료</p>
+              <p className="text-xl font-bold">{stats.completed}건</p>
             </div>
           </CardContent>
         </Card>
@@ -447,13 +447,13 @@ export default function PartnerPage() {
           }`}
           onClick={() => handleCardClick("보완요청")}
         >
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="rounded-lg bg-red-100 p-2">
-              <RotateCcw className="h-5 w-5 text-red-700" />
+          <CardContent className="flex items-center gap-2.5 p-3">
+            <div className="rounded-md bg-red-100 p-1.5">
+              <RotateCcw className="h-4 w-4 text-red-700" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">보완요청</p>
-              <p className="text-2xl font-bold">{stats.needsFix}건</p>
+              <p className="text-xs text-gray-500">보완요청</p>
+              <p className="text-xl font-bold">{stats.needsFix}건</p>
             </div>
           </CardContent>
         </Card>
@@ -524,13 +524,16 @@ export default function PartnerPage() {
       {/* 서류 보완 현황 */}
       {(supplementStats.length > 0 || supplementList.length > 0) && (
         <div>
-          <h2 className="text-lg font-bold mb-3">서류 보완 현황</h2>
+          <h2 className="text-base font-bold mb-2">서류 보완 현황</h2>
           <SupplementPanel
             supplementStats={supplementStats}
             supplementList={supplementList}
           />
         </div>
       )}
+
+      {/* 구분선 */}
+      <div className="border-t border-gray-200" />
 
       {/* 헤더 + 필터 */}
       <div className="flex items-center justify-between">
@@ -620,6 +623,7 @@ export default function PartnerPage() {
           로딩 중...
         </div>
       ) : (
+        <div className="min-h-[60vh]">
         <DataTable
           columns={columns}
           data={filteredData}
@@ -637,6 +641,7 @@ export default function PartnerPage() {
             return hasSupp ? "bg-red-50/70" : "";
           }}
         />
+        </div>
       )}
     </div>
   );
