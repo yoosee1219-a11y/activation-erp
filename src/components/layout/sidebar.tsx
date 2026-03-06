@@ -47,11 +47,6 @@ const adminNavItems = [
     icon: CardSim,
   },
   {
-    label: "정산 관리",
-    href: "/admin/settlement",
-    icon: Calculator,
-  },
-  {
     label: "사용자 관리",
     href: "/admin/users",
     icon: Users,
@@ -65,6 +60,15 @@ const adminNavItems = [
     label: "설정",
     href: "/admin/settings",
     icon: Settings,
+  },
+];
+
+// ADMIN 전용 메뉴 (SUB_ADMIN 접근 불가)
+const adminOnlyNavItems = [
+  {
+    label: "정산 관리",
+    href: "/admin/settlement",
+    icon: Calculator,
   },
 ];
 
@@ -134,6 +138,25 @@ export function Sidebar({ user }: SidebarProps) {
                 </Link>
               );
             })}
+            {user?.role === "ADMIN" &&
+              adminOnlyNavItems.map((item) => {
+                const isActive = pathname.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                      isActive
+                        ? "bg-gray-100 text-gray-900"
+                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                    )}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    {item.label}
+                  </Link>
+                );
+              })}
           </>
         )}
       </nav>

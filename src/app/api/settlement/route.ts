@@ -10,7 +10,7 @@ import {
 
 export async function GET(request: NextRequest) {
   const user = await getSessionUser();
-  if (!user || (user.role !== "ADMIN" && user.role !== "SUB_ADMIN")) {
+  if (!user || user.role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

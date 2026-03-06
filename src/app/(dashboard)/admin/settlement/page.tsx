@@ -277,8 +277,8 @@ export default function SettlementPage() {
     });
   };
 
-  // Role guard
-  if (userRole !== null && userRole !== "ADMIN" && userRole !== "SUB_ADMIN") {
+  // Role guard: ADMIN 전용 (SUB_ADMIN 접근 불가)
+  if (userRole !== null && userRole !== "ADMIN") {
     return (
       <div className="flex items-center justify-center h-full p-12">
         <Card className="max-w-md w-full">

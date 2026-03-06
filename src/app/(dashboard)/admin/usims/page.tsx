@@ -40,6 +40,7 @@ import {
   Loader2,
   ClipboardList,
   X,
+  ArrowRightLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -306,6 +307,10 @@ export default function UsimManagementPage() {
             <Plus className="h-4 w-4" />
             유심 배정
           </TabsTrigger>
+          <TabsTrigger value="transfer" className="gap-2">
+            <ArrowRightLeft className="h-4 w-4" />
+            유심 이송
+          </TabsTrigger>
           <TabsTrigger value="cancelled" className="gap-2">
             <RotateCcw className="h-4 w-4" />
             취소/초기화 관리
@@ -322,7 +327,12 @@ export default function UsimManagementPage() {
           <AssignTab agencies={agencies} categories={categories} onAssigned={triggerRefresh} />
         </TabsContent>
 
-        {/* ─── Tab 3: 취소/초기화 관리 ─── */}
+        {/* ─── Tab 3: 유심 이송 ─── */}
+        <TabsContent value="transfer" className="space-y-4">
+          <TransferTab agencies={agencies} categories={categories} onTransferred={triggerRefresh} />
+        </TabsContent>
+
+        {/* ─── Tab 4: 취소/초기화 관리 ─── */}
         <TabsContent value="cancelled" className="space-y-4">
           <CancelledTab agencies={agencies} categories={categories} onReset={triggerRefresh} />
         </TabsContent>
@@ -958,5 +968,229 @@ function CancelledTab({
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════
+// Tab 3: 유심 이송
+// ═══════════════════════════════════════════
+function TransferTab({
+  agencies,
+  categories,
+  onTransferred,
+}: {
+  agencies: Agency[];
+  categories: CategoryNode[];
+  onTransferred: () => void;
+}) {
+  // Source agency selection
+  const [srcMajor, setSrcMajor] = useState("");
+  const [srcMedium, setSrcMedium] = useState("");
+  const [srcAgency, setSrcAgency] = useState("");
+
+  // Destination agency selection
+  const [dstMajor, setDstMajor] = useState("");
+  const [dstMedium, setDstMedium] = useState("");
+  const [dstAgency, setDstAgency] = useState("");
+
+  // Transfer details
+  const [transferCount, setTransferCount] = useState<number>(0);
+  const [transferNotes, setTransferNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const srcAgencyName = useMemo(
+    () => agencies.find((a) => a.id === srcAgency)?.name || "",
+    [agencies, srcAgency]
+  );
+  const dstAgencyName = useMemo(
+    () => agencies.find((a) => a.id === dstAgency)?.name || "",
+    [agencies, dstAgency]
+  );
+
+  const handleTransfer = async () => {
+    if (!srcAgency) {
+      toast.error("보내는 업체를 선택해 주세요.");
+      return;
+    }
+    if (!dstAgency) {
+      toast.error("받는 업체를 선택해 주세요.");
+      return;
+    }
+    if (srcAgency === dstAgency) {
+      toast.error("보내는 업체와 받는 업체가 동일합니다.");
+      return;
+    }
+    if (!transferCount || transferCount <= 0) {
+      toast.error("이송 수량을 1 이상 입력해 주세요.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/usims/transfer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sourceAgencyId: srcAgency,
+          targetAgencyId: dstAgency,
+          count: transferCount,
+          notes: transferNotes || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast.success(data.message);
+      // Reset form
+      setTransferCount(0);
+      setTransferNotes("");
+      onTransferred();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "이송 실패");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">유심 업체 간 이송</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Source and Destination side by side */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-6 items-start">
+          {/* Source */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Badge className="bg-red-100 text-red-700">출발</Badge>
+              <span className="text-sm font-medium">보내는 업체</span>
+            </div>
+            <div className="flex flex-wrap gap-3 items-end">
+              <CategoryCascadeFilter
+                categories={categories}
+                agencies={agencies}
+                selectedMajor={srcMajor}
+                selectedMedium={srcMedium}
+                selectedAgency={srcAgency}
+                onMajorChange={setSrcMajor}
+                onMediumChange={setSrcMedium}
+                onAgencyChange={setSrcAgency}
+                showAllOption={false}
+                majorLabel="대분류 *"
+                mediumLabel="중분류 *"
+                agencyLabel="보내는 업체 *"
+                showAgency={true}
+              />
+            </div>
+            {srcAgencyName && (
+              <p className="text-sm text-gray-600">
+                선택: <span className="font-semibold">{srcAgencyName}</span>
+              </p>
+            )}
+          </div>
+
+          {/* Arrow */}
+          <div className="hidden lg:flex items-center justify-center pt-10">
+            <div className="flex flex-col items-center gap-1">
+              <ArrowRightLeft className="h-8 w-8 text-gray-400" />
+              <span className="text-xs text-gray-400">이송</span>
+            </div>
+          </div>
+          <div className="flex lg:hidden items-center justify-center">
+            <ArrowRightLeft className="h-6 w-6 text-gray-400 rotate-90" />
+          </div>
+
+          {/* Destination */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Badge className="bg-blue-100 text-blue-700">도착</Badge>
+              <span className="text-sm font-medium">받는 업체</span>
+            </div>
+            <div className="flex flex-wrap gap-3 items-end">
+              <CategoryCascadeFilter
+                categories={categories}
+                agencies={agencies}
+                selectedMajor={dstMajor}
+                selectedMedium={dstMedium}
+                selectedAgency={dstAgency}
+                onMajorChange={setDstMajor}
+                onMediumChange={setDstMedium}
+                onAgencyChange={setDstAgency}
+                showAllOption={false}
+                majorLabel="대분류 *"
+                mediumLabel="중분류 *"
+                agencyLabel="받는 업체 *"
+                showAgency={true}
+              />
+            </div>
+            {dstAgencyName && (
+              <p className="text-sm text-gray-600">
+                선택: <span className="font-semibold">{dstAgencyName}</span>
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Transfer count and notes */}
+        <div className="border-t pt-4 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>이송 수량 *</Label>
+              <Input
+                type="number"
+                min={1}
+                placeholder="이송할 유심 수량"
+                value={transferCount || ""}
+                onChange={(e) => setTransferCount(parseInt(e.target.value) || 0)}
+              />
+              <p className="text-xs text-gray-400">
+                출발 업체의 배정(ASSIGNED) 상태 유심 중 배정일이 오래된 순으로 이송됩니다.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>메모 (선택)</Label>
+              <Input
+                placeholder="이송 사유 등"
+                value={transferNotes}
+                onChange={(e) => setTransferNotes(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Summary and button */}
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-500">
+              {srcAgencyName && dstAgencyName && transferCount > 0 ? (
+                <span>
+                  <span className="font-semibold text-gray-900">{srcAgencyName}</span>
+                  {" -> "}
+                  <span className="font-semibold text-gray-900">{dstAgencyName}</span>
+                  {" "}
+                  <span className="font-semibold text-blue-600">{transferCount}건</span> 이송 예정
+                </span>
+              ) : (
+                <span>업체와 수량을 선택해 주세요.</span>
+              )}
+            </div>
+            <Button
+              onClick={handleTransfer}
+              disabled={submitting || !srcAgency || !dstAgency || transferCount <= 0}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  이송 중...
+                </>
+              ) : (
+                <>
+                  <ArrowRightLeft className="h-4 w-4 mr-2" />
+                  유심 이송
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
