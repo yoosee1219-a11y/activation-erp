@@ -22,6 +22,8 @@ import {
   getTodayCompletedStats,
   getNameChangeIncomplete,
   getTodayTerminationCount,
+  getMonthlyTerminationDetail,
+  getTodayTerminationDetail,
 } from "@/lib/db/queries/activations";
 import {
   getAgencyIdsByMajorCategory,
@@ -95,6 +97,8 @@ export async function GET(request: NextRequest) {
       todayCompleted,
       nameChangeIncomplete,
       todayTermination,
+      monthlyTerminationDetail,
+      todayTerminationDetail,
     ] = await Promise.all([
       getDashboardStats(agencyId, agencyIds),
       getMonthlyStats(agencyId, agencyIds),
@@ -118,6 +122,8 @@ export async function GET(request: NextRequest) {
       getTodayCompletedStats(agencyIds),
       getNameChangeIncomplete(agencyIds),
       getTodayTerminationCount(agencyIds),
+      getMonthlyTerminationDetail(agencyIds),
+      getTodayTerminationDetail(agencyIds),
     ]);
 
     return NextResponse.json({
@@ -143,6 +149,8 @@ export async function GET(request: NextRequest) {
       todayCompleted,
       nameChangeIncomplete,
       todayTermination,
+      monthlyTerminationDetail,
+      todayTerminationDetail,
     });
   } catch (error) {
     console.error("Failed to fetch dashboard:", error);

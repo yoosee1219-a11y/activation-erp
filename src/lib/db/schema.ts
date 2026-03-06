@@ -47,6 +47,7 @@ export const userProfiles = pgTable("user_profiles", {
   allowedMediumCategories: text("allowed_medium_categories")
     .array()
     .default([]), // 중분류: ['DOD_키르기스스탄', 'DOD_ON']
+  plainPasswordHint: text("plain_password_hint"), // 어드민 비밀번호 확인용 (평문)
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
@@ -184,6 +185,22 @@ export const usims = pgTable("usims", {
   notes: text("notes"), // 메모
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+// 5-1. usim_logs (유심 작업이력)
+export const usimLogs = pgTable("usim_logs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id").notNull(),
+  userName: text("user_name").notNull(),
+  userRole: text("user_role").notNull(),
+  action: text("action").notNull(), // "assign"|"move"|"cancel"|"reset"|"manual_adjust"|"delete"
+  details: text("details").notNull(),
+  agencyId: text("agency_id"),
+  agencyName: text("agency_name"),
+  targetAgencyId: text("target_agency_id"),
+  targetAgencyName: text("target_agency_name"),
+  usimCount: integer("usim_count"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
 // 6. activation_status_config (상태값 설정)

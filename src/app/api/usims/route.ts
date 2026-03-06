@@ -6,6 +6,7 @@ import {
   getAgencyIdsByMediumCategories,
   getAgencyIdsByMajorCategory,
 } from "@/lib/db/queries/categories";
+import { addUsimLog } from "@/lib/db/queries/usim-logs";
 
 // GET: 유심 목록 조회
 export async function GET(request: NextRequest) {
@@ -114,6 +115,22 @@ export async function POST(request: NextRequest) {
     const cleaned = [...new Set(serialNumbers.map((s: string) => s.trim()).filter(Boolean))];
 
     const result = await assignUsims(agencyId, cleaned, assignedDate);
+
+    // 유심 배정 로그 기록
+    try {
+      await addUsimLog({
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role,
+        action: "assign",
+        details: `${agencyId} 업체에 유심 ${result.created}장 배정${result.duplicates.length > 0 ? ` (중복 ${result.duplicates.length}건)` : ""}`,
+        agencyId: agencyId,
+        usimCount: result.created,
+      });
+    } catch (logError) {
+      console.error("Failed to write usim assign log:", logError);
+    }
+
     return NextResponse.json({
       success: true,
       created: result.created,
@@ -142,6 +159,21 @@ export async function DELETE(request: NextRequest) {
     }
 
     await deleteUsims(usimIds);
+
+    // 유심 삭제 로그 기록
+    try {
+      await addUsimLog({
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role,
+        action: "delete",
+        details: `유심 ${usimIds.length}건 삭제`,
+        usimCount: usimIds.length,
+      });
+    } catch (logError) {
+      console.error("Failed to write usim delete log:", logError);
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Failed to delete usims:", error);

@@ -28,7 +28,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ChevronLeft, ChevronRight, Columns3 } from "lucide-react";
 
 interface DataTableProps<TData, TValue> {
@@ -40,6 +40,8 @@ interface DataTableProps<TData, TValue> {
   onPageChange?: (page: number) => void;
   searchPlaceholder?: string;
   getRowClassName?: (row: TData) => string;
+  highlightId?: string | null;
+  getRowId?: (row: TData) => string;
 }
 
 export function DataTable<TData, TValue>({
@@ -51,6 +53,8 @@ export function DataTable<TData, TValue>({
   onPageChange,
   searchPlaceholder = "검색...",
   getRowClassName,
+  highlightId,
+  getRowId,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -77,6 +81,18 @@ export function DataTable<TData, TValue>({
   });
 
   const totalPages = Math.ceil(total / pageSize);
+  const highlightRef = useRef<HTMLTableRowElement>(null);
+  const hasScrolled = useRef(false);
+
+  // 하이라이트된 행으로 스크롤
+  useEffect(() => {
+    if (highlightId && highlightRef.current && !hasScrolled.current) {
+      hasScrolled.current = true;
+      setTimeout(() => {
+        highlightRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 300);
+    }
+  }, [highlightId, data]);
 
   return (
     <div className="space-y-4">
@@ -143,18 +159,30 @@ export function DataTable<TData, TValue>({
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id} className={getRowClassName ? getRowClassName(row.original) : undefined}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+              table.getRowModel().rows.map((row) => {
+                const rowId = getRowId ? getRowId(row.original) : undefined;
+                const isHighlighted = highlightId && rowId === highlightId;
+                const baseClass = getRowClassName ? getRowClassName(row.original) : "";
+                const highlightClass = isHighlighted
+                  ? "ring-2 ring-blue-500 bg-blue-50/70 animate-pulse"
+                  : "";
+                return (
+                  <TableRow
+                    key={row.id}
+                    ref={isHighlighted ? highlightRef : undefined}
+                    className={`${baseClass} ${highlightClass}`.trim() || undefined}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                );
+              })
             ) : (
               <TableRow>
                 <TableCell

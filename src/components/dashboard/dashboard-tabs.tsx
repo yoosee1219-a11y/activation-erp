@@ -125,6 +125,7 @@ interface DashboardTabsProps {
   terminationStats: {
     monthlyCount: number;
     alertCount: number;
+    byAgency: Array<{ agencyId: string; agencyName: string; count: number }>;
   };
   monthlyCompleted: {
     totalCount: number;
@@ -149,6 +150,26 @@ interface DashboardTabsProps {
     autopayReview: string | null;
   }>;
   todayTermination: { count: number };
+  monthlyTerminationDetail: Array<{
+    id: string;
+    agencyId: string;
+    agencyName: string;
+    customerName: string;
+    newPhoneNumber: string | null;
+    terminationDate: string | null;
+    terminationReason: string | null;
+    workStatus: string | null;
+  }>;
+  todayTerminationDetail: Array<{
+    id: string;
+    agencyId: string;
+    agencyName: string;
+    customerName: string;
+    newPhoneNumber: string | null;
+    terminationDate: string | null;
+    terminationReason: string | null;
+    workStatus: string | null;
+  }>;
   categories: CategoryNode[];
   agencies: Agency[];
 }
@@ -191,6 +212,8 @@ export function DashboardTabs(props: DashboardTabsProps) {
           todayCompleted={props.todayCompleted}
           nameChangeIncomplete={props.nameChangeIncomplete}
           todayTermination={props.todayTermination}
+          monthlyTerminationDetail={props.monthlyTerminationDetail}
+          todayTerminationDetail={props.todayTerminationDetail}
           categories={props.categories}
           agencies={props.agencies}
           agencyStats={props.agencyStats}

@@ -359,3 +359,57 @@ JavaScript 배열을 PostgreSQL 배열로 올바르게 직렬화하지 못함
 - `npm run build` 성공 (26 pages, 0 TypeScript errors)
 - 런타임 검증 완료: dashboard/activations API - 대분류/중분류/전체 필터 모두 정상
 - Plan file: `C:\Users\woosol\.claude\plans\linear-finding-eagle.md`
+
+---
+
+## 2026-02-27: 유심(USIM) 재고관리 시스템 구현
+
+### 개요
+업체별 유심 배정 및 재고를 자동 관리하는 시스템. 유심은 고유 일련번호를 가지며, 업체에 배정 후 고객 개통 시 자동 재고 차감.
+
+### DB 변경
+- `usims` 테이블 신규 (`src/lib/db/schema.ts`)
+  - id(UUID), usimSerialNumber(UNIQUE), agencyId(FK→agencies), status, assignedDate
+  - usedDate, cancelledDate, resetDate, usedActivationId(FK→activations), notes
+
+### 상태 머신 (State Machine)
+```
+ASSIGNED (배정됨, 재고 O)
+  → USED (개통 시 자동)
+    → CANCELLED (개통취소 시 자동, 재고 X)
+      → RESET_READY (관리자 수동 초기화, 재고 O)
+```
+- **재고 = ASSIGNED + RESET_READY**
+- CANCELLED는 자동 복구 안됨 → 관리자가 "유심초기화 진행완료" 클릭 시만 RESET_READY로 전환
+
+### API 라우트
+| 경로 | 메서드 | 설명 |
+|------|--------|------|
+| `/api/usims` | GET | 유심 목록 (agencyId/status/search 필터) |
+| `/api/usims` | POST | 유심 일괄 배정 (ADMIN) |
+| `/api/usims` | DELETE | 유심 일괄 삭제 (ADMIN) |
+| `/api/usims/stats` | GET | 업체별 재고 통계 |
+| `/api/usims/reset` | POST | CANCELLED → RESET_READY 일괄 초기화 (ADMIN) |
+
+### Activation 연동 (`/api/activations/[id]/route.ts`)
+- 개통완료 시 `usimNumber` 있으면 → 해당 유심 자동 USED
+- `usimNumber` 새로 입력 + 이미 개통완료 → 자동 USED
+- `activationStatus`가 "개통취소"로 변경 → 유심 CANCELLED
+- 유심 연동 실패해도 개통 업데이트는 정상 처리 (non-critical)
+
+### UI (`/admin/usims`)
+3개 탭 구성:
+1. **재고 현황**: 전체 요약 카드(5종) + 업체별 아코디언 테이블 (클릭 시 유심 리스트 펼침)
+2. **유심 배정**: 업체 선택 + 범위지정(1300141~1300150) 또는 직접입력 + 일괄 배정
+3. **취소/초기화 관리**: CANCELLED 유심 목록 + 체크박스 선택 + "유심초기화 진행완료" 버튼
+
+### 사이드바
+- 관리 섹션에 "유심 관리" 메뉴 추가 (CardSim 아이콘)
+
+### 권한
+- ADMIN/SUB_ADMIN: 전체 관리 (배정, 삭제, 초기화)
+- PARTNER/GUEST: 자기 업체 유심만 조회
+
+### 빌드 상태
+- `npm run build` 성공 (30 pages, 0 TypeScript errors)
+- Vercel 배포 완료

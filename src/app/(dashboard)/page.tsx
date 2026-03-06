@@ -145,6 +145,7 @@ interface DashboardData {
   terminationStats: {
     monthlyCount: number;
     alertCount: number;
+    byAgency: Array<{ agencyId: string; agencyName: string; count: number }>;
   };
   monthlyCompleted: {
     totalCount: number;
@@ -169,6 +170,26 @@ interface DashboardData {
     autopayReview: string | null;
   }>;
   todayTermination: { count: number };
+  monthlyTerminationDetail: Array<{
+    id: string;
+    agencyId: string;
+    agencyName: string;
+    customerName: string;
+    newPhoneNumber: string | null;
+    terminationDate: string | null;
+    terminationReason: string | null;
+    workStatus: string | null;
+  }>;
+  todayTerminationDetail: Array<{
+    id: string;
+    agencyId: string;
+    agencyName: string;
+    customerName: string;
+    newPhoneNumber: string | null;
+    terminationDate: string | null;
+    terminationReason: string | null;
+    workStatus: string | null;
+  }>;
 }
 
 export default function DashboardPage() {
@@ -249,11 +270,13 @@ export default function DashboardPage() {
         todayPendingDetail={data.todayPendingDetail || []}
         supplementStats={data.supplementStats || []}
         supplementList={data.supplementList || []}
-        terminationStats={data.terminationStats || { monthlyCount: 0, alertCount: 0 }}
+        terminationStats={data.terminationStats || { monthlyCount: 0, alertCount: 0, byAgency: [] }}
         monthlyCompleted={data.monthlyCompleted || { totalCount: 0, byAgency: [] }}
         todayCompleted={data.todayCompleted || []}
         nameChangeIncomplete={data.nameChangeIncomplete || []}
         todayTermination={data.todayTermination || { count: 0 }}
+        monthlyTerminationDetail={data.monthlyTerminationDetail || []}
+        todayTerminationDetail={data.todayTerminationDetail || []}
         categories={categories}
         agencies={agencies}
       />

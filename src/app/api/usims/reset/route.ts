@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { resetUsims } from "@/lib/db/queries/usims";
+import { addUsimLog } from "@/lib/db/queries/usim-logs";
 
 // POST: CANCELLED → RESET_READY 일괄 초기화
 export async function POST(request: NextRequest) {
@@ -24,6 +25,21 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await resetUsims(usimIds);
+
+    // 유심 초기화 로그 기록
+    try {
+      await addUsimLog({
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role,
+        action: "reset",
+        details: `유심 ${result.updated}건 초기화 (CANCELLED → RESET_READY, 재고 복구)`,
+        usimCount: result.updated,
+      });
+    } catch (logError) {
+      console.error("Failed to write usim reset log:", logError);
+    }
+
     return NextResponse.json({
       success: true,
       updated: result.updated,

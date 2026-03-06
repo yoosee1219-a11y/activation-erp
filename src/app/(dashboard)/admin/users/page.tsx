@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
 interface UserProfile {
@@ -24,6 +24,7 @@ interface UserProfile {
   allowedAgencies: string[];
   allowedMajorCategory?: string | null;
   allowedMediumCategories?: string[];
+  plainPasswordHint?: string | null;
 }
 
 const roleLabels: Record<string, string> = {
@@ -46,6 +47,9 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editUser, setEditUser] = useState<UserProfile | undefined>();
+  const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(
+    new Set()
+  );
 
   const fetchUsers = async () => {
     try {
@@ -76,6 +80,39 @@ export default function UsersPage() {
       }
     } catch {
       toast.error("삭제 중 오류가 발생했습니다.");
+    }
+  };
+
+  const togglePasswordVisibility = (userId: string) => {
+    setVisiblePasswords((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  };
+
+  const handlePasswordChange = async (userId: string) => {
+    const newPw = prompt("새 비밀번호를 입력하세요 (4자 이상):");
+    if (!newPw || newPw.length < 4) {
+      if (newPw !== null) toast.error("비밀번호는 4자 이상이어야 합니다.");
+      return;
+    }
+    try {
+      const res = await fetch("/api/users/password", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, newPassword: newPw }),
+      });
+      if (res.ok) {
+        toast.success("비밀번호가 변경되었습니다.");
+        fetchUsers();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || "변경 실패");
+      }
+    } catch {
+      toast.error("비밀번호 변경 중 오류");
     }
   };
 
@@ -116,6 +153,9 @@ export default function UsersPage() {
                 <TableHead>이름</TableHead>
                 <TableHead>로그인 ID</TableHead>
                 <TableHead>역할</TableHead>
+                {user?.role === "ADMIN" && (
+                  <TableHead>비밀번호</TableHead>
+                )}
                 <TableHead>접근 거래처</TableHead>
                 <TableHead className="w-[100px]"></TableHead>
               </TableRow>
@@ -130,6 +170,36 @@ export default function UsersPage() {
                       {roleLabels[u.role] || u.role}
                     </Badge>
                   </TableCell>
+                  {user?.role === "ADMIN" && (
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <span className="text-sm font-mono">
+                          {visiblePasswords.has(u.id)
+                            ? u.plainPasswordHint || "미설정"
+                            : "●●●●●●"}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => togglePasswordVisibility(u.id)}
+                        >
+                          {visiblePasswords.has(u.id) ? (
+                            <EyeOff className="h-3 w-3" />
+                          ) : (
+                            <Eye className="h-3 w-3" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handlePasswordChange(u.id)}
+                          className="text-blue-600"
+                        >
+                          변경
+                        </Button>
+                      </div>
+                    </TableCell>
+                  )}
                   <TableCell className="text-sm">
                     {u.allowedAgencies?.includes("ALL")
                       ? "전체"
@@ -166,7 +236,7 @@ export default function UsersPage() {
               {users.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={user?.role === "ADMIN" ? 6 : 5}
                     className="h-24 text-center text-gray-500"
                   >
                     등록된 사용자가 없습니다.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,15 +28,12 @@ import {
   Minus,
   ChevronDown,
   ChevronRight,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
+import * as XLSX from "xlsx";
 
 // ─── Types ───
-interface Agency {
-  id: string;
-  name: string;
-}
-
 interface UsimData {
   received: number;
   used: number;
@@ -130,11 +127,12 @@ function StatusBadge({ status }: { status: string | null }) {
 // ─── Main Page ───
 export default function SettlementPage() {
   const [userRole, setUserRole] = useState<string | null>(null);
-  const [agencies, setAgencies] = useState<Agency[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(
     new Date().toISOString().slice(0, 7)
   );
-  const [selectedAgency, setSelectedAgency] = useState("all");
+  const [selectedMajor, setSelectedMajor] = useState("all");
+  const [selectedMedium, setSelectedMedium] = useState("all");
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<SettlementResponse | null>(null);
   const [expandedAgencies, setExpandedAgencies] = useState<Set<string>>(
@@ -153,13 +151,19 @@ export default function SettlementPage() {
       .catch(() => setUserRole(null));
   }, []);
 
-  // Load agencies list
+  // Load categories list
   useEffect(() => {
-    fetch("/api/agencies")
+    fetch("/api/categories")
       .then((r) => r.json())
-      .then((d) => setAgencies(d.agencies || []))
-      .catch(() => toast.error("거래처 목록 로드 실패"));
+      .then((d) => setCategories(d.categories || []))
+      .catch(() => toast.error("카테고리 목록 로드 실패"));
   }, []);
+
+  const mediumCats = useMemo(() => {
+    if (!selectedMajor || selectedMajor === "all") return [];
+    const major = categories.find((c: any) => c.id === selectedMajor);
+    return major?.children || [];
+  }, [selectedMajor, categories]);
 
   // Fetch settlement data
   const fetchSettlement = useCallback(async () => {
@@ -168,8 +172,10 @@ export default function SettlementPage() {
     setExpandedAgencies(new Set());
     try {
       const params = new URLSearchParams({ month: selectedMonth });
-      if (selectedAgency !== "all") {
-        params.set("agencyId", selectedAgency);
+      if (selectedMedium !== "all") {
+        params.set("mediumCategory", selectedMedium);
+      } else if (selectedMajor !== "all") {
+        params.set("majorCategory", selectedMajor);
       }
       const res = await fetch(`/api/settlement?${params}`);
       if (!res.ok) {
@@ -188,7 +194,76 @@ export default function SettlementPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedMonth, selectedAgency]);
+  }, [selectedMonth, selectedMajor, selectedMedium]);
+
+  const downloadExcel = () => {
+    if (!data) return;
+
+    // Sheet 1: Summary
+    const summaryRows = data.agencies.map((a) => ({
+      "거래처": a.agencyName,
+      "수수료 단가": a.commissionRate,
+      "USIM 배정 (당월)": a.usim.received,
+      "USIM 배정 비용": a.usim.cost,
+      "USIM 사용 (개통)": a.usim.used,
+      "USIM 환급": a.usim.revenue,
+      "USIM 소계": a.usim.subtotal,
+      "정상 개통": a.commission.normalCount,
+      "정상 수수료": a.commission.normalAmount,
+      "환수 (보완미완료)": a.commission.supplementClawbackCount,
+      "환수 (보완) 금액": a.commission.supplementClawback,
+      "환수 (6개월)": a.commission.sixMonthClawbackCount,
+      "환수 (6개월) 금액": a.commission.sixMonthClawback,
+      "환수 (수동)": a.commission.manualClawbackCount,
+      "환수 (수동) 금액": a.commission.manualClawback,
+      "수수료 소계": a.commission.subtotal,
+      "최종 정산금액": a.total,
+    }));
+
+    // Add total row
+    summaryRows.push({
+      "거래처": "합계",
+      "수수료 단가": 0,
+      "USIM 배정 (당월)": data.agencies.reduce((s, a) => s + a.usim.received, 0),
+      "USIM 배정 비용": data.agencies.reduce((s, a) => s + a.usim.cost, 0),
+      "USIM 사용 (개통)": data.agencies.reduce((s, a) => s + a.usim.used, 0),
+      "USIM 환급": data.agencies.reduce((s, a) => s + a.usim.revenue, 0),
+      "USIM 소계": data.agencies.reduce((s, a) => s + a.usim.subtotal, 0),
+      "정상 개통": data.agencies.reduce((s, a) => s + a.commission.normalCount, 0),
+      "정상 수수료": data.agencies.reduce((s, a) => s + a.commission.normalAmount, 0),
+      "환수 (보완미완료)": data.agencies.reduce((s, a) => s + a.commission.supplementClawbackCount, 0),
+      "환수 (보완) 금액": data.agencies.reduce((s, a) => s + a.commission.supplementClawback, 0),
+      "환수 (6개월)": data.agencies.reduce((s, a) => s + a.commission.sixMonthClawbackCount, 0),
+      "환수 (6개월) 금액": data.agencies.reduce((s, a) => s + a.commission.sixMonthClawback, 0),
+      "환수 (수동)": data.agencies.reduce((s, a) => s + a.commission.manualClawbackCount, 0),
+      "환수 (수동) 금액": data.agencies.reduce((s, a) => s + a.commission.manualClawback, 0),
+      "수수료 소계": data.agencies.reduce((s, a) => s + a.commission.subtotal, 0),
+      "최종 정산금액": data.grandTotal,
+    });
+
+    // Sheet 2: Details
+    const detailRows: any[] = [];
+    data.agencies.forEach((a) => {
+      a.details.forEach((d) => {
+        detailRows.push({
+          "거래처": a.agencyName,
+          "고객명": d.customerName,
+          "개통일자": d.activationDate || "-",
+          "상태": d.workStatus || "-",
+          "해지일자": d.terminationDate || "-",
+          "해지사유": d.terminationReason || "-",
+          "수수료": d.workStatus === "해지" ? -a.commissionRate : a.commissionRate,
+        });
+      });
+    });
+
+    const wb = XLSX.utils.book_new();
+    const ws1 = XLSX.utils.json_to_sheet(summaryRows);
+    const ws2 = XLSX.utils.json_to_sheet(detailRows);
+    XLSX.utils.book_append_sheet(wb, ws1, "정산요약");
+    XLSX.utils.book_append_sheet(wb, ws2, "상세내역");
+    XLSX.writeFile(wb, `정산서_${data.month}.xlsx`);
+  };
 
   const toggleExpand = (agencyId: string) => {
     setExpandedAgencies((prev) => {
@@ -252,20 +327,46 @@ export default function SettlementPage() {
 
             <div className="space-y-1">
               <label className="text-xs font-medium text-gray-500">
-                거래처
+                대분류
               </label>
               <Select
-                value={selectedAgency}
-                onValueChange={setSelectedAgency}
+                value={selectedMajor}
+                onValueChange={(v) => {
+                  setSelectedMajor(v);
+                  setSelectedMedium("all");
+                }}
               >
-                <SelectTrigger className="w-52">
+                <SelectTrigger className="w-44">
                   <SelectValue placeholder="전체" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">전체</SelectItem>
-                  {agencies.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.name}
+                  {categories.map((c: any) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-500">
+                중분류
+              </label>
+              <Select
+                value={selectedMedium}
+                onValueChange={setSelectedMedium}
+                disabled={selectedMajor === "all"}
+              >
+                <SelectTrigger className="w-44">
+                  <SelectValue placeholder="전체" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체</SelectItem>
+                  {mediumCats.map((c: any) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -285,6 +386,12 @@ export default function SettlementPage() {
                 </>
               )}
             </Button>
+            {data && (
+              <Button variant="outline" onClick={downloadExcel}>
+                <Download className="h-4 w-4 mr-2" />
+                엑셀 다운로드
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -420,7 +527,7 @@ function AgencySettlementCard({
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-500">
-                  수령 ({agency.usim.received}건 x {formatKRW(unitCost)}원)
+                  당월 배정 ({agency.usim.received}건 x {formatKRW(unitCost)}원)
                 </span>
                 <AmountCell value={agency.usim.cost} />
               </div>

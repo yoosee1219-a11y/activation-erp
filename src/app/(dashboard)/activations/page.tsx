@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { useDashboard } from "../layout";
 import { DataTable } from "@/components/activations/data-table";
 import { Filters } from "@/components/activations/filters";
@@ -39,6 +40,8 @@ type CategoryGroup = {
 
 export default function ActivationsPage() {
   const { getFilterParams, selectedMajors, selectedMediums, agencies, categories, user } = useDashboard();
+  const searchParams = useSearchParams();
+  const highlightId = searchParams.get("highlight");
   const [data, setData] = useState<ActivationRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -48,7 +51,7 @@ export default function ActivationsPage() {
   const [dateTo, setDateTo] = useState("");
   const [month, setMonth] = useState("all");
   const [availableMonths, setAvailableMonths] = useState<MonthSummary[]>([]);
-  const [viewMode, setViewMode] = useState<"list" | "grouped">("grouped");
+  const [viewMode, setViewMode] = useState<"list" | "grouped">(highlightId ? "list" : "grouped");
   const [selectedAgency, setSelectedAgency] = useState<string | null>(null);
 
   const agencyMap = useMemo(() => {
@@ -414,6 +417,8 @@ export default function ActivationsPage() {
           pageSize={200}
           onPageChange={setPage}
           searchPlaceholder="고객명으로 검색..."
+          highlightId={highlightId}
+          getRowId={(row: ActivationRow) => row.id}
           getRowClassName={(row: ActivationRow) => {
             const hasSupp =
               row.workStatus === "보완요청" ||
@@ -532,6 +537,8 @@ export default function ActivationsPage() {
                 page={1}
                 pageSize={999}
                 searchPlaceholder="고객명으로 검색..."
+                highlightId={highlightId}
+                getRowId={(row: ActivationRow) => row.id}
                 getRowClassName={(row: ActivationRow) => {
                   const hasSupp =
                     row.workStatus === "보완요청" ||

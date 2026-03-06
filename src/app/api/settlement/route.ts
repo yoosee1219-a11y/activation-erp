@@ -3,6 +3,10 @@ import { getSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { activations, agencies, usims } from "@/lib/db/schema";
 import { eq, and, gte, lt, sql, count, ne } from "drizzle-orm";
+import {
+  getAgencyIdsByMediumCategories,
+  getAgencyIdsByMajorCategory,
+} from "@/lib/db/queries/categories";
 
 export async function GET(request: NextRequest) {
   const user = await getSessionUser();
@@ -14,6 +18,8 @@ export async function GET(request: NextRequest) {
   const month =
     searchParams.get("month") || new Date().toISOString().slice(0, 7);
   const agencyId = searchParams.get("agencyId");
+  const majorCategory = searchParams.get("majorCategory");
+  const mediumCategory = searchParams.get("mediumCategory");
 
   const monthStart = `${month}-01`;
   const nextMonth = new Date(monthStart);
@@ -25,9 +31,16 @@ export async function GET(request: NextRequest) {
     .select()
     .from(agencies)
     .where(eq(agencies.isActive, true));
-  const targetAgencies = agencyId
-    ? agencyList.filter((a) => a.id === agencyId)
-    : agencyList;
+  let targetAgencies = agencyList;
+  if (agencyId) {
+    targetAgencies = agencyList.filter((a) => a.id === agencyId);
+  } else if (mediumCategory) {
+    const agencyIds = await getAgencyIdsByMediumCategories([mediumCategory]);
+    targetAgencies = agencyList.filter((a) => agencyIds.includes(a.id));
+  } else if (majorCategory) {
+    const agencyIds = await getAgencyIdsByMajorCategory(majorCategory);
+    targetAgencies = agencyList.filter((a) => agencyIds.includes(a.id));
+  }
 
   const USIM_UNIT_COST = 7700;
   const results = [];

@@ -18,8 +18,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Clock, CheckCircle2, Loader2, RotateCcw, X, RefreshCw, FileEdit, Package, ChevronDown, ChevronRight, XCircle } from "lucide-react";
+import { Plus, Clock, CheckCircle2, Loader2, RotateCcw, X, RefreshCw, FileEdit, Package, ChevronDown, ChevronRight, XCircle, Lock } from "lucide-react";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { SupplementPanel } from "@/components/dashboard/supplement-panel";
 import type { SupplementStat, SupplementItem } from "@/components/dashboard/supplement-panel";
 
@@ -53,6 +62,13 @@ export default function PartnerPage() {
   // 서류 보완 현황
   const [supplementStats, setSupplementStats] = useState<SupplementStat[]>([]);
   const [supplementList, setSupplementList] = useState<SupplementItem[]>([]);
+
+  // 비밀번호 변경 다이얼로그
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [changingPw, setChangingPw] = useState(false);
 
   // 카테고리 기반 필터 상태
   const [selectedMediumCategories, setSelectedMediumCategories] = useState<string[]>([]);
@@ -324,6 +340,43 @@ export default function PartnerPage() {
     setStatusFilter((prev) => (prev === filter ? null : filter));
   };
 
+  const handleChangePassword = async () => {
+    if (!currentPw || !newPw || !confirmPw) {
+      toast.error("모든 필드를 입력해 주세요.");
+      return;
+    }
+    if (newPw.length < 4) {
+      toast.error("새 비밀번호는 4자 이상이어야 합니다.");
+      return;
+    }
+    if (newPw !== confirmPw) {
+      toast.error("새 비밀번호가 일치하지 않습니다.");
+      return;
+    }
+    setChangingPw(true);
+    try {
+      const res = await fetch("/api/users/change-password", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
+      });
+      if (res.ok) {
+        toast.success("비밀번호가 변경되었습니다.");
+        setPasswordDialogOpen(false);
+        setCurrentPw("");
+        setNewPw("");
+        setConfirmPw("");
+      } else {
+        const err = await res.json();
+        toast.error(err.error || "변경 실패");
+      }
+    } catch {
+      toast.error("비밀번호 변경 중 오류가 발생했습니다.");
+    } finally {
+      setChangingPw(false);
+    }
+  };
+
   // 중분류 체크박스 토글
   const handleMediumCategoryToggle = (catId: string) => {
     setSelectedMediumCategories((prev) => {
@@ -363,8 +416,14 @@ export default function PartnerPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">개통 현황</h1>
-        <div className="rounded-lg bg-gray-900 px-3 py-1.5 text-white shadow">
-          <span className="text-xs font-medium">{dateStr}</span>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setPasswordDialogOpen(true)}>
+            <Lock className="h-4 w-4 mr-1" />
+            비밀번호 변경
+          </Button>
+          <div className="rounded-lg bg-gray-900 px-3 py-1.5 text-white shadow">
+            <span className="text-xs font-medium">{dateStr}</span>
+          </div>
         </div>
       </div>
 
@@ -665,6 +724,51 @@ export default function PartnerPage() {
         />
         </div>
       )}
+
+      <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>비밀번호 변경</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>현재 비밀번호</Label>
+              <Input
+                type="password"
+                value={currentPw}
+                onChange={(e) => setCurrentPw(e.target.value)}
+                placeholder="현재 비밀번호 입력"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>새 비밀번호</Label>
+              <Input
+                type="password"
+                value={newPw}
+                onChange={(e) => setNewPw(e.target.value)}
+                placeholder="4자 이상"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>새 비밀번호 확인</Label>
+              <Input
+                type="password"
+                value={confirmPw}
+                onChange={(e) => setConfirmPw(e.target.value)}
+                placeholder="새 비밀번호 다시 입력"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPasswordDialogOpen(false)}>
+              취소
+            </Button>
+            <Button onClick={handleChangePassword} disabled={changingPw}>
+              {changingPw ? "변경 중..." : "변경"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

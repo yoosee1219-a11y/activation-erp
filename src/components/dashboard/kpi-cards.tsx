@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, Fragment, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -89,6 +90,7 @@ interface KpiCardsProps {
   terminationStats?: {
     monthlyCount: number;
     alertCount: number;
+    byAgency: Array<{ agencyId: string; agencyName: string; count: number }>;
   };
   monthlyCompleted?: {
     totalCount: number;
@@ -113,6 +115,26 @@ interface KpiCardsProps {
     autopayReview: string | null;
   }>;
   todayTermination?: { count: number };
+  monthlyTerminationDetail?: Array<{
+    id: string;
+    agencyId: string;
+    agencyName: string;
+    customerName: string;
+    newPhoneNumber: string | null;
+    terminationDate: string | null;
+    terminationReason: string | null;
+    workStatus: string | null;
+  }>;
+  todayTerminationDetail?: Array<{
+    id: string;
+    agencyId: string;
+    agencyName: string;
+    customerName: string;
+    newPhoneNumber: string | null;
+    terminationDate: string | null;
+    terminationReason: string | null;
+    workStatus: string | null;
+  }>;
   categories?: CategoryNode[];
   agencies?: Agency[];
   agencyStats?: Array<{
@@ -567,15 +589,18 @@ export function KpiCards({
   supplementRequestDetail = [],
   pendingByPeriod = { totalPending: 0, monthlyPending: 0, todayPending: 0 },
   todayPendingDetail = [],
-  terminationStats = { monthlyCount: 0, alertCount: 0 },
+  terminationStats = { monthlyCount: 0, alertCount: 0, byAgency: [] },
   monthlyCompleted = { totalCount: 0, byAgency: [] },
   todayCompleted = [],
   nameChangeIncomplete = [],
   todayTermination = { count: 0 },
+  monthlyTerminationDetail = [],
+  todayTerminationDetail = [],
   categories = [],
   agencies = [],
   agencyStats = [],
 }: KpiCardsProps) {
+  const router = useRouter();
   const [expanded, setExpanded] = useState<KpiKey | null>(null);
   const [drillMajors, setDrillMajors] = useState<Set<string>>(new Set());
   const [drillMediums, setDrillMediums] = useState<Set<string>>(new Set());
@@ -725,6 +750,55 @@ export function KpiCards({
     [hasHierarchy, todayByAgency, agencyCatMap, categories]
   );
 
+  // ─── 해지 관련 데이터 ───
+  const monthlyTermByAgency = useMemo<CountItem[]>(() => {
+    return (terminationStats.byAgency || []).map(a => ({
+      agencyId: a.agencyId,
+      agencyName: a.agencyName || a.agencyId,
+      count: Number(a.count),
+    })).sort((a, b) => b.count - a.count);
+  }, [terminationStats.byAgency]);
+
+  const monthlyTermHierarchy = useMemo(
+    () => (hasHierarchy ? buildCountHierarchy(monthlyTermByAgency, categories, agencies) : null),
+    [hasHierarchy, monthlyTermByAgency, categories, agencies]
+  );
+
+  const monthlyTermDetailByAgency = useMemo(() => {
+    const groups: Record<string, { name: string; items: typeof monthlyTerminationDetail }> = {};
+    monthlyTerminationDetail.forEach((item) => {
+      const key = item.agencyId;
+      if (!groups[key]) groups[key] = { name: item.agencyName || item.agencyId, items: [] };
+      groups[key].items.push(item);
+    });
+    return Object.entries(groups).sort((a, b) => b[1].items.length - a[1].items.length);
+  }, [monthlyTerminationDetail]);
+
+  const monthlyTermDetailHierarchy = useMemo(
+    () => (hasHierarchy ? buildDetailHierarchy(monthlyTermDetailByAgency as AgencyEntry[], agencyCatMap, categories) : null),
+    [hasHierarchy, monthlyTermDetailByAgency, agencyCatMap, categories]
+  );
+
+  const todayTermDetailByAgency = useMemo(() => {
+    const groups: Record<string, { name: string; items: typeof todayTerminationDetail }> = {};
+    todayTerminationDetail.forEach((item) => {
+      const key = item.agencyId;
+      if (!groups[key]) groups[key] = { name: item.agencyName || item.agencyId, items: [] };
+      groups[key].items.push(item);
+    });
+    return Object.entries(groups).sort((a, b) => b[1].items.length - a[1].items.length);
+  }, [todayTerminationDetail]);
+
+  const todayTermDetailHierarchy = useMemo(
+    () => (hasHierarchy ? buildDetailHierarchy(todayTermDetailByAgency as AgencyEntry[], agencyCatMap, categories) : null),
+    [hasHierarchy, todayTermDetailByAgency, agencyCatMap, categories]
+  );
+
+  // ─── 고객명 클릭 → 개통관리 페이지 이동 ───
+  const navigateToActivation = (activationId: string) => {
+    router.push(`/activations?highlight=${activationId}`);
+  };
+
   // ─── helpers ───
   const getSupplementReasons = (item: (typeof supplementRequestDetail)[0]) => {
     const reasons: string[] = [];
@@ -755,7 +829,14 @@ export function KpiCards({
         <TableBody>
           {group.items.map((item: { id: string; customerName: string; newPhoneNumber: string | null; entryDate: string | null }) => (
             <TableRow key={item.id}>
-              <TableCell className="font-medium">{item.customerName}</TableCell>
+              <TableCell>
+                <button
+                  className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-left"
+                  onClick={(e) => { e.stopPropagation(); navigateToActivation(item.id); }}
+                >
+                  {item.customerName}
+                </button>
+              </TableCell>
               <TableCell className="text-sm">{item.newPhoneNumber || "-"}</TableCell>
               <TableCell className="text-center">
                 {item.entryDate ? (
@@ -792,7 +873,14 @@ export function KpiCards({
         <TableBody>
           {group.items.map((item: { id: string; customerName: string; newPhoneNumber: string | null; personInCharge: string | null; entryDate: string | null }) => (
             <TableRow key={item.id}>
-              <TableCell className="font-medium">{item.customerName}</TableCell>
+              <TableCell>
+                <button
+                  className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-left"
+                  onClick={(e) => { e.stopPropagation(); navigateToActivation(item.id); }}
+                >
+                  {item.customerName}
+                </button>
+              </TableCell>
               <TableCell className="text-sm">{item.newPhoneNumber || "-"}</TableCell>
               <TableCell className="text-sm">{item.personInCharge || "-"}</TableCell>
               <TableCell className="text-center">
@@ -832,7 +920,14 @@ export function KpiCards({
             const reasons = getSupplementReasons(item);
             return (
               <TableRow key={item.id} className="bg-rose-50/50">
-                <TableCell className="font-medium">{item.customerName}</TableCell>
+                <TableCell>
+                  <button
+                    className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-left"
+                    onClick={(e) => { e.stopPropagation(); navigateToActivation(item.id); }}
+                  >
+                    {item.customerName}
+                  </button>
+                </TableCell>
                 <TableCell className="text-sm">{item.newPhoneNumber || "-"}</TableCell>
                 <TableCell className="text-sm">{item.personInCharge || "-"}</TableCell>
                 <TableCell className="text-center">
@@ -870,7 +965,14 @@ export function KpiCards({
         <TableBody>
           {group.items.map((item: { id: string; customerName: string; newPhoneNumber: string | null; activationDate: string | null }) => (
             <TableRow key={item.id}>
-              <TableCell className="font-medium">{item.customerName}</TableCell>
+              <TableCell>
+                <button
+                  className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-left"
+                  onClick={(e) => { e.stopPropagation(); navigateToActivation(item.id); }}
+                >
+                  {item.customerName}
+                </button>
+              </TableCell>
               <TableCell className="text-sm">{item.newPhoneNumber || "-"}</TableCell>
               <TableCell className="text-center">
                 {item.activationDate ? (
@@ -908,7 +1010,14 @@ export function KpiCards({
         <TableBody>
           {group.items.map((item: { id: string; customerName: string; newPhoneNumber: string | null; nameChangeDocsReview: string | null; arcReview: string | null; autopayReview: string | null }) => (
             <TableRow key={item.id}>
-              <TableCell className="font-medium">{item.customerName}</TableCell>
+              <TableCell>
+                <button
+                  className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-left"
+                  onClick={(e) => { e.stopPropagation(); navigateToActivation(item.id); }}
+                >
+                  {item.customerName}
+                </button>
+              </TableCell>
               <TableCell className="text-sm">{item.newPhoneNumber || "-"}</TableCell>
               <TableCell className="text-center">
                 <Badge className={item.nameChangeDocsReview === '완료' ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
@@ -923,6 +1032,55 @@ export function KpiCards({
               <TableCell className="text-center">
                 <Badge className={item.autopayReview === '완료' ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
                   {item.autopayReview || '미검수'}
+                </Badge>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const renderTerminationAgency = (agencyId: string, group: { name: string; items: any[] }) => (
+    <div key={agencyId}>
+      <div className="flex items-center gap-2 mb-2">
+        <h3 className="font-semibold text-sm">{group.name}</h3>
+        <Badge variant="secondary">{group.items.length}건</Badge>
+      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>고객명</TableHead>
+            <TableHead>번호</TableHead>
+            <TableHead className="text-center">해지일</TableHead>
+            <TableHead className="text-center">사유</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {group.items.map((item: { id: string; customerName: string; newPhoneNumber: string | null; terminationDate: string | null; terminationReason: string | null }) => (
+            <TableRow key={item.id} className="bg-red-50/50">
+              <TableCell>
+                <button
+                  className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-left"
+                  onClick={(e) => { e.stopPropagation(); navigateToActivation(item.id); }}
+                >
+                  {item.customerName}
+                </button>
+              </TableCell>
+              <TableCell className="text-sm">{item.newPhoneNumber || "-"}</TableCell>
+              <TableCell className="text-center">
+                {item.terminationDate ? (
+                  <Badge className="bg-red-100 text-red-800">
+                    {format(new Date(item.terminationDate), "yyyy-MM-dd")}
+                  </Badge>
+                ) : (
+                  <span className="text-gray-400">-</span>
+                )}
+              </TableCell>
+              <TableCell className="text-center">
+                <Badge className="bg-gray-100 text-gray-700 text-[10px]">
+                  {item.terminationReason || "수동해지"}
                 </Badge>
               </TableCell>
             </TableRow>
@@ -984,7 +1142,7 @@ export function KpiCards({
       color: "text-gray-700",
       bg: "bg-gray-100",
       ring: "ring-gray-500",
-      expandable: false,
+      expandable: true,
     },
     // Row 2
     {
@@ -1029,7 +1187,7 @@ export function KpiCards({
       color: "text-red-600",
       bg: "bg-red-50",
       ring: "ring-red-500",
-      expandable: false,
+      expandable: true,
     },
   ];
 
@@ -1254,6 +1412,131 @@ export function KpiCards({
             ) : (
               <div className="py-8 text-center text-gray-500">
                 오늘 입국예정인 개통대기 건이 없습니다.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ──── 당월 해지 drill-down ──── */}
+      {expanded === "monthlyTermination" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <XCircle className="h-4 w-4 text-gray-700" />
+              당월 해지 ({terminationStats.monthlyCount}건)
+              {terminationStats.alertCount > 0 && (
+                <Badge className="bg-orange-100 text-orange-700 ml-2">해지예고 {terminationStats.alertCount}건</Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {terminationStats.monthlyCount > 0 ? (
+              <div className="space-y-6">
+                {/* 거래처별 건수 요약 */}
+                {monthlyTermByAgency.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-600 mb-2">거래처별 건수</h4>
+                    {monthlyTermHierarchy ? (
+                      <CountHierarchyTable
+                        hierarchy={monthlyTermHierarchy}
+                        total={terminationStats.monthlyCount}
+                        badgeClass="bg-red-100 text-red-800"
+                        drillMajors={drillMajors}
+                        drillMediums={drillMediums}
+                        toggleMajor={toggleDrillMajor}
+                        toggleMedium={toggleDrillMedium}
+                      />
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>거래처</TableHead>
+                            <TableHead className="text-center">해지 건수</TableHead>
+                            <TableHead className="text-right">비율</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {monthlyTermByAgency.map((row) => (
+                            <TableRow key={row.agencyId}>
+                              <TableCell className="font-medium">{row.agencyName}</TableCell>
+                              <TableCell className="text-center">
+                                <Badge className="bg-red-100 text-red-800">{row.count}건</Badge>
+                              </TableCell>
+                              <TableCell className="text-right text-sm text-gray-500">
+                                {terminationStats.monthlyCount > 0
+                                  ? ((Number(row.count) / terminationStats.monthlyCount) * 100).toFixed(1)
+                                  : 0}%
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </div>
+                )}
+                {/* 상세 목록 */}
+                {monthlyTermDetailByAgency.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-600 mb-2">상세 목록</h4>
+                    {monthlyTermDetailHierarchy ? (
+                      <DetailHierarchySection
+                        hierarchy={monthlyTermDetailHierarchy}
+                        drillMajors={drillMajors}
+                        drillMediums={drillMediums}
+                        toggleMajor={toggleDrillMajor}
+                        toggleMedium={toggleDrillMedium}
+                        renderAgencyTable={renderTerminationAgency}
+                      />
+                    ) : (
+                      <div className="space-y-6">
+                        {monthlyTermDetailByAgency.map(([agencyId, group]) =>
+                          renderTerminationAgency(agencyId, group)
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="py-8 text-center text-gray-500">
+                당월 해지 건이 없습니다.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ──── 당일 해지 drill-down ──── */}
+      {expanded === "todayTermination" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <XCircle className="h-4 w-4 text-red-600" />
+              당일 해지 ({todayTermination.count}건)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {todayTermDetailByAgency.length > 0 ? (
+              todayTermDetailHierarchy ? (
+                <DetailHierarchySection
+                  hierarchy={todayTermDetailHierarchy}
+                  drillMajors={drillMajors}
+                  drillMediums={drillMediums}
+                  toggleMajor={toggleDrillMajor}
+                  toggleMedium={toggleDrillMedium}
+                  renderAgencyTable={renderTerminationAgency}
+                />
+              ) : (
+                <div className="space-y-6">
+                  {todayTermDetailByAgency.map(([agencyId, group]) =>
+                    renderTerminationAgency(agencyId, group)
+                  )}
+                </div>
+              )
+            ) : (
+              <div className="py-8 text-center text-gray-500">
+                오늘 해지 처리된 건이 없습니다.
               </div>
             )}
           </CardContent>

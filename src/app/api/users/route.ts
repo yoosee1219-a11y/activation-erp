@@ -7,6 +7,9 @@ import {
 } from "@/lib/db/queries/users";
 import { getSessionUser } from "@/lib/auth/session";
 import { auth } from "@/lib/auth/server";
+import { db } from "@/lib/db";
+import { userProfiles } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 
 export async function GET() {
   try {
@@ -16,7 +19,14 @@ export async function GET() {
     }
 
     const users = await getAllUsers();
-    return NextResponse.json({ users });
+
+    // plainPasswordHint는 ADMIN만 볼 수 있음
+    const sanitizedUsers =
+      user.role === "ADMIN"
+        ? users
+        : users.map(({ plainPasswordHint, ...rest }) => rest);
+
+    return NextResponse.json({ users: sanitizedUsers });
   } catch (error) {
     console.error("Failed to fetch users:", error);
     return NextResponse.json(
@@ -84,6 +94,12 @@ export async function POST(request: NextRequest) {
       allowedMajorCategory: allowedMajorCategory || null,
       allowedMediumCategories: allowedMediumCategories || [],
     });
+
+    // Save plain password hint for admin viewing
+    await db
+      .update(userProfiles)
+      .set({ plainPasswordHint: password })
+      .where(eq(userProfiles.id, authResult.user.id));
 
     return NextResponse.json({ user: profile }, { status: 201 });
   } catch (error) {

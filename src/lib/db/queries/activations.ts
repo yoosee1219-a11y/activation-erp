@@ -662,7 +662,7 @@ export async function getSupplementList(agencyIds?: string[]) {
   return result.rows;
 }
 
-// ── 해지 통계 (당월 해지 건수 + 해지예고 건수) ──
+// ── 해지 통계 (당월 해지 건수 + 해지예고 건수 + 거래처별 breakdown) ──
 export async function getTerminationStats(filters?: {
   agencyId?: string;
   agencyIds?: string[];
@@ -697,9 +697,29 @@ export async function getTerminationStats(filters?: {
       ...(conditions.length > 0 ? conditions : [])
     ));
 
+  // 당월 해지 거래처별 breakdown
+  const agencyFilter = filters?.agencyIds && filters.agencyIds.length > 0
+    ? sql`AND a.agency_id IN (${inList(filters.agencyIds)})`
+    : filters?.agencyId
+      ? sql`AND a.agency_id = ${filters.agencyId}`
+      : sql``;
+
+  const byAgencyResult = await db.execute(sql`
+    SELECT a.agency_id as "agencyId", COALESCE(ag.name, a.agency_id) as "agencyName", COUNT(*) as "count"
+    FROM activations a
+    LEFT JOIN agencies ag ON a.agency_id = ag.id
+    WHERE a.work_status = '해지'
+      AND a.termination_date >= ${monthStart}
+      AND a.termination_date < ${monthEnd}
+      ${agencyFilter}
+    GROUP BY a.agency_id, ag.name
+    ORDER BY COUNT(*) DESC
+  `);
+
   return {
     monthlyCount: Number(monthlyResult[0]?.count || 0),
     alertCount: Number(alertResult[0]?.count || 0),
+    byAgency: byAgencyResult.rows as Array<{ agencyId: string; agencyName: string; count: number }>,
   };
 }
 
@@ -785,20 +805,79 @@ export async function getNameChangeIncomplete(agencyIds?: string[]) {
   return result.rows;
 }
 
-// ── KPI 카드: 당일 해지 건수 ──
+// ── KPI 카드: 당일 해지 상세 (건수 + 거래처별 + 상세 목록) ──
 export async function getTodayTerminationCount(agencyIds?: string[]) {
   const agencyFilter = agencyIds && agencyIds.length > 0
-    ? sql`AND agency_id IN (${inList(agencyIds)})`
+    ? sql`AND a.agency_id IN (${inList(agencyIds)})`
+    : sql``;
+
+  const countResult = await db.execute(sql`
+    SELECT COUNT(*) as "count"
+    FROM activations a
+    WHERE a.work_status = '해지'
+      AND a.termination_date = CURRENT_DATE
+      ${agencyFilter}
+  `);
+
+  return {
+    count: Number(countResult.rows[0]?.count || 0),
+  };
+}
+
+// ── KPI 카드: 당월 해지 상세 목록 ──
+export async function getMonthlyTerminationDetail(agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`AND a.agency_id IN (${inList(agencyIds)})`
+    : sql``;
+
+  const now = new Date();
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const monthEnd = nextMonth.toISOString().split("T")[0];
+
+  const result = await db.execute(sql`
+    SELECT
+      a.id,
+      a.agency_id as "agencyId",
+      COALESCE(ag.name, a.agency_id) as "agencyName",
+      a.customer_name as "customerName",
+      a.new_phone_number as "newPhoneNumber",
+      a.termination_date as "terminationDate",
+      a.termination_reason as "terminationReason",
+      a.work_status as "workStatus"
+    FROM activations a
+    LEFT JOIN agencies ag ON a.agency_id = ag.id
+    WHERE a.work_status = '해지'
+      AND a.termination_date >= ${monthStart}
+      AND a.termination_date < ${monthEnd}
+      ${agencyFilter}
+    ORDER BY a.termination_date DESC
+  `);
+  return result.rows;
+}
+
+// ── KPI 카드: 당일 해지 상세 목록 ──
+export async function getTodayTerminationDetail(agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`AND a.agency_id IN (${inList(agencyIds)})`
     : sql``;
 
   const result = await db.execute(sql`
-    SELECT COUNT(*) as "count"
-    FROM activations
-    WHERE work_status = '해지'
-      AND termination_date = CURRENT_DATE
+    SELECT
+      a.id,
+      a.agency_id as "agencyId",
+      COALESCE(ag.name, a.agency_id) as "agencyName",
+      a.customer_name as "customerName",
+      a.new_phone_number as "newPhoneNumber",
+      a.termination_date as "terminationDate",
+      a.termination_reason as "terminationReason",
+      a.work_status as "workStatus"
+    FROM activations a
+    LEFT JOIN agencies ag ON a.agency_id = ag.id
+    WHERE a.work_status = '해지'
+      AND a.termination_date = CURRENT_DATE
       ${agencyFilter}
+    ORDER BY a.termination_date DESC
   `);
-  return {
-    count: Number(result.rows[0]?.count || 0),
-  };
+  return result.rows;
 }

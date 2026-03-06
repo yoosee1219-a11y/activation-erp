@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAgencyFilter, type Agency, type CategoryNode } from "@/hooks/use-agency-filter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,8 @@ import {
   ChevronDown,
   ChevronRight,
   Loader2,
+  ClipboardList,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -92,7 +94,7 @@ function CategoryCascadeFilter({
   majorLabel = "대분류",
   mediumLabel = "중분류",
   agencyLabel = "소분류 (업체)",
-  showAgency = true,
+  showAgency = false,
 }: {
   categories: CategoryNode[];
   agencies: Agency[];
@@ -208,16 +210,91 @@ export default function UsimManagementPage() {
   const { agencies, categories } = useAgencyFilter();
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const triggerRefresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+  // ─── 유심 작업이력 상태 ───
+  const [usimLogs, setUsimLogs] = useState<any[]>([]);
+  const [logsOpen, setLogsOpen] = useState(false);
+  const logsOpenRef = useRef(false);
+
+  // logsOpen 변경 시 ref도 동기화
+  useEffect(() => {
+    logsOpenRef.current = logsOpen;
+  }, [logsOpen]);
+
+  const fetchUsimLogs = useCallback(async () => {
+    try {
+      const res = await fetch("/api/usims/logs");
+      const data = await res.json();
+      setUsimLogs(data.logs || []);
+    } catch {
+      console.error("유심 로그 로드 실패");
+    }
+  }, []);
+
+  // 마운트 시 로그 프리로드 (패널이 열려 있을 때 바로 보여주기 위해)
+  useEffect(() => {
+    fetchUsimLogs();
+  }, [fetchUsimLogs]);
+
+  const triggerRefresh = useCallback(() => {
+    setRefreshKey((k) => k + 1);
+    // 로그 패널이 열려 있으면 로그도 새로고침
+    if (logsOpenRef.current) {
+      fetchUsimLogs();
+    }
+  }, [fetchUsimLogs]);
 
   return (
     <div className="space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold">유심 관리</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          업체별 유심 배정 및 재고를 관리합니다.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">유심 관리</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            업체별 유심 배정 및 재고를 관리합니다.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setLogsOpen(!logsOpen);
+            if (!logsOpen) fetchUsimLogs();
+          }}
+        >
+          <ClipboardList className="h-4 w-4 mr-1" />
+          작업이력
+        </Button>
       </div>
+
+      {/* ─── 유심 작업이력 패널 ─── */}
+      {logsOpen && (
+        <Card>
+          <CardHeader className="py-3 px-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold">유심 작업이력</CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => setLogsOpen(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <div className="max-h-60 overflow-y-auto space-y-2">
+              {usimLogs.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-4">작업이력이 없습니다.</p>
+              ) : (
+                usimLogs.map((log: any) => (
+                  <div key={log.id} className="text-xs border-b pb-2 last:border-0">
+                    <div className="flex items-center gap-2 text-gray-400">
+                      <span>{new Date(log.createdAt).toLocaleString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                      <Badge variant="outline" className="text-[10px] px-1 py-0">{log.userName}</Badge>
+                    </div>
+                    <p className="text-gray-700 mt-0.5">{log.details}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
@@ -543,7 +620,7 @@ function AssignTab({
 
   const handleSubmit = async () => {
     if (!agencyId) {
-      toast.error("업체(소분류)를 선택해 주세요.");
+      toast.error("업체를 선택해 주세요.");
       return;
     }
     const serials = getSerialNumbers();
@@ -579,7 +656,7 @@ function AssignTab({
         <CardTitle className="text-base">유심 일괄 배정</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* 대분류 → 중분류 → 소분류 캐스케이드 */}
+        {/* 대분류 → 중분류 → 업체 캐스케이드 */}
         <div className="flex flex-wrap gap-3 items-end">
           <CategoryCascadeFilter
             categories={categories}
@@ -593,7 +670,8 @@ function AssignTab({
             showAllOption={false}
             majorLabel="대분류 *"
             mediumLabel="중분류 *"
-            agencyLabel="배정 업체 (소분류) *"
+            agencyLabel="배정 업체 *"
+            showAgency={true}
           />
 
           {/* 배정일 */}

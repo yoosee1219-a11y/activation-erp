@@ -280,7 +280,7 @@ export function AgencyStatusTable({ data, categories, agencies }: Props) {
                           <StatCells stat={mediumStat} />
                         </TableRow>,
 
-                        // 소분류(거래처) 행 (중분류 펼쳤을 때)
+                        // 거래처 행 (중분류 펼쳤을 때)
                         ...(isMediumExpanded
                           ? medAgencies.map(({ agency, stat }) => (
                               <TableRow key={`agency-${agency.id}`}>
