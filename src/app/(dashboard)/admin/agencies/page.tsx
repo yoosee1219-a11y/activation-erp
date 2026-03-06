@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   Plus,
-  Pencil,
   FolderTree,
   ChevronRight,
   ChevronDown,
@@ -38,7 +37,6 @@ export default function AgenciesPage() {
 
   // Tree expand/collapse state
   const [expandedMajors, setExpandedMajors] = useState<Set<string>>(new Set());
-  const [expandedMediums, setExpandedMediums] = useState<Set<string>>(new Set());
 
   const toggleMajor = useCallback((majorId: string) => {
     setExpandedMajors((prev) => {
@@ -47,18 +45,6 @@ export default function AgenciesPage() {
         next.delete(majorId);
       } else {
         next.add(majorId);
-      }
-      return next;
-    });
-  }, []);
-
-  const toggleMedium = useCallback((mediumId: string) => {
-    setExpandedMediums((prev) => {
-      const next = new Set(prev);
-      if (next.has(mediumId)) {
-        next.delete(mediumId);
-      } else {
-        next.add(mediumId);
       }
       return next;
     });
@@ -209,78 +195,20 @@ export default function AgenciesPage() {
                   {isMajorExpanded && mediums.length > 0 && (
                     <div className="border-t border-gray-100 bg-gray-50/40">
                       {mediums.map((medium) => {
-                        const isMediumExpanded = expandedMediums.has(medium.id);
                         const mediumAgencies =
                           agenciesByMedium[medium.id] || [];
 
                         return (
-                          <div key={medium.id}>
-                            {/* Medium row */}
-                            <button
-                              type="button"
-                              onClick={() => toggleMedium(medium.id)}
-                              className="flex w-full items-center gap-3 py-2.5 pl-10 pr-4 text-left transition-colors hover:bg-gray-100/60"
-                            >
-                              <span className="text-gray-400">
-                                {isMediumExpanded ? (
-                                  <ChevronDown className="h-3.5 w-3.5" />
-                                ) : (
-                                  <ChevronRight className="h-3.5 w-3.5" />
-                                )}
-                              </span>
-                              <span className="font-semibold text-gray-700">
-                                {medium.name}
-                              </span>
-                              <span className="rounded-full bg-gray-200/70 px-2 py-0.5 text-xs font-medium text-gray-500">
-                                {mediumAgencies.length}
-                              </span>
-                            </button>
-
-                            {/* Agency rows */}
-                            {isMediumExpanded && mediumAgencies.length > 0 && (
-                              <div className="border-t border-gray-100/80 bg-white">
-                                {mediumAgencies.map((agency) => (
-                                  <div
-                                    key={agency.id}
-                                    className="flex items-center justify-between py-2 pl-20 pr-4 transition-colors hover:bg-blue-50/40"
-                                  >
-                                    <span className="text-sm text-gray-800">
-                                      {agency.name}
-                                    </span>
-                                    <div className="flex items-center gap-3">
-                                      {isAdmin &&
-                                        agency.commissionRate != null &&
-                                        agency.commissionRate > 0 && (
-                                          <span className="text-xs text-gray-500">
-                                            {agency.commissionRate.toLocaleString()}
-                                            원/건
-                                          </span>
-                                        )}
-                                      {isAdmin && (
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-7 w-7 p-0 text-gray-400 hover:text-gray-700"
-                                          onClick={() => {
-                                            setEditAgency(agency);
-                                            setFormOpen(true);
-                                          }}
-                                        >
-                                          <Pencil className="h-3.5 w-3.5" />
-                                        </Button>
-                                      )}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-
-                            {isMediumExpanded &&
-                              mediumAgencies.length === 0 && (
-                                <div className="py-2 pl-20 pr-4 text-xs text-gray-400">
-                                  등록된 거래처 없음
-                                </div>
-                              )}
+                          <div
+                            key={medium.id}
+                            className="flex items-center gap-3 py-2.5 pl-10 pr-4"
+                          >
+                            <span className="font-semibold text-gray-700">
+                              {medium.name}
+                            </span>
+                            <span className="rounded-full bg-gray-200/70 px-2 py-0.5 text-xs font-medium text-gray-500">
+                              {mediumAgencies.length}개 업체
+                            </span>
                           </div>
                         );
                       })}
@@ -296,72 +224,6 @@ export default function AgenciesPage() {
               );
             })}
 
-            {/* Uncategorized agencies */}
-            {uncategorizedAgencies.length > 0 && (
-              <div>
-                <button
-                  type="button"
-                  onClick={() => toggleMajor("__uncategorized__")}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50"
-                >
-                  <span className="text-gray-400">
-                    {expandedMajors.has("__uncategorized__") ? (
-                      <ChevronDown className="h-4 w-4" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4" />
-                    )}
-                  </span>
-                  <span className="text-gray-400">
-                    {expandedMajors.has("__uncategorized__") ? (
-                      <FolderOpen className="h-5 w-5" />
-                    ) : (
-                      <Folder className="h-5 w-5" />
-                    )}
-                  </span>
-                  <span className="font-bold text-gray-500">미분류</span>
-                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
-                    {uncategorizedAgencies.length}
-                  </span>
-                </button>
-
-                {expandedMajors.has("__uncategorized__") && (
-                  <div className="border-t border-gray-100 bg-white">
-                    {uncategorizedAgencies.map((agency) => (
-                      <div
-                        key={agency.id}
-                        className="flex items-center justify-between py-2 pl-14 pr-4 transition-colors hover:bg-blue-50/40"
-                      >
-                        <span className="text-sm text-gray-800">
-                          {agency.name}
-                        </span>
-                        <div className="flex items-center gap-3">
-                          {isAdmin &&
-                            agency.commissionRate != null &&
-                            agency.commissionRate > 0 && (
-                              <span className="text-xs text-gray-500">
-                                {agency.commissionRate.toLocaleString()}원/건
-                              </span>
-                            )}
-                          {isAdmin && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0 text-gray-400 hover:text-gray-700"
-                              onClick={() => {
-                                setEditAgency(agency);
-                                setFormOpen(true);
-                              }}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </Card>
       )}

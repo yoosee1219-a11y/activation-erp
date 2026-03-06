@@ -38,7 +38,7 @@ interface UserFormProps {
   };
 }
 
-type AccessMode = "all" | "category" | "direct";
+type AccessMode = "all" | "category";
 
 export function UserForm({
   open,
@@ -55,7 +55,6 @@ export function UserForm({
     if (!initialData) return "all";
     if (initialData.allowedAgencies.includes("ALL")) return "all";
     if (initialData.allowedMajorCategory) return "category";
-    if (initialData.allowedAgencies.length > 0) return "direct";
     return "all";
   };
 
@@ -77,15 +76,6 @@ export function UserForm({
     const major = categories.find((c) => c.id === formData.allowedMajorCategory);
     return major?.children || [];
   }, [formData.allowedMajorCategory, categories]);
-
-  const handleAgencyToggle = (agencyId: string, checked: boolean) => {
-    setFormData((prev) => ({
-      ...prev,
-      allowedAgencies: checked
-        ? [...prev.allowedAgencies, agencyId]
-        : prev.allowedAgencies.filter((id) => id !== agencyId),
-    }));
-  };
 
   const handleMediumToggle = (mediumId: string, checked: boolean) => {
     setFormData((prev) => ({
@@ -122,13 +112,6 @@ export function UserForm({
         allowedMajorCategory: categories.length === 1 ? categories[0].id : "",
         allowedMediumCategories: [],
       }));
-    } else {
-      setFormData((p) => ({
-        ...p,
-        allowedAgencies: [],
-        allowedMajorCategory: "",
-        allowedMediumCategories: [],
-      }));
     }
   };
 
@@ -151,10 +134,6 @@ export function UserForm({
         payload.allowedAgencies = [];
         payload.allowedMajorCategory = formData.allowedMajorCategory || null;
         payload.allowedMediumCategories = formData.allowedMediumCategories;
-      } else {
-        payload.allowedAgencies = formData.allowedAgencies;
-        payload.allowedMajorCategory = null;
-        payload.allowedMediumCategories = [];
       }
 
       if (isEdit) {
@@ -285,7 +264,6 @@ export function UserForm({
                 {categories.length > 0 && (
                   <SelectItem value="category">카테고리 기반</SelectItem>
                 )}
-                <SelectItem value="direct">직접 지정</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -354,28 +332,6 @@ export function UserForm({
             </div>
           )}
 
-          {/* 직접 지정 접근 설정 */}
-          {accessMode === "direct" && (
-            <div className="max-h-48 overflow-y-auto rounded border p-3 space-y-2">
-              {agencies.map((agency) => (
-                <div
-                  key={agency.id}
-                  className="flex items-center space-x-2"
-                >
-                  <Checkbox
-                    id={`agency-${agency.id}`}
-                    checked={formData.allowedAgencies.includes(agency.id)}
-                    onCheckedChange={(v) =>
-                      handleAgencyToggle(agency.id, !!v)
-                    }
-                  />
-                  <Label htmlFor={`agency-${agency.id}`} className="text-sm">
-                    {agency.name}
-                  </Label>
-                </div>
-              ))}
-            </div>
-          )}
 
           <div className="flex justify-end gap-3">
             <Button type="button" variant="outline" onClick={onClose}>

@@ -594,13 +594,19 @@ function AssignTab({
 }) {
   const [selectedMajor, setSelectedMajor] = useState("");
   const [selectedMedium, setSelectedMedium] = useState("");
-  const [agencyId, setAgencyId] = useState("");
   const [assignedDate, setAssignedDate] = useState(new Date().toISOString().split("T")[0]);
   const [serialInput, setSerialInput] = useState("");
   const [rangeStart, setRangeStart] = useState("");
   const [rangeEnd, setRangeEnd] = useState("");
   const [inputMode, setInputMode] = useState<"list" | "range">("range");
   const [submitting, setSubmitting] = useState(false);
+
+  // Auto-resolve: 중분류 선택 시 해당 카테고리의 첫 번째 업체를 자동 선택
+  const resolvedAgencyId = useMemo(() => {
+    if (!selectedMedium) return "";
+    const mediumAgencies = agencies.filter(a => a.mediumCategory === selectedMedium);
+    return mediumAgencies[0]?.id || "";
+  }, [selectedMedium, agencies]);
 
   // 범위에서 일련번호 배열 생성
   const generateRange = (start: string, end: string): string[] => {
@@ -629,7 +635,7 @@ function AssignTab({
   const previewCount = getSerialNumbers().length;
 
   const handleSubmit = async () => {
-    if (!agencyId) {
+    if (!resolvedAgencyId) {
       toast.error("업체를 선택해 주세요.");
       return;
     }
@@ -644,7 +650,7 @@ function AssignTab({
       const res = await fetch("/api/usims", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agencyId, serialNumbers: serials, assignedDate }),
+        body: JSON.stringify({ agencyId: resolvedAgencyId, serialNumbers: serials, assignedDate }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -666,22 +672,21 @@ function AssignTab({
         <CardTitle className="text-base">유심 일괄 배정</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* 대분류 → 중분류 → 업체 캐스케이드 */}
+        {/* 대분류 → 중분류 캐스케이드 */}
         <div className="flex flex-wrap gap-3 items-end">
           <CategoryCascadeFilter
             categories={categories}
             agencies={agencies}
             selectedMajor={selectedMajor}
             selectedMedium={selectedMedium}
-            selectedAgency={agencyId}
+            selectedAgency=""
             onMajorChange={setSelectedMajor}
             onMediumChange={setSelectedMedium}
-            onAgencyChange={setAgencyId}
+            onAgencyChange={() => {}}
             showAllOption={false}
             majorLabel="대분류 *"
             mediumLabel="중분류 *"
-            agencyLabel="배정 업체 *"
-            showAgency={true}
+            showAgency={false}
           />
 
           {/* 배정일 */}
@@ -972,7 +977,7 @@ function CancelledTab({
 }
 
 // ═══════════════════════════════════════════
-// Tab 3: 유심 이송
+// Tab 4: 유심 이송
 // ═══════════════════════════════════════════
 function TransferTab({
   agencies,
@@ -983,41 +988,58 @@ function TransferTab({
   categories: CategoryNode[];
   onTransferred: () => void;
 }) {
-  // Source agency selection
+  // Source category selection
   const [srcMajor, setSrcMajor] = useState("");
   const [srcMedium, setSrcMedium] = useState("");
-  const [srcAgency, setSrcAgency] = useState("");
 
-  // Destination agency selection
+  // Destination category selection
   const [dstMajor, setDstMajor] = useState("");
   const [dstMedium, setDstMedium] = useState("");
-  const [dstAgency, setDstAgency] = useState("");
 
   // Transfer details
   const [transferCount, setTransferCount] = useState<number>(0);
   const [transferNotes, setTransferNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const srcAgencyName = useMemo(
-    () => agencies.find((a) => a.id === srcAgency)?.name || "",
-    [agencies, srcAgency]
-  );
-  const dstAgencyName = useMemo(
-    () => agencies.find((a) => a.id === dstAgency)?.name || "",
-    [agencies, dstAgency]
-  );
+  // Auto-resolve: 중분류 → 해당 카테고리 소속 전체 업체 IDs
+  const srcAgencyIds = useMemo(() => {
+    if (!srcMedium) return [];
+    return agencies.filter(a => a.mediumCategory === srcMedium).map(a => a.id);
+  }, [srcMedium, agencies]);
+
+  const dstAgencyIds = useMemo(() => {
+    if (!dstMedium) return [];
+    return agencies.filter(a => a.mediumCategory === dstMedium).map(a => a.id);
+  }, [dstMedium, agencies]);
+
+  // Category names for display
+  const srcCategoryName = useMemo(() => {
+    for (const cat of categories) {
+      const medium = (cat.children || []).find(c => c.id === srcMedium);
+      if (medium) return medium.name;
+    }
+    return "";
+  }, [srcMedium, categories]);
+
+  const dstCategoryName = useMemo(() => {
+    for (const cat of categories) {
+      const medium = (cat.children || []).find(c => c.id === dstMedium);
+      if (medium) return medium.name;
+    }
+    return "";
+  }, [dstMedium, categories]);
 
   const handleTransfer = async () => {
-    if (!srcAgency) {
-      toast.error("보내는 업체를 선택해 주세요.");
+    if (srcAgencyIds.length === 0) {
+      toast.error("보내는 분류를 선택해 주세요.");
       return;
     }
-    if (!dstAgency) {
-      toast.error("받는 업체를 선택해 주세요.");
+    if (dstAgencyIds.length === 0) {
+      toast.error("받는 분류를 선택해 주세요.");
       return;
     }
-    if (srcAgency === dstAgency) {
-      toast.error("보내는 업체와 받는 업체가 동일합니다.");
+    if (srcMedium === dstMedium) {
+      toast.error("보내는 분류와 받는 분류가 동일합니다.");
       return;
     }
     if (!transferCount || transferCount <= 0) {
@@ -1031,8 +1053,8 @@ function TransferTab({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sourceAgencyId: srcAgency,
-          targetAgencyId: dstAgency,
+          sourceAgencyIds: srcAgencyIds,
+          targetAgencyIds: dstAgencyIds,
           count: transferCount,
           notes: transferNotes || undefined,
         }),
@@ -1040,7 +1062,6 @@ function TransferTab({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       toast.success(data.message);
-      // Reset form
       setTransferCount(0);
       setTransferNotes("");
       onTransferred();
@@ -1071,20 +1092,19 @@ function TransferTab({
                 agencies={agencies}
                 selectedMajor={srcMajor}
                 selectedMedium={srcMedium}
-                selectedAgency={srcAgency}
+                selectedAgency=""
                 onMajorChange={setSrcMajor}
                 onMediumChange={setSrcMedium}
-                onAgencyChange={setSrcAgency}
+                onAgencyChange={() => {}}
                 showAllOption={false}
                 majorLabel="대분류 *"
                 mediumLabel="중분류 *"
-                agencyLabel="보내는 업체 *"
-                showAgency={true}
+                showAgency={false}
               />
             </div>
-            {srcAgencyName && (
+            {srcCategoryName && (
               <p className="text-sm text-gray-600">
-                선택: <span className="font-semibold">{srcAgencyName}</span>
+                선택: <span className="font-semibold">{srcCategoryName}</span>
               </p>
             )}
           </div>
@@ -1112,20 +1132,19 @@ function TransferTab({
                 agencies={agencies}
                 selectedMajor={dstMajor}
                 selectedMedium={dstMedium}
-                selectedAgency={dstAgency}
+                selectedAgency=""
                 onMajorChange={setDstMajor}
                 onMediumChange={setDstMedium}
-                onAgencyChange={setDstAgency}
+                onAgencyChange={() => {}}
                 showAllOption={false}
                 majorLabel="대분류 *"
                 mediumLabel="중분류 *"
-                agencyLabel="받는 업체 *"
-                showAgency={true}
+                showAgency={false}
               />
             </div>
-            {dstAgencyName && (
+            {dstCategoryName && (
               <p className="text-sm text-gray-600">
-                선택: <span className="font-semibold">{dstAgencyName}</span>
+                선택: <span className="font-semibold">{dstCategoryName}</span>
               </p>
             )}
           </div>
@@ -1160,21 +1179,21 @@ function TransferTab({
           {/* Summary and button */}
           <div className="flex items-center justify-between">
             <div className="text-sm text-gray-500">
-              {srcAgencyName && dstAgencyName && transferCount > 0 ? (
+              {srcCategoryName && dstCategoryName && transferCount > 0 ? (
                 <span>
-                  <span className="font-semibold text-gray-900">{srcAgencyName}</span>
+                  <span className="font-semibold text-gray-900">{srcCategoryName}</span>
                   {" -> "}
-                  <span className="font-semibold text-gray-900">{dstAgencyName}</span>
+                  <span className="font-semibold text-gray-900">{dstCategoryName}</span>
                   {" "}
                   <span className="font-semibold text-blue-600">{transferCount}건</span> 이송 예정
                 </span>
               ) : (
-                <span>업체와 수량을 선택해 주세요.</span>
+                <span>분류와 수량을 선택해 주세요.</span>
               )}
             </div>
             <Button
               onClick={handleTransfer}
-              disabled={submitting || !srcAgency || !dstAgency || transferCount <= 0}
+              disabled={submitting || srcAgencyIds.length === 0 || dstAgencyIds.length === 0 || transferCount <= 0}
             >
               {submitting ? (
                 <>

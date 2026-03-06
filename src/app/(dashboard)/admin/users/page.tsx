@@ -205,7 +205,7 @@ export default function UsersPage() {
                       ? "전체"
                       : u.allowedMajorCategory
                       ? `${u.allowedMajorCategory}${u.allowedMediumCategories?.length ? ` (${u.allowedMediumCategories.join(", ")})` : ""}`
-                      : u.allowedAgencies?.join(", ") || "-"}
+                      : "-"}
                   </TableCell>
                   <TableCell>
                     {user?.role === "ADMIN" && (
