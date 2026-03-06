@@ -146,6 +146,29 @@ interface DashboardData {
     monthlyCount: number;
     alertCount: number;
   };
+  monthlyCompleted: {
+    totalCount: number;
+    byAgency: Array<{ agencyId: string; agencyName: string; count: number }>;
+  };
+  todayCompleted: Array<{
+    id: string;
+    agencyId: string;
+    agencyName: string;
+    customerName: string;
+    newPhoneNumber: string | null;
+    activationDate: string | null;
+  }>;
+  nameChangeIncomplete: Array<{
+    id: string;
+    agencyId: string;
+    agencyName: string;
+    customerName: string;
+    newPhoneNumber: string | null;
+    nameChangeDocsReview: string | null;
+    arcReview: string | null;
+    autopayReview: string | null;
+  }>;
+  todayTermination: { count: number };
 }
 
 export default function DashboardPage() {
@@ -227,6 +250,10 @@ export default function DashboardPage() {
         supplementStats={data.supplementStats || []}
         supplementList={data.supplementList || []}
         terminationStats={data.terminationStats || { monthlyCount: 0, alertCount: 0 }}
+        monthlyCompleted={data.monthlyCompleted || { totalCount: 0, byAgency: [] }}
+        todayCompleted={data.todayCompleted || []}
+        nameChangeIncomplete={data.nameChangeIncomplete || []}
+        todayTermination={data.todayTermination || { count: 0 }}
         categories={categories}
         agencies={agencies}
       />

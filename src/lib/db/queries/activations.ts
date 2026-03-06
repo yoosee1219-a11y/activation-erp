@@ -702,3 +702,100 @@ export async function getTerminationStats(filters?: {
     alertCount: Number(alertResult[0]?.count || 0),
   };
 }
+
+// ── KPI 카드: 당월 개통완료 (거래처별 breakdown 포함) ──
+export async function getMonthlyCompletedStats(agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`AND a.agency_id IN (${inList(agencyIds)})`
+    : sql``;
+
+  const result = await db.execute(sql`
+    SELECT
+      COUNT(*) as "totalCount",
+      json_agg(json_build_object('agencyId', sub.agency_id, 'agencyName', sub.agency_name, 'count', sub.cnt)) as "byAgency"
+    FROM (
+      SELECT a.agency_id, COALESCE(ag.name, a.agency_id) as agency_name, COUNT(*) as cnt
+      FROM activations a
+      LEFT JOIN agencies ag ON a.agency_id = ag.id
+      WHERE a.work_status = '개통완료'
+        AND TO_CHAR(COALESCE(a.activation_date, a.entry_date, a.created_at::date), 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
+        ${agencyFilter}
+      GROUP BY a.agency_id, ag.name
+    ) sub
+  `);
+  const row = result.rows[0] || { totalCount: 0, byAgency: [] };
+  return {
+    totalCount: Number(row.totalCount || 0),
+    byAgency: row.byAgency || [],
+  };
+}
+
+// ── KPI 카드: 당일 개통완료 상세 ──
+export async function getTodayCompletedStats(agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`AND a.agency_id IN (${inList(agencyIds)})`
+    : sql``;
+
+  const result = await db.execute(sql`
+    SELECT
+      a.id,
+      a.agency_id as "agencyId",
+      COALESCE(ag.name, a.agency_id) as "agencyName",
+      a.customer_name as "customerName",
+      a.new_phone_number as "newPhoneNumber",
+      a.activation_date as "activationDate"
+    FROM activations a
+    LEFT JOIN agencies ag ON a.agency_id = ag.id
+    WHERE a.work_status = '개통완료'
+      AND a.updated_at::date = CURRENT_DATE
+      ${agencyFilter}
+    ORDER BY a.updated_at DESC
+  `);
+  return result.rows;
+}
+
+// ── KPI 카드: 명의변경 미보완 상세 ──
+export async function getNameChangeIncomplete(agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`AND a.agency_id IN (${inList(agencyIds)})`
+    : sql``;
+
+  const result = await db.execute(sql`
+    SELECT
+      a.id,
+      a.agency_id as "agencyId",
+      COALESCE(ag.name, a.agency_id) as "agencyName",
+      a.customer_name as "customerName",
+      a.new_phone_number as "newPhoneNumber",
+      a.name_change_docs_review as "nameChangeDocsReview",
+      a.arc_review as "arcReview",
+      a.autopay_review as "autopayReview"
+    FROM activations a
+    LEFT JOIN agencies ag ON a.agency_id = ag.id
+    WHERE a.work_status = '개통완료'
+      AND (COALESCE(a.name_change_docs_review, '') != '완료'
+           OR COALESCE(a.arc_review, '') != '완료'
+           OR COALESCE(a.autopay_review, '') != '완료')
+      ${agencyFilter}
+    ORDER BY a.created_at DESC
+  `);
+  return result.rows;
+}
+
+// ── KPI 카드: 당일 해지 건수 ──
+export async function getTodayTerminationCount(agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`AND agency_id IN (${inList(agencyIds)})`
+    : sql``;
+
+  const result = await db.execute(sql`
+    SELECT COUNT(*) as "count"
+    FROM activations
+    WHERE work_status = '해지'
+      AND termination_date = TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD')
+      ${agencyFilter}
+  `);
+  return {
+    count: Number(result.rows[0]?.count || 0),
+  };
+}
