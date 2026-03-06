@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useDashboard } from "../../layout";
 import { AgencyForm } from "@/components/admin/agency-form";
 import { Button } from "@/components/ui/button";
@@ -50,46 +50,6 @@ export default function AgenciesPage() {
     });
   }, []);
 
-  // Build a lookup: mediumCategoryId -> Agency[]
-  const agenciesByMedium = useMemo(() => {
-    const map: Record<string, Agency[]> = {};
-    for (const agency of agencies) {
-      const key = agency.mediumCategory || "__uncategorized__";
-      if (!map[key]) map[key] = [];
-      map[key].push(agency);
-    }
-    // Sort each group alphabetically
-    for (const key of Object.keys(map)) {
-      map[key].sort((a, b) => a.name.localeCompare(b.name, "ko"));
-    }
-    return map;
-  }, [agencies]);
-
-  // Count agencies per major category (sum of all medium children)
-  const agencyCountByMajor = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const major of categories) {
-      let count = 0;
-      for (const medium of major.children || []) {
-        count += (agenciesByMedium[medium.id] || []).length;
-      }
-      counts[major.id] = count;
-    }
-    return counts;
-  }, [categories, agenciesByMedium]);
-
-  // Agencies without a matching category
-  const uncategorizedAgencies = useMemo(() => {
-    const allMediumIds = new Set<string>();
-    for (const major of categories) {
-      for (const medium of major.children || []) {
-        allMediumIds.add(medium.id);
-      }
-    }
-    return agencies.filter(
-      (a) => !a.mediumCategory || !allMediumIds.has(a.mediumCategory)
-    );
-  }, [agencies, categories]);
 
   const fetchAgencies = async () => {
     try {
@@ -158,7 +118,6 @@ export default function AgenciesPage() {
           <div className="divide-y">
             {categories.map((major) => {
               const isMajorExpanded = expandedMajors.has(major.id);
-              const majorCount = agencyCountByMajor[major.id] || 0;
               const mediums = major.children || [];
 
               return (
@@ -187,7 +146,7 @@ export default function AgenciesPage() {
                       {major.name}
                     </span>
                     <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
-                      {majorCount}
+                      {mediums.length}
                     </span>
                   </button>
 
@@ -195,9 +154,6 @@ export default function AgenciesPage() {
                   {isMajorExpanded && mediums.length > 0 && (
                     <div className="border-t border-gray-100 bg-gray-50/40">
                       {mediums.map((medium) => {
-                        const mediumAgencies =
-                          agenciesByMedium[medium.id] || [];
-
                         return (
                           <div
                             key={medium.id}
@@ -205,9 +161,6 @@ export default function AgenciesPage() {
                           >
                             <span className="font-semibold text-gray-700">
                               {medium.name}
-                            </span>
-                            <span className="rounded-full bg-gray-200/70 px-2 py-0.5 text-xs font-medium text-gray-500">
-                              {mediumAgencies.length}개 업체
                             </span>
                           </div>
                         );
