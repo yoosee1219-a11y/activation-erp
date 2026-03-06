@@ -704,6 +704,7 @@ export async function getTerminationStats(filters?: {
 }
 
 // ── KPI 카드: 당월 개통완료 (거래처별 breakdown 포함) ──
+// 기준: work_status가 '개통완료'(또는 레거시 '완료')이고 updated_at이 당월인 건
 export async function getMonthlyCompletedStats(agencyIds?: string[]) {
   const agencyFilter = agencyIds && agencyIds.length > 0
     ? sql`AND a.agency_id IN (${inList(agencyIds)})`
@@ -717,8 +718,8 @@ export async function getMonthlyCompletedStats(agencyIds?: string[]) {
       SELECT a.agency_id, COALESCE(ag.name, a.agency_id) as agency_name, COUNT(*) as cnt
       FROM activations a
       LEFT JOIN agencies ag ON a.agency_id = ag.id
-      WHERE a.work_status = '개통완료'
-        AND TO_CHAR(COALESCE(a.activation_date, a.entry_date, a.created_at::date), 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
+      WHERE a.work_status IN ('개통완료', '완료')
+        AND TO_CHAR(a.updated_at, 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
         ${agencyFilter}
       GROUP BY a.agency_id, ag.name
     ) sub
@@ -731,6 +732,7 @@ export async function getMonthlyCompletedStats(agencyIds?: string[]) {
 }
 
 // ── KPI 카드: 당일 개통완료 상세 ──
+// 기준: work_status가 '개통완료'이고 updated_at이 오늘인 건
 export async function getTodayCompletedStats(agencyIds?: string[]) {
   const agencyFilter = agencyIds && agencyIds.length > 0
     ? sql`AND a.agency_id IN (${inList(agencyIds)})`
@@ -746,7 +748,7 @@ export async function getTodayCompletedStats(agencyIds?: string[]) {
       a.activation_date as "activationDate"
     FROM activations a
     LEFT JOIN agencies ag ON a.agency_id = ag.id
-    WHERE a.work_status = '개통완료'
+    WHERE a.work_status IN ('개통완료', '완료')
       AND a.updated_at::date = CURRENT_DATE
       ${agencyFilter}
     ORDER BY a.updated_at DESC
@@ -755,6 +757,7 @@ export async function getTodayCompletedStats(agencyIds?: string[]) {
 }
 
 // ── KPI 카드: 명의변경 미보완 상세 ──
+// 기준: work_status가 '개통완료'이고 3개 검수 중 하나라도 '완료'가 아닌 건 (전체, 월 필터 없음)
 export async function getNameChangeIncomplete(agencyIds?: string[]) {
   const agencyFilter = agencyIds && agencyIds.length > 0
     ? sql`AND a.agency_id IN (${inList(agencyIds)})`
@@ -772,7 +775,7 @@ export async function getNameChangeIncomplete(agencyIds?: string[]) {
       a.autopay_review as "autopayReview"
     FROM activations a
     LEFT JOIN agencies ag ON a.agency_id = ag.id
-    WHERE a.work_status = '개통완료'
+    WHERE a.work_status IN ('개통완료', '완료')
       AND (COALESCE(a.name_change_docs_review, '') != '완료'
            OR COALESCE(a.arc_review, '') != '완료'
            OR COALESCE(a.autopay_review, '') != '완료')
