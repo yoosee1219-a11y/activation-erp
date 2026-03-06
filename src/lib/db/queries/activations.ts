@@ -711,8 +711,8 @@ export async function getMonthlyCompletedStats(agencyIds?: string[]) {
 
   const result = await db.execute(sql`
     SELECT
-      COUNT(*) as "totalCount",
-      json_agg(json_build_object('agencyId', sub.agency_id, 'agencyName', sub.agency_name, 'count', sub.cnt)) as "byAgency"
+      COALESCE(SUM(sub.cnt), 0) as "totalCount",
+      COALESCE(json_agg(json_build_object('agencyId', sub.agency_id, 'agencyName', sub.agency_name, 'count', sub.cnt)), '[]'::json) as "byAgency"
     FROM (
       SELECT a.agency_id, COALESCE(ag.name, a.agency_id) as agency_name, COUNT(*) as cnt
       FROM activations a
@@ -726,7 +726,7 @@ export async function getMonthlyCompletedStats(agencyIds?: string[]) {
   const row = result.rows[0] || { totalCount: 0, byAgency: [] };
   return {
     totalCount: Number(row.totalCount || 0),
-    byAgency: row.byAgency || [],
+    byAgency: Array.isArray(row.byAgency) ? row.byAgency : [],
   };
 }
 
@@ -792,7 +792,7 @@ export async function getTodayTerminationCount(agencyIds?: string[]) {
     SELECT COUNT(*) as "count"
     FROM activations
     WHERE work_status = '해지'
-      AND termination_date = TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD')
+      AND termination_date = CURRENT_DATE
       ${agencyFilter}
   `);
   return {
