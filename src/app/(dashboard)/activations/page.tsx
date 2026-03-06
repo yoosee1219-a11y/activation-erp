@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useDashboard } from "../layout";
 import { DataTable } from "@/components/activations/data-table";
 import { Filters } from "@/components/activations/filters";
+import { CascadingFilter } from "@/components/layout/cascading-filter";
 import {
   getColumns,
   type ActivationRow,
@@ -53,6 +54,8 @@ export default function ActivationsPage() {
   const [availableMonths, setAvailableMonths] = useState<MonthSummary[]>([]);
   const [viewMode, setViewMode] = useState<"list" | "grouped">(highlightId ? "list" : "grouped");
   const [selectedAgency, setSelectedAgency] = useState<string | null>(null);
+  const [localMajors, setLocalMajors] = useState<string[]>([]);
+  const [localMediums, setLocalMediums] = useState<string[]>([]);
 
   const agencyMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -90,6 +93,23 @@ export default function ActivationsPage() {
     return map;
   }, [agencies]);
 
+  // 인페이지 카테고리 필터 적용
+  const filteredData = useMemo(() => {
+    let result = data;
+    if (localMediums.length > 0) {
+      result = result.filter((row) => {
+        const mediumCat = agencyMediumMap[row.agencyId];
+        return mediumCat ? localMediums.includes(mediumCat) : false;
+      });
+    } else if (localMajors.length > 0) {
+      result = result.filter((row) => {
+        const majorCat = agencyMajorMap[row.agencyId];
+        return majorCat ? localMajors.includes(majorCat) : false;
+      });
+    }
+    return result;
+  }, [data, localMajors, localMediums, agencyMajorMap, agencyMediumMap]);
+
   // 월 요약 데이터 로드
   useEffect(() => {
     async function loadMonths() {
@@ -115,7 +135,7 @@ export default function ActivationsPage() {
     if (dateTo) params.set("dateTo", dateTo);
     if (month && month !== "all") params.set("month", month);
     params.set("page", page.toString());
-    params.set("pageSize", "200");
+    params.set("pageSize", viewMode === "grouped" ? "9999" : "200");
 
     try {
       const res = await fetch(`/api/activations?${params}`);
@@ -133,7 +153,7 @@ export default function ActivationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [getFilterParams, selectedMajors, selectedMediums, agencyMap, agencyMajorMap, agencyMediumMap, categoryNameMap, status, dateFrom, dateTo, month, page]);
+  }, [getFilterParams, selectedMajors, selectedMediums, agencyMap, agencyMajorMap, agencyMediumMap, categoryNameMap, status, dateFrom, dateTo, month, page, viewMode]);
 
   useEffect(() => {
     fetchData();
@@ -213,7 +233,7 @@ export default function ActivationsPage() {
   const twoLevelGrouped = useMemo(() => {
     // 1단계: 중분류별 그룹
     const mediumGroups: Record<string, AgencyGroup> = {};
-    data.forEach((row) => {
+    filteredData.forEach((row) => {
       const mediumCat = agencyMediumMap[row.agencyId] || "__uncategorized__";
       if (!mediumGroups[mediumCat]) {
         mediumGroups[mediumCat] = {
@@ -260,7 +280,7 @@ export default function ActivationsPage() {
       if (b[0] === "__uncategorized__") return -1;
       return a[1].categoryName.localeCompare(b[1].categoryName);
     });
-  }, [data, agencyMediumMap, categoryNameMap, agencies]);
+  }, [filteredData, agencyMediumMap, categoryNameMap, agencies]);
 
   // 카테고리 존재 여부 (카테고리가 없으면 기존 flat 그룹 뷰)
   const hasCategories = categories.length > 0;
@@ -404,6 +424,20 @@ export default function ActivationsPage() {
         availableMonths={availableMonths}
       />
 
+      {/* 인페이지 대분류/중분류 필터 */}
+      <div className="flex items-center gap-3">
+        <span className="text-sm font-medium text-gray-600">분류 필터</span>
+        <CascadingFilter
+          categories={categories}
+          selectedMajors={localMajors}
+          selectedMediums={localMediums}
+          onMajorsChange={setLocalMajors}
+          onMediumsChange={(ids) => {
+            setLocalMediums(ids);
+          }}
+        />
+      </div>
+
       {loading ? (
         <div className="flex h-64 items-center justify-center text-gray-500">
           로딩 중...
@@ -411,8 +445,8 @@ export default function ActivationsPage() {
       ) : viewMode === "list" ? (
         <DataTable
           columns={columns}
-          data={data}
-          total={total}
+          data={filteredData}
+          total={filteredData.length}
           page={page}
           pageSize={200}
           onPageChange={setPage}
