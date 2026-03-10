@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -89,6 +90,9 @@ export function NoticeForm({
           <DialogTitle>
             {isEdit ? "공지사항 수정" : "새 공지사항"}
           </DialogTitle>
+          <DialogDescription>
+            {isEdit ? "공지사항 내용을 수정합니다." : "새로운 공지사항을 작성합니다."}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

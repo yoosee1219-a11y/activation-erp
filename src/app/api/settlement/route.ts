@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { activations, agencies, usims } from "@/lib/db/schema";
-import { eq, and, gte, lt, sql, count, ne } from "drizzle-orm";
+import { eq, and, gte, lt, sql, ne } from "drizzle-orm";
 import {
   getAgencyIdsByMediumCategories,
   getAgencyIdsByMajorCategory,
@@ -14,119 +14,105 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { searchParams } = new URL(request.url);
-  const month =
-    searchParams.get("month") || new Date().toISOString().slice(0, 7);
-  const agencyId = searchParams.get("agencyId");
-  const majorCategory = searchParams.get("majorCategory");
-  const mediumCategory = searchParams.get("mediumCategory");
+  try {
+    const { searchParams } = new URL(request.url);
+    const month =
+      searchParams.get("month") || new Date().toISOString().slice(0, 7);
+    const agencyId = searchParams.get("agencyId");
+    const majorCategory = searchParams.get("majorCategory");
+    const mediumCategory = searchParams.get("mediumCategory");
 
-  const monthStart = `${month}-01`;
-  const nextMonth = new Date(monthStart);
-  nextMonth.setMonth(nextMonth.getMonth() + 1);
-  const monthEnd = nextMonth.toISOString().slice(0, 10);
+    const monthStart = `${month}-01`;
+    const nextMonth = new Date(monthStart);
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    const monthEnd = nextMonth.toISOString().slice(0, 10);
 
-  // Get all agencies (or specific one)
-  const agencyList = await db
-    .select()
-    .from(agencies)
-    .where(eq(agencies.isActive, true));
-  let targetAgencies = agencyList;
-  if (agencyId) {
-    targetAgencies = agencyList.filter((a) => a.id === agencyId);
-  } else if (mediumCategory) {
-    const agencyIds = await getAgencyIdsByMediumCategories([mediumCategory]);
-    targetAgencies = agencyList.filter((a) => agencyIds.includes(a.id));
-  } else if (majorCategory) {
-    const agencyIds = await getAgencyIdsByMajorCategory(majorCategory);
-    targetAgencies = agencyList.filter((a) => agencyIds.includes(a.id));
-  }
+    // Get all active agencies
+    const agencyList = await db
+      .select()
+      .from(agencies)
+      .where(eq(agencies.isActive, true));
 
-  const USIM_UNIT_COST = 7700;
-  const results = [];
+    let targetAgencies = agencyList;
+    if (agencyId) {
+      targetAgencies = agencyList.filter((a) => a.id === agencyId);
+    } else if (mediumCategory) {
+      const agencyIds = await getAgencyIdsByMediumCategories([mediumCategory]);
+      targetAgencies = agencyList.filter((a) => agencyIds.includes(a.id));
+    } else if (majorCategory) {
+      const agencyIds = await getAgencyIdsByMajorCategory(majorCategory);
+      targetAgencies = agencyList.filter((a) => agencyIds.includes(a.id));
+    }
 
-  for (const agency of targetAgencies) {
-    const commissionRate = agency.commissionRate || 0;
+    if (targetAgencies.length === 0) {
+      return NextResponse.json({
+        month,
+        unitCost: 7700,
+        agencies: [],
+        grandTotal: 0,
+      });
+    }
 
-    // USIM received this month (assigned)
-    const usimReceived = await db
-      .select({ count: count() })
+    const targetIds = targetAgencies.map((a) => a.id);
+
+    // 1) USIM received (assigned) counts per agency - single query
+    const usimReceivedRows = await db
+      .select({
+        agencyId: usims.agencyId,
+        cnt: sql<number>`count(*)::int`,
+      })
       .from(usims)
       .where(
         and(
-          eq(usims.agencyId, agency.id),
+          sql`${usims.agencyId} = ANY(${targetIds})`,
           gte(usims.assignedDate, monthStart),
           lt(usims.assignedDate, monthEnd)
         )
-      );
+      )
+      .groupBy(usims.agencyId);
 
-    // USIM used this month (activated)
-    const usimUsed = await db
-      .select({ count: count() })
+    // 2) USIM used (activated) counts per agency - single query
+    const usimUsedRows = await db
+      .select({
+        agencyId: usims.agencyId,
+        cnt: sql<number>`count(*)::int`,
+      })
       .from(usims)
       .where(
         and(
-          eq(usims.agencyId, agency.id),
+          sql`${usims.agencyId} = ANY(${targetIds})`,
           gte(usims.usedDate, monthStart),
           lt(usims.usedDate, monthEnd)
         )
-      );
+      )
+      .groupBy(usims.agencyId);
 
-    // Normal activations this month
-    const normalActivations = await db
-      .select({ count: count() })
+    // 3) Activation counts per agency (normal + clawback categories) - single query
+    const activationRows = await db
+      .select({
+        agencyId: activations.agencyId,
+        normalCount: sql<number>`count(*) filter (where ${activations.activationDate} >= ${monthStart} and ${activations.activationDate} < ${monthEnd} and ${activations.workStatus} != '해지')::int`,
+        supplementClawbackCount: sql<number>`count(*) filter (where ${activations.terminationReason} = '보완기한초과' and ${activations.terminationDate} >= ${monthStart} and ${activations.terminationDate} < ${monthEnd})::int`,
+        sixMonthClawbackCount: sql<number>`count(*) filter (where ${activations.terminationReason} = '6개월해지' and ${activations.terminationDate} >= ${monthStart} and ${activations.terminationDate} < ${monthEnd})::int`,
+        manualClawbackCount: sql<number>`count(*) filter (where ${activations.terminationReason} = '수동해지' and ${activations.terminationDate} >= ${monthStart} and ${activations.terminationDate} < ${monthEnd})::int`,
+      })
       .from(activations)
       .where(
         and(
-          eq(activations.agencyId, agency.id),
-          gte(activations.activationDate, monthStart),
-          lt(activations.activationDate, monthEnd),
-          ne(activations.workStatus, "해지")
+          sql`${activations.agencyId} = ANY(${targetIds})`,
+          sql`(
+            (${activations.activationDate} >= ${monthStart} AND ${activations.activationDate} < ${monthEnd})
+            OR
+            (${activations.terminationDate} >= ${monthStart} AND ${activations.terminationDate} < ${monthEnd})
+          )`
         )
-      );
+      )
+      .groupBy(activations.agencyId);
 
-    // Clawback: terminations this month (보완기한초과)
-    const clawbackSupplement = await db
-      .select({ count: count() })
-      .from(activations)
-      .where(
-        and(
-          eq(activations.agencyId, agency.id),
-          eq(activations.terminationReason, "보완기한초과"),
-          gte(activations.terminationDate, monthStart),
-          lt(activations.terminationDate, monthEnd)
-        )
-      );
-
-    // Clawback: terminations this month (6개월해지)
-    const clawback6Month = await db
-      .select({ count: count() })
-      .from(activations)
-      .where(
-        and(
-          eq(activations.agencyId, agency.id),
-          eq(activations.terminationReason, "6개월해지"),
-          gte(activations.terminationDate, monthStart),
-          lt(activations.terminationDate, monthEnd)
-        )
-      );
-
-    // Clawback: manual termination
-    const clawbackManual = await db
-      .select({ count: count() })
-      .from(activations)
-      .where(
-        and(
-          eq(activations.agencyId, agency.id),
-          eq(activations.terminationReason, "수동해지"),
-          gte(activations.terminationDate, monthStart),
-          lt(activations.terminationDate, monthEnd)
-        )
-      );
-
-    // Detail list of activations this month
+    // 4) Detail list - single query for all agencies
     const detailList = await db
       .select({
+        agencyId: activations.agencyId,
         id: activations.id,
         customerName: activations.customerName,
         activationDate: activations.activationDate,
@@ -137,7 +123,7 @@ export async function GET(request: NextRequest) {
       .from(activations)
       .where(
         and(
-          eq(activations.agencyId, agency.id),
+          sql`${activations.agencyId} = ANY(${targetIds})`,
           sql`(
             (${activations.activationDate} >= ${monthStart} AND ${activations.activationDate} < ${monthEnd})
             OR
@@ -146,55 +132,80 @@ export async function GET(request: NextRequest) {
         )
       );
 
-    const receivedCount = Number(usimReceived[0]?.count || 0);
-    const usedCount = Number(usimUsed[0]?.count || 0);
-    const normalCount = Number(normalActivations[0]?.count || 0);
-    const supplementClawbackCount = Number(clawbackSupplement[0]?.count || 0);
-    const sixMonthClawbackCount = Number(clawback6Month[0]?.count || 0);
-    const manualClawbackCount = Number(clawbackManual[0]?.count || 0);
+    // Build lookup maps
+    const usimReceivedMap = new Map(usimReceivedRows.map((r) => [r.agencyId, r.cnt]));
+    const usimUsedMap = new Map(usimUsedRows.map((r) => [r.agencyId, r.cnt]));
+    const activationMap = new Map(activationRows.map((r) => [r.agencyId, r]));
+    const detailMap = new Map<string, typeof detailList>();
+    for (const d of detailList) {
+      if (!d.agencyId) continue;
+      if (!detailMap.has(d.agencyId)) detailMap.set(d.agencyId, []);
+      detailMap.get(d.agencyId)!.push(d);
+    }
 
-    const usimCost = receivedCount * -USIM_UNIT_COST;
-    const usimRevenue = usedCount * USIM_UNIT_COST;
-    const usimSubtotal = usimCost + usimRevenue;
+    const USIM_UNIT_COST = 7700;
+    const results = [];
 
-    const commissionRevenue = normalCount * commissionRate;
-    const supplementClawback = supplementClawbackCount * -commissionRate;
-    const sixMonthClawback = sixMonthClawbackCount * -commissionRate;
-    const manualClawback = manualClawbackCount * -commissionRate;
-    const commissionSubtotal =
-      commissionRevenue + supplementClawback + sixMonthClawback + manualClawback;
+    for (const agency of targetAgencies) {
+      const commissionRate = agency.commissionRate || 0;
+      const receivedCount = usimReceivedMap.get(agency.id) || 0;
+      const usedCount = usimUsedMap.get(agency.id) || 0;
 
-    results.push({
-      agencyId: agency.id,
-      agencyName: agency.name,
-      commissionRate,
-      usim: {
-        received: receivedCount,
-        used: usedCount,
-        cost: usimCost,
-        revenue: usimRevenue,
-        subtotal: usimSubtotal,
-      },
-      commission: {
-        normalCount,
-        normalAmount: commissionRevenue,
-        supplementClawbackCount,
-        supplementClawback,
-        sixMonthClawbackCount,
-        sixMonthClawback,
-        manualClawbackCount,
-        manualClawback,
-        subtotal: commissionSubtotal,
-      },
-      total: usimSubtotal + commissionSubtotal,
-      details: detailList,
+      const actRow = activationMap.get(agency.id);
+      const normalCount = actRow?.normalCount || 0;
+      const supplementClawbackCount = actRow?.supplementClawbackCount || 0;
+      const sixMonthClawbackCount = actRow?.sixMonthClawbackCount || 0;
+      const manualClawbackCount = actRow?.manualClawbackCount || 0;
+
+      const usimCost = receivedCount * -USIM_UNIT_COST;
+      const usimRevenue = usedCount * USIM_UNIT_COST;
+      const usimSubtotal = usimCost + usimRevenue;
+
+      const commissionRevenue = normalCount * commissionRate;
+      const supplementClawback = supplementClawbackCount * -commissionRate;
+      const sixMonthClawback = sixMonthClawbackCount * -commissionRate;
+      const manualClawback = manualClawbackCount * -commissionRate;
+      const commissionSubtotal =
+        commissionRevenue + supplementClawback + sixMonthClawback + manualClawback;
+
+      results.push({
+        agencyId: agency.id,
+        agencyName: agency.name,
+        commissionRate,
+        usim: {
+          received: receivedCount,
+          used: usedCount,
+          cost: usimCost,
+          revenue: usimRevenue,
+          subtotal: usimSubtotal,
+        },
+        commission: {
+          normalCount,
+          normalAmount: commissionRevenue,
+          supplementClawbackCount,
+          supplementClawback,
+          sixMonthClawbackCount,
+          sixMonthClawback,
+          manualClawbackCount,
+          manualClawback,
+          subtotal: commissionSubtotal,
+        },
+        total: usimSubtotal + commissionSubtotal,
+        details: detailMap.get(agency.id) || [],
+      });
+    }
+
+    return NextResponse.json({
+      month,
+      unitCost: USIM_UNIT_COST,
+      agencies: results,
+      grandTotal: results.reduce((sum, r) => sum + r.total, 0),
     });
+  } catch (error) {
+    console.error("GET /api/settlement error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
-
-  return NextResponse.json({
-    month,
-    unitCost: USIM_UNIT_COST,
-    agencies: results,
-    grandTotal: results.reduce((sum, r) => sum + r.total, 0),
-  });
 }
