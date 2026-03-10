@@ -567,9 +567,7 @@ export default function ActivationsPage() {
               <DataTable
                 columns={columns}
                 data={group.rows}
-                total={group.rows.length}
-                page={1}
-                pageSize={999}
+                pageSize={20}
                 searchPlaceholder="고객명으로 검색..."
                 highlightId={highlightId}
                 getRowId={(row: ActivationRow) => row.id}
