@@ -203,7 +203,19 @@ export const usimLogs = pgTable("usim_logs", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
-// 6. activation_status_config (상태값 설정)
+// 6. notices (공지사항)
+export const notices = pgTable("notices", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  isImportant: boolean("is_important").default(false),
+  createdBy: text("created_by").notNull(),
+  createdByName: text("created_by_name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+// 7. activation_status_config (상태값 설정)
 export const activationStatusConfig = pgTable("activation_status_config", {
   id: serial("id").primaryKey(),
   statusKey: text("status_key").unique().notNull(),

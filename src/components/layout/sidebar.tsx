@@ -13,6 +13,7 @@ import {
   FileSpreadsheet,
   CardSim,
   Calculator,
+  Megaphone,
 } from "lucide-react";
 import { signOut } from "@/lib/auth/client";
 import { useRouter } from "next/navigation";
@@ -55,6 +56,11 @@ const adminNavItems = [
     label: "거래처 관리",
     href: "/admin/agencies",
     icon: Building2,
+  },
+  {
+    label: "공지사항",
+    href: "/admin/notices",
+    icon: Megaphone,
   },
   {
     label: "설정",
