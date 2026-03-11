@@ -24,6 +24,7 @@ export async function POST(request: NextRequest) {
       targetAgencyIds: rawTargetAgencyIds,
       count,
       notes,
+      usimIds: rawUsimIds,
     } = body;
 
     // Support both single ID and array of IDs
@@ -75,31 +76,57 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find ASSIGNED USIMs from ALL source agencies, ordered by assignedDate ASC
-    const availableUsims = await db
-      .select({ id: usims.id, usimSerialNumber: usims.usimSerialNumber })
-      .from(usims)
-      .where(
-        and(
-          inArray(usims.agencyId, sourceIds),
-          eq(usims.status, "ASSIGNED")
-        )
-      )
-      .orderBy(asc(usims.assignedDate), asc(usims.createdAt))
-      .limit(count);
+    // 유심 선택: usimIds가 제공되면 특정 유심, 아니면 배정일 오래된 순으로 count개
+    let selectedUsims: { id: string; usimSerialNumber: string }[];
 
-    if (availableUsims.length < count) {
-      return NextResponse.json(
-        {
-          error: `출발 그룹의 배정 가능 유심이 부족합니다. (요청: ${count}건, 가용: ${availableUsims.length}건)`,
-        },
-        { status: 400 }
-      );
+    if (rawUsimIds && Array.isArray(rawUsimIds) && rawUsimIds.length > 0) {
+      // 특정 유심 ID 지정 모드
+      selectedUsims = await db
+        .select({ id: usims.id, usimSerialNumber: usims.usimSerialNumber })
+        .from(usims)
+        .where(
+          and(
+            inArray(usims.id, rawUsimIds),
+            inArray(usims.agencyId, sourceIds),
+            eq(usims.status, "ASSIGNED")
+          )
+        );
+
+      if (selectedUsims.length !== rawUsimIds.length) {
+        return NextResponse.json(
+          {
+            error: `선택한 유심 중 일부가 유효하지 않습니다. (요청: ${rawUsimIds.length}건, 유효: ${selectedUsims.length}건)`,
+          },
+          { status: 400 }
+        );
+      }
+    } else {
+      // 수량 기반 선택 모드 (배정일 오래된 순)
+      selectedUsims = await db
+        .select({ id: usims.id, usimSerialNumber: usims.usimSerialNumber })
+        .from(usims)
+        .where(
+          and(
+            inArray(usims.agencyId, sourceIds),
+            eq(usims.status, "ASSIGNED")
+          )
+        )
+        .orderBy(asc(usims.assignedDate), asc(usims.createdAt))
+        .limit(count);
+
+      if (selectedUsims.length < count) {
+        return NextResponse.json(
+          {
+            error: `출발 그룹의 배정 가능 유심이 부족합니다. (요청: ${count}건, 가용: ${selectedUsims.length}건)`,
+          },
+          { status: 400 }
+        );
+      }
     }
 
     // Assign USIMs to the first target agency
     const primaryTargetId = targetIds[0];
-    const usimIdList = availableUsims.map((u) => u.id);
+    const usimIdList = selectedUsims.map((u) => u.id);
     let updatedCount = 0;
 
     for (const usimId of usimIdList) {

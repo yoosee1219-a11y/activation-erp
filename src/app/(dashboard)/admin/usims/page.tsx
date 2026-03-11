@@ -1015,6 +1015,10 @@ function TransferTab({
   const [srcUsimsOpen, setSrcUsimsOpen] = useState(false);
   const [dstUsimsOpen, setDstUsimsOpen] = useState(false);
 
+  // 체크박스 선택 상태
+  const [srcSelectedIds, setSrcSelectedIds] = useState<Set<string>>(new Set());
+  const [dstSelectedIds, setDstSelectedIds] = useState<Set<string>>(new Set());
+
   // Auto-resolve: 중분류 → 해당 카테고리 소속 전체 업체 IDs
   const srcAgencyIds = useMemo(() => {
     if (!srcMedium) return [];
@@ -1089,6 +1093,7 @@ function TransferTab({
 
   // 출발 업체 배정 유심 번호 목록 조회
   useEffect(() => {
+    setSrcSelectedIds(new Set());
     if (srcAgencyIds.length === 0) { setSrcUsims([]); setSrcUsimsOpen(false); return; }
     setSrcUsimsLoading(true);
     fetch(`/api/usims?agencyIds=${srcAgencyIds.join(",")}&status=ASSIGNED&pageSize=9999`)
@@ -1102,6 +1107,7 @@ function TransferTab({
 
   // 도착 업체 배정 유심 번호 목록 조회
   useEffect(() => {
+    setDstSelectedIds(new Set());
     if (dstAgencyIds.length === 0) { setDstUsims([]); setDstUsimsOpen(false); return; }
     setDstUsimsLoading(true);
     fetch(`/api/usims?agencyIds=${dstAgencyIds.join(",")}&status=ASSIGNED&pageSize=9999`)
@@ -1112,6 +1118,47 @@ function TransferTab({
       .catch(() => setDstUsims([]))
       .finally(() => setDstUsimsLoading(false));
   }, [dstAgencyIds]);
+
+  // 출발 유심 체크박스 선택 시 이송 수량 자동 동기화
+  useEffect(() => {
+    if (srcSelectedIds.size > 0) {
+      setTransferCount(srcSelectedIds.size);
+    }
+  }, [srcSelectedIds]);
+
+  // 체크박스 토글 헬퍼 (출발)
+  const toggleSrcId = (id: string) => {
+    setSrcSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const toggleAllSrc = () => {
+    if (srcSelectedIds.size === srcUsims.length) {
+      setSrcSelectedIds(new Set());
+    } else {
+      setSrcSelectedIds(new Set(srcUsims.map(u => u.id)));
+    }
+  };
+
+  // 체크박스 토글 헬퍼 (도착)
+  const toggleDstId = (id: string) => {
+    setDstSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const toggleAllDst = () => {
+    if (dstSelectedIds.size === dstUsims.length) {
+      setDstSelectedIds(new Set());
+    } else {
+      setDstSelectedIds(new Set(dstUsims.map(u => u.id)));
+    }
+  };
 
   const handleTransfer = async () => {
     if (srcAgencyIds.length === 0) {
@@ -1141,6 +1188,7 @@ function TransferTab({
           targetAgencyIds: dstAgencyIds,
           count: transferCount,
           notes: transferNotes || undefined,
+          ...(srcSelectedIds.size > 0 ? { usimIds: Array.from(srcSelectedIds) } : {}),
         }),
       });
       const data = await res.json();
@@ -1148,6 +1196,8 @@ function TransferTab({
       toast.success(data.message);
       setTransferCount(0);
       setTransferNotes("");
+      setSrcSelectedIds(new Set());
+      setDstSelectedIds(new Set());
       // 재고 새로고침
       setSrcStock(null);
       setDstStock(null);
@@ -1264,6 +1314,9 @@ function TransferTab({
                 >
                   <span className="font-medium text-red-700">
                     📋 배정 번호 목록 ({srcUsims.length}건)
+                    {srcSelectedIds.size > 0 && (
+                      <span className="ml-1.5 text-red-500 font-bold">· 선택: {srcSelectedIds.size}건</span>
+                    )}
                   </span>
                   {srcUsimsOpen ? (
                     <ChevronDown className="h-3.5 w-3.5 text-red-500" />
@@ -1276,15 +1329,35 @@ function TransferTab({
                     <table className="w-full text-xs">
                       <thead className="bg-red-50/80 sticky top-0">
                         <tr>
-                          <th className="text-left px-3 py-1.5 font-medium text-red-700">No.</th>
+                          <th className="px-2 py-1.5 w-8 text-center">
+                            <input
+                              type="checkbox"
+                              className="rounded border-red-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                              checked={srcSelectedIds.size === srcUsims.length && srcUsims.length > 0}
+                              onChange={toggleAllSrc}
+                            />
+                          </th>
+                          <th className="text-left px-2 py-1.5 font-medium text-red-700">No.</th>
                           <th className="text-left px-3 py-1.5 font-medium text-red-700">유심 번호</th>
                           <th className="text-left px-3 py-1.5 font-medium text-red-700">배정일</th>
                         </tr>
                       </thead>
                       <tbody>
                         {srcUsims.map((u, idx) => (
-                          <tr key={u.id} className={idx % 2 === 0 ? "bg-white" : "bg-red-50/30"}>
-                            <td className="px-3 py-1 text-gray-400">{idx + 1}</td>
+                          <tr
+                            key={u.id}
+                            className={`${idx % 2 === 0 ? "bg-white" : "bg-red-50/30"} ${srcSelectedIds.has(u.id) ? "!bg-red-100" : ""} cursor-pointer hover:bg-red-50`}
+                            onClick={() => toggleSrcId(u.id)}
+                          >
+                            <td className="px-2 py-1 w-8 text-center" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                className="rounded border-red-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                                checked={srcSelectedIds.has(u.id)}
+                                onChange={() => toggleSrcId(u.id)}
+                              />
+                            </td>
+                            <td className="px-2 py-1 text-gray-400">{idx + 1}</td>
                             <td className="px-3 py-1 font-mono text-gray-800">{u.usimSerialNumber}</td>
                             <td className="px-3 py-1 text-gray-500">{u.assignedDate}</td>
                           </tr>
@@ -1371,6 +1444,9 @@ function TransferTab({
                 >
                   <span className="font-medium text-blue-700">
                     📋 배정 번호 목록 ({dstUsims.length}건)
+                    {dstSelectedIds.size > 0 && (
+                      <span className="ml-1.5 text-blue-500 font-bold">· 선택: {dstSelectedIds.size}건</span>
+                    )}
                   </span>
                   {dstUsimsOpen ? (
                     <ChevronDown className="h-3.5 w-3.5 text-blue-500" />
@@ -1383,15 +1459,35 @@ function TransferTab({
                     <table className="w-full text-xs">
                       <thead className="bg-blue-50/80 sticky top-0">
                         <tr>
-                          <th className="text-left px-3 py-1.5 font-medium text-blue-700">No.</th>
+                          <th className="px-2 py-1.5 w-8 text-center">
+                            <input
+                              type="checkbox"
+                              className="rounded border-blue-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                              checked={dstSelectedIds.size === dstUsims.length && dstUsims.length > 0}
+                              onChange={toggleAllDst}
+                            />
+                          </th>
+                          <th className="text-left px-2 py-1.5 font-medium text-blue-700">No.</th>
                           <th className="text-left px-3 py-1.5 font-medium text-blue-700">유심 번호</th>
                           <th className="text-left px-3 py-1.5 font-medium text-blue-700">배정일</th>
                         </tr>
                       </thead>
                       <tbody>
                         {dstUsims.map((u, idx) => (
-                          <tr key={u.id} className={idx % 2 === 0 ? "bg-white" : "bg-blue-50/30"}>
-                            <td className="px-3 py-1 text-gray-400">{idx + 1}</td>
+                          <tr
+                            key={u.id}
+                            className={`${idx % 2 === 0 ? "bg-white" : "bg-blue-50/30"} ${dstSelectedIds.has(u.id) ? "!bg-blue-100" : ""} cursor-pointer hover:bg-blue-50`}
+                            onClick={() => toggleDstId(u.id)}
+                          >
+                            <td className="px-2 py-1 w-8 text-center" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                className="rounded border-blue-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                checked={dstSelectedIds.has(u.id)}
+                                onChange={() => toggleDstId(u.id)}
+                              />
+                            </td>
+                            <td className="px-2 py-1 text-gray-400">{idx + 1}</td>
                             <td className="px-3 py-1 font-mono text-gray-800">{u.usimSerialNumber}</td>
                             <td className="px-3 py-1 text-gray-500">{u.assignedDate}</td>
                           </tr>
@@ -1421,10 +1517,18 @@ function TransferTab({
                 placeholder="이송할 유심 수량"
                 value={transferCount || ""}
                 onChange={(e) => setTransferCount(parseInt(e.target.value) || 0)}
+                disabled={srcSelectedIds.size > 0}
+                className={srcSelectedIds.size > 0 ? "bg-blue-50 border-blue-200" : ""}
               />
-              <p className="text-xs text-gray-400">
-                출발 업체의 배정(ASSIGNED) 상태 유심 중 배정일이 오래된 순으로 이송됩니다.
-              </p>
+              {srcSelectedIds.size > 0 ? (
+                <p className="text-xs text-blue-600 font-medium">
+                  ✓ 선택한 유심 {srcSelectedIds.size}건이 이송됩니다. (수량 자동 설정)
+                </p>
+              ) : (
+                <p className="text-xs text-gray-400">
+                  출발 업체의 배정(ASSIGNED) 상태 유심 중 배정일이 오래된 순으로 이송됩니다.
+                </p>
+              )}
               {srcStock && transferCount > srcStock.currentStock && (
                 <p className="text-xs text-red-600 font-medium">
                   ⚠️ 이송 가능 재고({srcStock.currentStock}개)보다 많습니다.
