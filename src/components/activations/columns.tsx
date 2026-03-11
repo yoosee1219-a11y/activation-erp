@@ -169,7 +169,37 @@ export function getColumns(options: {
         <span className="font-medium">{row.getValue("customerName")}</span>
       ),
     },
-    // 진행상황 - 고객명 바로 뒤 배치
+    // 담당자 - 고객명 바로 뒤 배치
+    {
+      accessorKey: "personInCharge",
+      header: "담당자",
+      cell: ({ row }) => {
+        const current = row.getValue("personInCharge") as string;
+        if (!onInlineUpdate || staffList.length === 0) {
+          return current || "-";
+        }
+        return (
+          <Select
+            value={current || ""}
+            onValueChange={(v) =>
+              onInlineUpdate(row.original.id, "personInCharge", v)
+            }
+          >
+            <SelectTrigger className="h-7 w-[100px] text-xs border-dashed">
+              <SelectValue placeholder="배정" />
+            </SelectTrigger>
+            <SelectContent>
+              {staffList.map((name) => (
+                <SelectItem key={name} value={name}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        );
+      },
+    },
+    // 진행상황 - 담당자 바로 뒤 배치
     {
       accessorKey: "workStatus",
       header: "진행상황",
@@ -448,35 +478,20 @@ export function getColumns(options: {
       header: "개통일자",
       cell: ({ row }) => {
         const date = row.getValue("activationDate") as string;
-        return date ? format(new Date(date), "yyyy-MM-dd") : "-";
-      },
-    },
-    {
-      accessorKey: "personInCharge",
-      header: "담당자",
-      cell: ({ row }) => {
-        const current = row.getValue("personInCharge") as string;
-        if (!onInlineUpdate || staffList.length === 0) {
-          return current || "-";
+        if (!onInlineUpdate) {
+          return date ? format(new Date(date), "yyyy-MM-dd") : "-";
         }
         return (
-          <Select
-            value={current || ""}
-            onValueChange={(v) =>
-              onInlineUpdate(row.original.id, "personInCharge", v)
-            }
-          >
-            <SelectTrigger className="h-7 w-[100px] text-xs border-dashed">
-              <SelectValue placeholder="배정" />
-            </SelectTrigger>
-            <SelectContent>
-              {staffList.map((name) => (
-                <SelectItem key={name} value={name}>
-                  {name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <input
+            type="date"
+            className="h-7 w-[130px] rounded border border-dashed border-gray-300 bg-transparent px-2 text-xs focus:border-blue-500 focus:outline-none"
+            value={date ? new Date(date).toISOString().slice(0, 10) : ""}
+            onChange={(e) => {
+              if (e.target.value) {
+                onInlineUpdate(row.original.id, "activationDate", e.target.value);
+              }
+            }}
+          />
         );
       },
     },

@@ -11,6 +11,8 @@ import {
   SortingState,
   ColumnFiltersState,
   VisibilityState,
+  ColumnResizeMode,
+  Header,
 } from "@tanstack/react-table";
 import {
   Table,
@@ -35,7 +37,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Columns3 } from "lucide-react";
 
 interface DataTableProps<TData, TValue> {
@@ -73,6 +75,7 @@ export function DataTable<TData, TValue>({
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [globalFilter, setGlobalFilter] = useState("");
+  const [columnResizeMode] = useState<ColumnResizeMode>("onChange");
 
   // 서버사이드 페이징 여부: onPageChange가 있으면 서버, 없으면 클라이언트
   const isServerPaging = !!onPageChange;
@@ -80,6 +83,7 @@ export function DataTable<TData, TValue>({
   const table = useReactTable({
     data,
     columns,
+    columnResizeMode,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -101,6 +105,29 @@ export function DataTable<TData, TValue>({
       globalFilter,
     },
   });
+
+  // 더블클릭 자동맞춤: 헤더 + 셀 내용 중 가장 넓은 값에 맞춤
+  const tableRef = useRef<HTMLTableElement>(null);
+  const handleAutoFit = useCallback((header: Header<TData, unknown>) => {
+    if (!tableRef.current) return;
+    const colIndex = header.index;
+    const cells = tableRef.current.querySelectorAll(
+      `td:nth-child(${colIndex + 1}), th:nth-child(${colIndex + 1})`
+    );
+    let maxWidth = 50; // 최소 50px
+    cells.forEach((cell) => {
+      // 실제 콘텐츠 너비 측정
+      const el = cell as HTMLElement;
+      const contentWidth = el.scrollWidth + 16; // 패딩 여유
+      if (contentWidth > maxWidth) maxWidth = contentWidth;
+    });
+    // 최대 400px 제한
+    maxWidth = Math.min(maxWidth, 400);
+    table.setColumnSizing((old) => ({
+      ...old,
+      [header.column.id]: maxWidth,
+    }));
+  }, [table]);
 
   // 클라이언트 페이징: pageSize 변경 시 테이블 반영
   useEffect(() => {
@@ -216,26 +243,49 @@ export function DataTable<TData, TValue>({
       </div>
 
       <div className="rounded-md border bg-white overflow-x-auto">
-        <Table>
+        <Table ref={tableRef} style={{ width: table.getCenterTotalSize() }}>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
                   <TableHead
                     key={header.id}
-                    className="cursor-pointer select-none"
+                    className="relative cursor-pointer select-none group"
+                    style={{ width: header.getSize() }}
                     onClick={header.column.getToggleSortingHandler()}
                   >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                    {{
-                      asc: " ↑",
-                      desc: " ↓",
-                    }[header.column.getIsSorted() as string] ?? null}
+                    <div className="flex items-center whitespace-nowrap overflow-hidden">
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                      {{
+                        asc: " ↑",
+                        desc: " ↓",
+                      }[header.column.getIsSorted() as string] ?? null}
+                    </div>
+                    {/* 리사이즈 핸들 */}
+                    <div
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        handleAutoFit(header);
+                      }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        header.getResizeHandler()(e);
+                      }}
+                      onTouchStart={(e) => {
+                        e.stopPropagation();
+                        header.getResizeHandler()(e);
+                      }}
+                      className={`absolute right-0 top-0 h-full w-1 cursor-col-resize select-none touch-none transition-colors ${
+                        header.column.getIsResizing()
+                          ? "bg-blue-500"
+                          : "bg-transparent group-hover:bg-gray-300"
+                      }`}
+                    />
                   </TableHead>
                 ))}
               </TableRow>
@@ -257,7 +307,10 @@ export function DataTable<TData, TValue>({
                     className={`${baseClass} ${highlightClass}`.trim() || undefined}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>
+                      <TableCell
+                        key={cell.id}
+                        style={{ width: cell.column.getSize() }}
+                      >
                         {flexRender(
                           cell.column.columnDef.cell,
                           cell.getContext()
