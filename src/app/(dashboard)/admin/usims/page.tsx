@@ -1001,6 +1001,12 @@ function TransferTab({
   const [transferNotes, setTransferNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // 실시간 재고 현황
+  const [srcStock, setSrcStock] = useState<UsimAgencyStats | null>(null);
+  const [dstStock, setDstStock] = useState<UsimAgencyStats | null>(null);
+  const [srcStockLoading, setSrcStockLoading] = useState(false);
+  const [dstStockLoading, setDstStockLoading] = useState(false);
+
   // Auto-resolve: 중분류 → 해당 카테고리 소속 전체 업체 IDs
   const srcAgencyIds = useMemo(() => {
     if (!srcMedium) return [];
@@ -1028,6 +1034,50 @@ function TransferTab({
     }
     return "";
   }, [dstMedium, categories]);
+
+  // 출발 업체 재고 조회
+  useEffect(() => {
+    if (srcAgencyIds.length === 0) { setSrcStock(null); return; }
+    setSrcStockLoading(true);
+    fetch(`/api/usims/stats?agencyIds=${srcAgencyIds.join(",")}`)
+      .then(r => r.json())
+      .then(data => {
+        const stats: UsimAgencyStats[] = data.stats || [];
+        const merged: UsimAgencyStats = {
+          agencyId: "", agencyName: srcCategoryName || "",
+          totalAssigned: stats.reduce((s, v) => s + v.totalAssigned, 0),
+          currentStock: stats.reduce((s, v) => s + v.currentStock, 0),
+          used: stats.reduce((s, v) => s + v.used, 0),
+          cancelled: stats.reduce((s, v) => s + v.cancelled, 0),
+          resetReady: stats.reduce((s, v) => s + v.resetReady, 0),
+        };
+        setSrcStock(merged);
+      })
+      .catch(() => setSrcStock(null))
+      .finally(() => setSrcStockLoading(false));
+  }, [srcAgencyIds, srcCategoryName]);
+
+  // 도착 업체 재고 조회
+  useEffect(() => {
+    if (dstAgencyIds.length === 0) { setDstStock(null); return; }
+    setDstStockLoading(true);
+    fetch(`/api/usims/stats?agencyIds=${dstAgencyIds.join(",")}`)
+      .then(r => r.json())
+      .then(data => {
+        const stats: UsimAgencyStats[] = data.stats || [];
+        const merged: UsimAgencyStats = {
+          agencyId: "", agencyName: dstCategoryName || "",
+          totalAssigned: stats.reduce((s, v) => s + v.totalAssigned, 0),
+          currentStock: stats.reduce((s, v) => s + v.currentStock, 0),
+          used: stats.reduce((s, v) => s + v.used, 0),
+          cancelled: stats.reduce((s, v) => s + v.cancelled, 0),
+          resetReady: stats.reduce((s, v) => s + v.resetReady, 0),
+        };
+        setDstStock(merged);
+      })
+      .catch(() => setDstStock(null))
+      .finally(() => setDstStockLoading(false));
+  }, [dstAgencyIds, dstCategoryName]);
 
   const handleTransfer = async () => {
     if (srcAgencyIds.length === 0) {
@@ -1064,6 +1114,42 @@ function TransferTab({
       toast.success(data.message);
       setTransferCount(0);
       setTransferNotes("");
+      // 재고 새로고침
+      setSrcStock(null);
+      setDstStock(null);
+      // 약간의 딜레이 후 재고 다시 조회 (DB 반영 대기)
+      setTimeout(() => {
+        if (srcAgencyIds.length > 0) {
+          fetch(`/api/usims/stats?agencyIds=${srcAgencyIds.join(",")}`)
+            .then(r => r.json())
+            .then(d => {
+              const stats: UsimAgencyStats[] = d.stats || [];
+              setSrcStock({
+                agencyId: "", agencyName: srcCategoryName || "",
+                totalAssigned: stats.reduce((s, v) => s + v.totalAssigned, 0),
+                currentStock: stats.reduce((s, v) => s + v.currentStock, 0),
+                used: stats.reduce((s, v) => s + v.used, 0),
+                cancelled: stats.reduce((s, v) => s + v.cancelled, 0),
+                resetReady: stats.reduce((s, v) => s + v.resetReady, 0),
+              });
+            });
+        }
+        if (dstAgencyIds.length > 0) {
+          fetch(`/api/usims/stats?agencyIds=${dstAgencyIds.join(",")}`)
+            .then(r => r.json())
+            .then(d => {
+              const stats: UsimAgencyStats[] = d.stats || [];
+              setDstStock({
+                agencyId: "", agencyName: dstCategoryName || "",
+                totalAssigned: stats.reduce((s, v) => s + v.totalAssigned, 0),
+                currentStock: stats.reduce((s, v) => s + v.currentStock, 0),
+                used: stats.reduce((s, v) => s + v.used, 0),
+                cancelled: stats.reduce((s, v) => s + v.cancelled, 0),
+                resetReady: stats.reduce((s, v) => s + v.resetReady, 0),
+              });
+            });
+        }
+      }, 500);
       onTransferred();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "이송 실패");
@@ -1107,6 +1193,27 @@ function TransferTab({
                 선택: <span className="font-semibold">{srcCategoryName}</span>
               </p>
             )}
+            {/* 출발 업체 재고 현황 */}
+            {srcStockLoading && (
+              <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                <Loader2 className="h-3 w-3 animate-spin" /> 재고 조회 중...
+              </div>
+            )}
+            {srcStock && !srcStockLoading && (
+              <div className="rounded-lg bg-red-50 border border-red-100 p-3 space-y-1">
+                <p className="text-xs font-semibold text-red-700 mb-1.5">📦 현재 재고</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs">
+                  <span className="text-gray-600">이송 가능 (배정)</span>
+                  <span className="font-bold text-red-700">{srcStock.currentStock}개</span>
+                  <span className="text-gray-600">사용 완료</span>
+                  <span className="font-medium text-gray-700">{srcStock.used}개</span>
+                  <span className="text-gray-600">취소/초기화</span>
+                  <span className="font-medium text-gray-700">{srcStock.cancelled + srcStock.resetReady}개</span>
+                  <span className="text-gray-600">전체 배정</span>
+                  <span className="font-medium text-gray-700">{srcStock.totalAssigned}개</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Arrow */}
@@ -1147,6 +1254,27 @@ function TransferTab({
                 선택: <span className="font-semibold">{dstCategoryName}</span>
               </p>
             )}
+            {/* 도착 업체 재고 현황 */}
+            {dstStockLoading && (
+              <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                <Loader2 className="h-3 w-3 animate-spin" /> 재고 조회 중...
+              </div>
+            )}
+            {dstStock && !dstStockLoading && (
+              <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 space-y-1">
+                <p className="text-xs font-semibold text-blue-700 mb-1.5">📦 현재 재고</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs">
+                  <span className="text-gray-600">현재 보유 (배정)</span>
+                  <span className="font-bold text-blue-700">{dstStock.currentStock}개</span>
+                  <span className="text-gray-600">사용 완료</span>
+                  <span className="font-medium text-gray-700">{dstStock.used}개</span>
+                  <span className="text-gray-600">취소/초기화</span>
+                  <span className="font-medium text-gray-700">{dstStock.cancelled + dstStock.resetReady}개</span>
+                  <span className="text-gray-600">전체 배정</span>
+                  <span className="font-medium text-gray-700">{dstStock.totalAssigned}개</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1165,6 +1293,11 @@ function TransferTab({
               <p className="text-xs text-gray-400">
                 출발 업체의 배정(ASSIGNED) 상태 유심 중 배정일이 오래된 순으로 이송됩니다.
               </p>
+              {srcStock && transferCount > srcStock.currentStock && (
+                <p className="text-xs text-red-600 font-medium">
+                  ⚠️ 이송 가능 재고({srcStock.currentStock}개)보다 많습니다.
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>메모 (선택)</Label>
@@ -1180,13 +1313,22 @@ function TransferTab({
           <div className="flex items-center justify-between">
             <div className="text-sm text-gray-500">
               {srcCategoryName && dstCategoryName && transferCount > 0 ? (
-                <span>
-                  <span className="font-semibold text-gray-900">{srcCategoryName}</span>
-                  {" -> "}
-                  <span className="font-semibold text-gray-900">{dstCategoryName}</span>
-                  {" "}
-                  <span className="font-semibold text-blue-600">{transferCount}건</span> 이송 예정
-                </span>
+                <div className="space-y-0.5">
+                  <span>
+                    <span className="font-semibold text-gray-900">{srcCategoryName}</span>
+                    {" → "}
+                    <span className="font-semibold text-gray-900">{dstCategoryName}</span>
+                    {" "}
+                    <span className="font-semibold text-blue-600">{transferCount}건</span> 이송 예정
+                  </span>
+                  {srcStock && dstStock && (
+                    <p className="text-xs text-gray-400">
+                      이송 후 예상: {srcCategoryName} <span className="font-medium">{srcStock.currentStock - transferCount}개</span>
+                      {" / "}
+                      {dstCategoryName} <span className="font-medium">{dstStock.currentStock + transferCount}개</span>
+                    </p>
+                  )}
+                </div>
               ) : (
                 <span>분류와 수량을 선택해 주세요.</span>
               )}
