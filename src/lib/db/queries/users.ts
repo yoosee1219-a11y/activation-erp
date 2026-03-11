@@ -56,7 +56,7 @@ export function canAccessAgency(
   allowedAgencies: string[],
   agencyId: string
 ): boolean {
-  if (userRole === "ADMIN") return true;
+  if (userRole === "ADMIN" || userRole === "SUB_ADMIN") return true;
   if (allowedAgencies.includes("ALL")) return true;
   return allowedAgencies.includes(agencyId);
 }

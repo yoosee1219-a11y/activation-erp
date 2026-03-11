@@ -30,6 +30,7 @@ import {
   getAgencyIdsByMediumCategories,
 } from "@/lib/db/queries/categories";
 import { getSessionUser } from "@/lib/auth/session";
+import { resolveAllowedAgencyIds } from "@/lib/db/queries/users";
 
 export async function GET(request: NextRequest) {
   try {
@@ -53,7 +54,28 @@ export async function GET(request: NextRequest) {
     // 우선순위: agencyIds > mediumCategories > majorCategories > majorCategory > agencyId
     let agencyIds: string[] | undefined;
 
-    if (agencyIdsParam) {
+    // PARTNER/GUEST: 허용된 업체만 조회 가능하도록 제한
+    if (user.role === "PARTNER" || user.role === "GUEST") {
+      const allowedIds = await resolveAllowedAgencyIds(user);
+      if (allowedIds !== null) {
+        if (allowedIds.length === 0) {
+          return NextResponse.json({
+            stats: { total: 0, pending: 0, completed: 0, cancelled: 0 },
+            monthlyStats: [], weeklyStats: [], dailyStats: [],
+            agencyStats: [], arcStats: [], arcUrgentList: [],
+            staffStats: [], kpiTotalByAgency: [], kpiPendingDetail: [],
+            kpiAutopayDetail: [], supplementRequestStats: [],
+            supplementRequestDetail: [], pendingByPeriod: [],
+            todayPendingDetail: [], supplementStats: [],
+            supplementList: [], terminationStats: { total: 0 },
+            monthlyCompleted: [], todayCompleted: [],
+            nameChangeIncomplete: [], todayTermination: 0,
+            monthlyTerminationDetail: [], todayTerminationDetail: [],
+          });
+        }
+        agencyIds = allowedIds;
+      }
+    } else if (agencyIdsParam) {
       agencyIds = agencyIdsParam.split(",").filter(Boolean);
       if (agencyIds.length === 0) agencyIds = undefined;
     } else if (mediumCategoriesParam) {

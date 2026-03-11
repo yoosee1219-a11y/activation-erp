@@ -54,6 +54,10 @@ export async function GET(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    // GUEST는 내보내기 불가
+    if (user.role === "GUEST") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const { searchParams } = new URL(request.url);
     const agencyId = searchParams.get("agencyId");
@@ -61,7 +65,7 @@ export async function GET(request: NextRequest) {
 
     // 조건 빌드
     const conditions = [];
-    if (user.role === "PARTNER" || user.role === "GUEST") {
+    if (user.role === "PARTNER") {
       const allowedIds = await resolveAllowedAgencyIds(user);
       if (allowedIds !== null) {
         if (allowedIds.length === 0) return new Response("", { status: 200 });

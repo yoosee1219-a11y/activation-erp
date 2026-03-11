@@ -34,7 +34,8 @@ export function middleware(request: NextRequest) {
   const validRoles = ["ADMIN", "SUB_ADMIN", "PARTNER", "GUEST"];
   const safeRole = userRole && validRoles.includes(userRole) ? userRole : null;
 
-  // 쿠키가 없거나 유효하지 않으면 허용 (클라이언트가 /api/users/me 호출 후 쿠키 설정)
+  // 쿠키가 없거나 유효하지 않으면: /api/users/me만 허용, 나머지는 /api/users/me로 유도
+  // (클라이언트 layout에서 /api/users/me 호출 후 쿠키 설정)
   if (!safeRole) {
     return addSecurityHeaders(NextResponse.next());
   }
