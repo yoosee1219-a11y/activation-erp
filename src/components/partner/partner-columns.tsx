@@ -59,6 +59,7 @@ const workStatusColors: Record<string, string> = {
   개통요청: "bg-blue-100 text-blue-700",
   진행중: "bg-yellow-100 text-yellow-700",
   개통완료: "bg-green-100 text-green-700",
+  최종완료: "bg-emerald-100 text-emerald-800",
   보완요청: "bg-red-100 text-red-700",
   해지: "bg-gray-900 text-white",
 };

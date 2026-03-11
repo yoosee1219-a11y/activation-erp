@@ -32,7 +32,7 @@ import { Label } from "@/components/ui/label";
 import { SupplementPanel } from "@/components/dashboard/supplement-panel";
 import type { SupplementStat, SupplementItem } from "@/components/dashboard/supplement-panel";
 
-type WorkStatusFilter = "입력중" | "개통요청" | "진행중" | "개통완료" | "보완요청" | "해지" | null;
+type WorkStatusFilter = "입력중" | "개통요청" | "진행중" | "개통완료" | "최종완료" | "보완요청" | "해지" | null;
 
 interface UsimAgencyStats {
   agencyId: string;

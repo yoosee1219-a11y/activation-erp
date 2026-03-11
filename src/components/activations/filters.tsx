@@ -98,7 +98,9 @@ export function Filters({
             <SelectItem value="개통요청">개통요청</SelectItem>
             <SelectItem value="진행중">진행중</SelectItem>
             <SelectItem value="개통완료">개통완료</SelectItem>
+            <SelectItem value="최종완료">최종완료</SelectItem>
             <SelectItem value="보완요청">보완요청</SelectItem>
+            <SelectItem value="해지">해지</SelectItem>
           </SelectContent>
         </Select>
 

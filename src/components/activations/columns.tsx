@@ -71,6 +71,7 @@ const workStatusColors: Record<string, string> = {
   개통요청: "bg-blue-100 text-blue-700",
   진행중: "bg-yellow-100 text-yellow-700",
   개통완료: "bg-green-100 text-green-700",
+  최종완료: "bg-emerald-100 text-emerald-800",
   보완요청: "bg-red-100 text-red-700",
   해지: "bg-gray-900 text-white",
 };
@@ -167,6 +168,42 @@ export function getColumns(options: {
       cell: ({ row }) => (
         <span className="font-medium">{row.getValue("customerName")}</span>
       ),
+    },
+    // 진행상황 - 고객명 바로 뒤 배치
+    {
+      accessorKey: "workStatus",
+      header: "진행상황",
+      cell: ({ row }) => {
+        const current = (row.getValue("workStatus") as string) || "입력중";
+        if (!onInlineUpdate) {
+          return (
+            <Badge className={workStatusColors[current] || workStatusColors["입력중"]}>
+              {current}
+            </Badge>
+          );
+        }
+        return (
+          <Select
+            value={current}
+            onValueChange={(v) =>
+              onInlineUpdate(row.original.id, "workStatus", v)
+            }
+          >
+            <SelectTrigger className={`h-7 w-[100px] text-xs border-dashed ${workStatusColors[current] || ""}`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="입력중">입력중</SelectItem>
+              <SelectItem value="개통요청">개통요청</SelectItem>
+              <SelectItem value="진행중">진행중</SelectItem>
+              <SelectItem value="개통완료">개통완료</SelectItem>
+              <SelectItem value="최종완료">최종완료</SelectItem>
+              <SelectItem value="보완요청">보완요청</SelectItem>
+              <SelectItem value="해지">해지</SelectItem>
+            </SelectContent>
+          </Select>
+        );
+      },
     },
     {
       accessorKey: "newPhoneNumber",
@@ -440,55 +477,6 @@ export function getColumns(options: {
               ))}
             </SelectContent>
           </Select>
-        );
-      },
-    },
-    {
-      accessorKey: "workStatus",
-      header: "진행상황",
-      cell: ({ row }) => {
-        const current = (row.getValue("workStatus") as string) || "입력중";
-        if (!onInlineUpdate) {
-          return (
-            <Badge className={workStatusColors[current] || workStatusColors["입력중"]}>
-              {current}
-            </Badge>
-          );
-        }
-        return (
-          <Select
-            value={current}
-            onValueChange={(v) =>
-              onInlineUpdate(row.original.id, "workStatus", v)
-            }
-          >
-            <SelectTrigger className={`h-7 w-[100px] text-xs border-dashed ${workStatusColors[current] || ""}`}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="입력중">입력중</SelectItem>
-              <SelectItem value="개통요청">개통요청</SelectItem>
-              <SelectItem value="진행중">진행중</SelectItem>
-              <SelectItem value="개통완료">개통완료</SelectItem>
-              <SelectItem value="보완요청">보완요청</SelectItem>
-              <SelectItem value="해지">해지</SelectItem>
-            </SelectContent>
-          </Select>
-        );
-      },
-    },
-    {
-      accessorKey: "autopayRegistered",
-      header: "자동이체등록",
-      cell: ({ row }) => {
-        const registered = row.getValue("autopayRegistered") as boolean;
-        return (
-          <Badge
-            variant={registered ? "default" : "outline"}
-            className={registered ? "bg-green-100 text-green-800" : ""}
-          >
-            {registered ? "등록" : "미등록"}
-          </Badge>
         );
       },
     },
