@@ -1007,6 +1007,14 @@ function TransferTab({
   const [srcStockLoading, setSrcStockLoading] = useState(false);
   const [dstStockLoading, setDstStockLoading] = useState(false);
 
+  // 배정된 유심 번호 목록
+  const [srcUsims, setSrcUsims] = useState<UsimRow[]>([]);
+  const [dstUsims, setDstUsims] = useState<UsimRow[]>([]);
+  const [srcUsimsLoading, setSrcUsimsLoading] = useState(false);
+  const [dstUsimsLoading, setDstUsimsLoading] = useState(false);
+  const [srcUsimsOpen, setSrcUsimsOpen] = useState(false);
+  const [dstUsimsOpen, setDstUsimsOpen] = useState(false);
+
   // Auto-resolve: 중분류 → 해당 카테고리 소속 전체 업체 IDs
   const srcAgencyIds = useMemo(() => {
     if (!srcMedium) return [];
@@ -1079,6 +1087,32 @@ function TransferTab({
       .finally(() => setDstStockLoading(false));
   }, [dstAgencyIds, dstCategoryName]);
 
+  // 출발 업체 배정 유심 번호 목록 조회
+  useEffect(() => {
+    if (srcAgencyIds.length === 0) { setSrcUsims([]); setSrcUsimsOpen(false); return; }
+    setSrcUsimsLoading(true);
+    fetch(`/api/usims?agencyIds=${srcAgencyIds.join(",")}&status=ASSIGNED&pageSize=9999`)
+      .then(r => r.json())
+      .then(data => {
+        setSrcUsims(data.data || []);
+      })
+      .catch(() => setSrcUsims([]))
+      .finally(() => setSrcUsimsLoading(false));
+  }, [srcAgencyIds]);
+
+  // 도착 업체 배정 유심 번호 목록 조회
+  useEffect(() => {
+    if (dstAgencyIds.length === 0) { setDstUsims([]); setDstUsimsOpen(false); return; }
+    setDstUsimsLoading(true);
+    fetch(`/api/usims?agencyIds=${dstAgencyIds.join(",")}&status=ASSIGNED&pageSize=9999`)
+      .then(r => r.json())
+      .then(data => {
+        setDstUsims(data.data || []);
+      })
+      .catch(() => setDstUsims([]))
+      .finally(() => setDstUsimsLoading(false));
+  }, [dstAgencyIds]);
+
   const handleTransfer = async () => {
     if (srcAgencyIds.length === 0) {
       toast.error("보내는 분류를 선택해 주세요.");
@@ -1117,7 +1151,7 @@ function TransferTab({
       // 재고 새로고침
       setSrcStock(null);
       setDstStock(null);
-      // 약간의 딜레이 후 재고 다시 조회 (DB 반영 대기)
+      // 약간의 딜레이 후 재고 + 유심 번호 다시 조회 (DB 반영 대기)
       setTimeout(() => {
         if (srcAgencyIds.length > 0) {
           fetch(`/api/usims/stats?agencyIds=${srcAgencyIds.join(",")}`)
@@ -1133,6 +1167,9 @@ function TransferTab({
                 resetReady: stats.reduce((s, v) => s + v.resetReady, 0),
               });
             });
+          fetch(`/api/usims?agencyIds=${srcAgencyIds.join(",")}&status=ASSIGNED&pageSize=9999`)
+            .then(r => r.json())
+            .then(d => setSrcUsims(d.data || []));
         }
         if (dstAgencyIds.length > 0) {
           fetch(`/api/usims/stats?agencyIds=${dstAgencyIds.join(",")}`)
@@ -1148,6 +1185,9 @@ function TransferTab({
                 resetReady: stats.reduce((s, v) => s + v.resetReady, 0),
               });
             });
+          fetch(`/api/usims?agencyIds=${dstAgencyIds.join(",")}&status=ASSIGNED&pageSize=9999`)
+            .then(r => r.json())
+            .then(d => setDstUsims(d.data || []));
         }
       }, 500);
       onTransferred();
@@ -1214,6 +1254,52 @@ function TransferTab({
                 </div>
               </div>
             )}
+            {/* 출발 업체 배정 유심 번호 목록 */}
+            {srcUsims.length > 0 && !srcUsimsLoading && (
+              <div className="rounded-lg border border-red-100 overflow-hidden">
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between px-3 py-2 bg-red-50/50 hover:bg-red-50 transition-colors text-xs"
+                  onClick={() => setSrcUsimsOpen(!srcUsimsOpen)}
+                >
+                  <span className="font-medium text-red-700">
+                    📋 배정 번호 목록 ({srcUsims.length}건)
+                  </span>
+                  {srcUsimsOpen ? (
+                    <ChevronDown className="h-3.5 w-3.5 text-red-500" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5 text-red-500" />
+                  )}
+                </button>
+                {srcUsimsOpen && (
+                  <div className="max-h-48 overflow-y-auto border-t border-red-100">
+                    <table className="w-full text-xs">
+                      <thead className="bg-red-50/80 sticky top-0">
+                        <tr>
+                          <th className="text-left px-3 py-1.5 font-medium text-red-700">No.</th>
+                          <th className="text-left px-3 py-1.5 font-medium text-red-700">유심 번호</th>
+                          <th className="text-left px-3 py-1.5 font-medium text-red-700">배정일</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {srcUsims.map((u, idx) => (
+                          <tr key={u.id} className={idx % 2 === 0 ? "bg-white" : "bg-red-50/30"}>
+                            <td className="px-3 py-1 text-gray-400">{idx + 1}</td>
+                            <td className="px-3 py-1 font-mono text-gray-800">{u.usimSerialNumber}</td>
+                            <td className="px-3 py-1 text-gray-500">{u.assignedDate}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+            {srcUsimsLoading && srcAgencyIds.length > 0 && (
+              <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                <Loader2 className="h-3 w-3 animate-spin" /> 번호 목록 조회 중...
+              </div>
+            )}
           </div>
 
           {/* Arrow */}
@@ -1273,6 +1359,52 @@ function TransferTab({
                   <span className="text-gray-600">전체 배정</span>
                   <span className="font-medium text-gray-700">{dstStock.totalAssigned}개</span>
                 </div>
+              </div>
+            )}
+            {/* 도착 업체 배정 유심 번호 목록 */}
+            {dstUsims.length > 0 && !dstUsimsLoading && (
+              <div className="rounded-lg border border-blue-100 overflow-hidden">
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between px-3 py-2 bg-blue-50/50 hover:bg-blue-50 transition-colors text-xs"
+                  onClick={() => setDstUsimsOpen(!dstUsimsOpen)}
+                >
+                  <span className="font-medium text-blue-700">
+                    📋 배정 번호 목록 ({dstUsims.length}건)
+                  </span>
+                  {dstUsimsOpen ? (
+                    <ChevronDown className="h-3.5 w-3.5 text-blue-500" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5 text-blue-500" />
+                  )}
+                </button>
+                {dstUsimsOpen && (
+                  <div className="max-h-48 overflow-y-auto border-t border-blue-100">
+                    <table className="w-full text-xs">
+                      <thead className="bg-blue-50/80 sticky top-0">
+                        <tr>
+                          <th className="text-left px-3 py-1.5 font-medium text-blue-700">No.</th>
+                          <th className="text-left px-3 py-1.5 font-medium text-blue-700">유심 번호</th>
+                          <th className="text-left px-3 py-1.5 font-medium text-blue-700">배정일</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dstUsims.map((u, idx) => (
+                          <tr key={u.id} className={idx % 2 === 0 ? "bg-white" : "bg-blue-50/30"}>
+                            <td className="px-3 py-1 text-gray-400">{idx + 1}</td>
+                            <td className="px-3 py-1 font-mono text-gray-800">{u.usimSerialNumber}</td>
+                            <td className="px-3 py-1 text-gray-500">{u.assignedDate}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+            {dstUsimsLoading && dstAgencyIds.length > 0 && (
+              <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                <Loader2 className="h-3 w-3 animate-spin" /> 번호 목록 조회 중...
               </div>
             )}
           </div>
