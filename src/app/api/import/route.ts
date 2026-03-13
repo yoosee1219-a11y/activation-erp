@@ -139,9 +139,11 @@ export async function POST(request: NextRequest) {
       skipped: 0,
       duplicates: 0,
       errors: [] as string[],
-      duplicateDetails: [] as string[],
       newAgencies: [] as string[],
     };
+
+    // 행별 상태 추적: 'inserted' | 'duplicate' | 'skipped' | 'error'
+    const rowStatuses: Record<number, string> = {};
 
     // 알 수 없는 거래처 수집
     const unknownAgencies = new Set<string>();
@@ -196,6 +198,7 @@ export async function POST(request: NextRequest) {
 
     // 데이터 준비 (배치 인서트용)
     const batchValues: (typeof activations.$inferInsert)[] = [];
+    const batchRowIndices: number[] = []; // batchValues와 1:1 대응하는 원본 행 인덱스
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
@@ -203,6 +206,7 @@ export async function POST(request: NextRequest) {
         const customerName = (row.customerName || "").trim();
         if (!customerName) {
           results.skipped++;
+          rowStatuses[i] = "skipped";
           continue;
         }
 
@@ -212,6 +216,7 @@ export async function POST(request: NextRequest) {
         if (!agencyId) {
           results.errors.push(`행 ${i + 1}: 거래처를 찾을 수 없음 (${agencyRaw})`);
           results.skipped++;
+          rowStatuses[i] = "error";
           continue;
         }
 
@@ -223,14 +228,14 @@ export async function POST(request: NextRequest) {
         const dupKey2 = `${customerName.toLowerCase()}|${agencyId}|${entryDate || ""}`;
         if (existingSet.has(dupKey1) || (entryDate && existingSet.has(dupKey2))) {
           results.duplicates++;
-          const dateInfo = activationDate || entryDate || "날짜없음";
-          results.duplicateDetails.push(`행 ${i + 1}: ${customerName} (${agencyRaw}, ${dateInfo})`);
+          rowStatuses[i] = "duplicate";
           continue;
         }
         // 같은 배치 내 중복도 방지
         existingSet.add(dupKey1);
         if (entryDate) existingSet.add(dupKey2);
 
+        batchRowIndices.push(i);
         batchValues.push({
           agencyId,
           customerName,
@@ -268,6 +273,7 @@ export async function POST(request: NextRequest) {
         const message = err instanceof Error ? err.message : String(err);
         results.errors.push(`행 ${i + 1}: ${message}`);
         results.skipped++;
+        rowStatuses[i] = "error";
       }
     }
 
@@ -275,19 +281,23 @@ export async function POST(request: NextRequest) {
     const BATCH_SIZE = 50;
     for (let i = 0; i < batchValues.length; i += BATCH_SIZE) {
       const batch = batchValues.slice(i, i + BATCH_SIZE);
+      const indices = batchRowIndices.slice(i, i + BATCH_SIZE);
       try {
         await db.insert(activations).values(batch);
         results.inserted += batch.length;
+        for (const idx of indices) rowStatuses[idx] = "inserted";
       } catch (err: unknown) {
         // 배치 실패 시 개별 삽입으로 폴백
-        for (const item of batch) {
+        for (let j = 0; j < batch.length; j++) {
           try {
-            await db.insert(activations).values(item);
+            await db.insert(activations).values(batch[j]);
             results.inserted++;
+            rowStatuses[indices[j]] = "inserted";
           } catch (innerErr: unknown) {
             const message = innerErr instanceof Error ? innerErr.message : String(innerErr);
-            results.errors.push(`${item.customerName}: ${message}`);
+            results.errors.push(`${batch[j].customerName}: ${message}`);
             results.skipped++;
+            rowStatuses[indices[j]] = "error";
           }
         }
       }
@@ -296,6 +306,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       ...results,
+      rowStatuses,
     });
   } catch (error) {
     console.error("Import error:", error);

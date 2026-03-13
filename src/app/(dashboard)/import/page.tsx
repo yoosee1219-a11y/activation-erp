@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import Papa from "papaparse";
 import { Button } from "@/components/ui/button";
 import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Download } from "lucide-react";
@@ -84,15 +84,25 @@ function resolveReviewField(): string {
 }
 
 type MappedRow = Record<string, string>;
+type RowStatus = "inserted" | "duplicate" | "skipped" | "error";
+type FilterTab = "all" | "inserted" | "duplicate" | "error";
 
 interface ImportResult {
   inserted: number;
   skipped: number;
   duplicates: number;
   errors: string[];
-  duplicateDetails: string[];
   newAgencies: string[];
+  rowStatuses: Record<number, RowStatus>;
 }
+
+// 상태별 스타일
+const STATUS_STYLES: Record<RowStatus, { bg: string; badge: string; badgeBg: string; label: string }> = {
+  inserted: { bg: "bg-green-50", badge: "text-green-700", badgeBg: "bg-green-100", label: "추가됨" },
+  duplicate: { bg: "bg-red-50", badge: "text-red-700", badgeBg: "bg-red-100", label: "중복" },
+  skipped: { bg: "bg-gray-50", badge: "text-gray-500", badgeBg: "bg-gray-100", label: "스킵" },
+  error: { bg: "bg-orange-50", badge: "text-orange-700", badgeBg: "bg-orange-100", label: "오류" },
+};
 
 export default function ImportPage() {
   const [fileName, setFileName] = useState<string>("");
@@ -100,11 +110,13 @@ export default function ImportPage() {
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string>("");
+  const [filterTab, setFilterTab] = useState<FilterTab>("all");
 
   const handleFile = useCallback((file: File) => {
     setError("");
     setResult(null);
     setFileName(file.name);
+    setFilterTab("all");
     reviewCount = 0;
 
     const reader = new FileReader();
@@ -114,7 +126,7 @@ export default function ImportPage() {
       Papa.parse(text, {
         header: true,
         skipEmptyLines: true,
-        transformHeader: (header: string, index: number) => {
+        transformHeader: (header: string) => {
           const h = header.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
 
           // "서류 검수" 패턴 감지
@@ -126,7 +138,6 @@ export default function ImportPage() {
         },
         complete: (results) => {
           const rows = (results.data as MappedRow[]).filter((row) => {
-            // 빈 행 스킵
             const customerName = row.customerName || "";
             return customerName.trim().length > 0;
           });
@@ -195,6 +206,7 @@ export default function ImportPage() {
       }
 
       setResult(data);
+      setFilterTab("all");
     } catch {
       setError("서버 연결 오류");
     } finally {
@@ -205,6 +217,32 @@ export default function ImportPage() {
   const handleExport = async () => {
     window.location.href = "/api/export";
   };
+
+  // 필터링된 행 목록 (인덱스 포함)
+  const filteredRows = useMemo(() => {
+    const indexed = mappedRows.map((row, i) => ({ row, index: i }));
+    if (!result || filterTab === "all") return indexed;
+
+    return indexed.filter(({ index }) => {
+      const status = result.rowStatuses[index];
+      if (filterTab === "inserted") return status === "inserted";
+      if (filterTab === "duplicate") return status === "duplicate";
+      if (filterTab === "error") return status === "error" || status === "skipped";
+      return true;
+    });
+  }, [mappedRows, result, filterTab]);
+
+  // 필터 탭 카운트
+  const tabCounts = useMemo(() => {
+    if (!result) return { all: mappedRows.length, inserted: 0, duplicate: 0, error: 0 };
+    const counts = { all: mappedRows.length, inserted: 0, duplicate: 0, error: 0 };
+    for (const status of Object.values(result.rowStatuses)) {
+      if (status === "inserted") counts.inserted++;
+      else if (status === "duplicate") counts.duplicate++;
+      else counts.error++;
+    }
+    return counts;
+  }, [result, mappedRows.length]);
 
   return (
     <div className="space-y-6">
@@ -260,46 +298,50 @@ export default function ImportPage() {
         </div>
       )}
 
-      {/* 결과 표시 */}
+      {/* 결과 요약 (컴팩트) */}
       {result && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-2">
           <div className="flex items-center gap-3">
             <CheckCircle className="h-5 w-5 text-green-500 shrink-0" />
-            <p className="text-sm font-medium text-green-700">
-              가져오기 완료: {result.inserted}건 추가
-              {result.duplicates > 0 && `, ${result.duplicates}건 중복 제외`}
-              {result.skipped > 0 && `, ${result.skipped}건 스킵`}
-            </p>
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-sm font-medium text-green-700">
+                가져오기 완료
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                추가 {result.inserted}건
+              </span>
+              {result.duplicates > 0 && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                  중복 {result.duplicates}건
+                </span>
+              )}
+              {result.skipped > 0 && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
+                  스킵/오류 {result.skipped}건
+                </span>
+              )}
+            </div>
           </div>
           {result.newAgencies.length > 0 && (
             <p className="text-xs text-green-600 ml-8">
               새로 생성된 거래처: {result.newAgencies.join(", ")}
             </p>
           )}
-          {result.duplicateDetails && result.duplicateDetails.length > 0 && (
-            <div className="ml-8 mt-2">
-              <p className="text-xs font-medium text-blue-600">중복 제외 목록 (이미 DB에 존재):</p>
-              <ul className="text-xs text-blue-600 list-disc list-inside max-h-40 overflow-y-auto">
-                {result.duplicateDetails.slice(0, 50).map((d, i) => (
-                  <li key={i}>{d}</li>
-                ))}
-                {result.duplicateDetails.length > 50 && (
-                  <li>... 외 {result.duplicateDetails.length - 50}건</li>
-                )}
-              </ul>
-            </div>
-          )}
           {result.errors.length > 0 && (
-            <div className="ml-8 mt-2">
-              <p className="text-xs font-medium text-orange-600">오류:</p>
-              <ul className="text-xs text-orange-600 list-disc list-inside max-h-32 overflow-y-auto">
-                {result.errors.slice(0, 20).map((err, i) => (
-                  <li key={i}>{err}</li>
-                ))}
-                {result.errors.length > 20 && (
-                  <li>... 외 {result.errors.length - 20}건</li>
-                )}
-              </ul>
+            <div className="ml-8 mt-1">
+              <details className="text-xs text-orange-600">
+                <summary className="cursor-pointer font-medium">
+                  오류 상세 ({result.errors.length}건)
+                </summary>
+                <ul className="list-disc list-inside mt-1 max-h-24 overflow-y-auto">
+                  {result.errors.slice(0, 20).map((err, i) => (
+                    <li key={i}>{err}</li>
+                  ))}
+                  {result.errors.length > 20 && (
+                    <li>... 외 {result.errors.length - 20}건</li>
+                  )}
+                </ul>
+              </details>
             </div>
           )}
         </div>
@@ -325,11 +367,66 @@ export default function ImportPage() {
             </Button>
           </div>
 
+          {/* 필터 탭 (결과가 있을 때만 표시) */}
+          {result && (
+            <div className="flex items-center gap-1 px-4 py-2 border-b bg-gray-50">
+              <button
+                onClick={() => setFilterTab("all")}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                  filterTab === "all"
+                    ? "bg-gray-800 text-white"
+                    : "bg-white text-gray-600 hover:bg-gray-100 border"
+                }`}
+              >
+                전체 {tabCounts.all}
+              </button>
+              {tabCounts.inserted > 0 && (
+                <button
+                  onClick={() => setFilterTab("inserted")}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                    filterTab === "inserted"
+                      ? "bg-green-600 text-white"
+                      : "bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
+                  }`}
+                >
+                  추가됨 {tabCounts.inserted}
+                </button>
+              )}
+              {tabCounts.duplicate > 0 && (
+                <button
+                  onClick={() => setFilterTab("duplicate")}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                    filterTab === "duplicate"
+                      ? "bg-red-600 text-white"
+                      : "bg-red-50 text-red-700 hover:bg-red-100 border border-red-200"
+                  }`}
+                >
+                  중복 {tabCounts.duplicate}
+                </button>
+              )}
+              {tabCounts.error > 0 && (
+                <button
+                  onClick={() => setFilterTab("error")}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                    filterTab === "error"
+                      ? "bg-orange-600 text-white"
+                      : "bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200"
+                  }`}
+                >
+                  오류 {tabCounts.error}
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
             <table className="w-full text-xs">
               <thead className="bg-gray-50 sticky top-0">
                 <tr>
                   <th className="px-3 py-2 text-left font-medium text-gray-500">No.</th>
+                  {result && (
+                    <th className="px-3 py-2 text-left font-medium text-gray-500">상태</th>
+                  )}
                   <th className="px-3 py-2 text-left font-medium text-gray-500">거래처</th>
                   <th className="px-3 py-2 text-left font-medium text-gray-500">고객명</th>
                   <th className="px-3 py-2 text-left font-medium text-gray-500">유심번호</th>
@@ -340,23 +437,40 @@ export default function ImportPage() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {mappedRows.slice(0, 50).map((row, i) => (
-                  <tr key={i} className="hover:bg-gray-50">
-                    <td className="px-3 py-1.5 text-gray-500">{i + 1}</td>
-                    <td className="px-3 py-1.5">{row.agencyId || "-"}</td>
-                    <td className="px-3 py-1.5 font-medium">{row.customerName || "-"}</td>
-                    <td className="px-3 py-1.5">{row.usimNumber || "-"}</td>
-                    <td className="px-3 py-1.5">{row.entryDate || "-"}</td>
-                    <td className="px-3 py-1.5">{row.activationStatus || "-"}</td>
-                    <td className="px-3 py-1.5">{row.personInCharge || "-"}</td>
-                    <td className="px-3 py-1.5">{row.ratePlan || "-"}</td>
-                  </tr>
-                ))}
+                {filteredRows.slice(0, 100).map(({ row, index }) => {
+                  const status = result?.rowStatuses[index] as RowStatus | undefined;
+                  const style = status ? STATUS_STYLES[status] : null;
+
+                  return (
+                    <tr
+                      key={index}
+                      className={style ? style.bg : "hover:bg-gray-50"}
+                    >
+                      <td className="px-3 py-1.5 text-gray-500">{index + 1}</td>
+                      {result && (
+                        <td className="px-3 py-1.5">
+                          {style && (
+                            <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${style.badgeBg} ${style.badge}`}>
+                              {style.label}
+                            </span>
+                          )}
+                        </td>
+                      )}
+                      <td className="px-3 py-1.5">{row.agencyId || "-"}</td>
+                      <td className="px-3 py-1.5 font-medium">{row.customerName || "-"}</td>
+                      <td className="px-3 py-1.5">{row.usimNumber || "-"}</td>
+                      <td className="px-3 py-1.5">{row.entryDate || "-"}</td>
+                      <td className="px-3 py-1.5">{row.activationStatus || "-"}</td>
+                      <td className="px-3 py-1.5">{row.personInCharge || "-"}</td>
+                      <td className="px-3 py-1.5">{row.ratePlan || "-"}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
-            {mappedRows.length > 50 && (
+            {filteredRows.length > 100 && (
               <p className="text-xs text-gray-400 text-center py-2">
-                ... 처음 50건만 표시 (전체 {mappedRows.length}건)
+                ... 처음 100건만 표시 (전체 {filteredRows.length}건)
               </p>
             )}
           </div>
