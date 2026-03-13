@@ -162,7 +162,6 @@ export async function GET(request: NextRequest) {
       // 해당 월에 데이터가 하나도 없는 거래처(소분류)는 결과에서 제외
       const hasAnyData =
         receivedCount > 0 ||
-        usedCount > 0 ||
         normalCount > 0 ||
         supplementClawbackCount > 0 ||
         sixMonthClawbackCount > 0 ||
@@ -170,8 +169,11 @@ export async function GET(request: NextRequest) {
 
       if (!hasAnyData) continue;
 
+      // 유심 사용 = 정상 개통 건수 (개통 시 건당 7,700원 환급)
+      const effectiveUsedCount = normalCount;
+
       const usimCost = receivedCount * -USIM_UNIT_COST;
-      const usimRevenue = usedCount * USIM_UNIT_COST;
+      const usimRevenue = effectiveUsedCount * USIM_UNIT_COST;
       const usimSubtotal = usimCost + usimRevenue;
 
       const commissionRevenue = normalCount * commissionRate;
@@ -187,7 +189,7 @@ export async function GET(request: NextRequest) {
         commissionRate,
         usim: {
           received: receivedCount,
-          used: usedCount,
+          used: effectiveUsedCount,
           cost: usimCost,
           revenue: usimRevenue,
           subtotal: usimSubtotal,
