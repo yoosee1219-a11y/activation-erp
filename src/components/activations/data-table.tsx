@@ -76,6 +76,7 @@ export function DataTable<TData, TValue>({
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [globalFilter, setGlobalFilter] = useState("");
   const [columnResizeMode] = useState<ColumnResizeMode>("onChange");
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
 
   // 서버사이드 페이징 여부: onPageChange가 있으면 서버, 없으면 클라이언트
   const isServerPaging = !!onPageChange;
@@ -296,15 +297,23 @@ export function DataTable<TData, TValue>({
               table.getRowModel().rows.map((row) => {
                 const rowId = getRowId ? getRowId(row.original) : undefined;
                 const isHighlighted = highlightId && rowId === highlightId;
+                const isSelected = selectedRowId != null && rowId === selectedRowId;
                 const baseClass = getRowClassName ? getRowClassName(row.original) : "";
                 const highlightClass = isHighlighted
                   ? "ring-2 ring-blue-500 bg-blue-50/70 animate-pulse"
+                  : isSelected
+                  ? "!bg-green-50 ring-1 ring-green-400"
                   : "";
                 return (
                   <TableRow
                     key={row.id}
                     ref={isHighlighted ? highlightRef : undefined}
-                    className={`${baseClass} ${highlightClass}`.trim() || undefined}
+                    className={`cursor-pointer ${baseClass} ${highlightClass}`.trim() || undefined}
+                    onClick={() => {
+                      if (rowId) {
+                        setSelectedRowId((prev) => (prev === rowId ? null : rowId));
+                      }
+                    }}
                   >
                     {row.getVisibleCells().map((cell) => (
                       <TableCell

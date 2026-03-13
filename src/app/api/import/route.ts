@@ -100,6 +100,25 @@ function parseDate(value: string): string | null {
   return null;
 }
 
+// 과학표기법(5.14784E+11) → 원래 숫자 문자열로 변환
+function parseNumericText(value: string): string {
+  if (!value) return "";
+  const v = value.trim();
+  // 과학표기법 패턴: 1.23E+10, 5.14784E+11, 1E+12 등
+  if (/^[\d.]+[eE][+\-]?\d+$/.test(v)) {
+    try {
+      const num = parseFloat(v);
+      if (!isNaN(num) && isFinite(num)) {
+        // 소수점 없는 정수로 변환 (전화번호/가입번호는 정수)
+        return num.toFixed(0);
+      }
+    } catch {
+      // 변환 실패 시 원본 반환
+    }
+  }
+  return v;
+}
+
 // 불리언 변환
 function parseBool(value: string): boolean {
   if (!value) return false;
@@ -245,7 +264,7 @@ export async function POST(request: NextRequest) {
           if (existingByEntryDate.has(key)) isDuplicate = true;
         }
         // 날짜가 모두 없는 경우: 유심번호로 중복 판별
-        const usimNumber = (row.usimNumber || "").trim();
+        const usimNumber = parseNumericText(row.usimNumber || "");
         if (!isDuplicate && !activationDate && !entryDate && usimNumber) {
           if (existingByUsim.has(usimNumber)) isDuplicate = true;
         }
@@ -271,11 +290,11 @@ export async function POST(request: NextRequest) {
         batchValues.push({
           agencyId,
           customerName,
-          usimNumber: row.usimNumber || null,
+          usimNumber: parseNumericText(row.usimNumber || "") || null,
           entryDate,
-          subscriptionNumber: row.subscriptionNumber || null,
-          newPhoneNumber: row.newPhoneNumber || null,
-          virtualAccount: row.virtualAccount || null,
+          subscriptionNumber: parseNumericText(row.subscriptionNumber || "") || null,
+          newPhoneNumber: parseNumericText(row.newPhoneNumber || "") || null,
+          virtualAccount: parseNumericText(row.virtualAccount || "") || null,
           subscriptionType: row.subscriptionType || "신규",
           ratePlan: row.ratePlan || null,
           deviceChangeConfirmed: parseBool(row.deviceChangeConfirmed || ""),
