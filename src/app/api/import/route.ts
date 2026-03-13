@@ -177,23 +177,32 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 기존 데이터 조회 (중복 방지용) - 고객명+거래처+개통일자 기준
+    // 기존 데이터 조회 (중복 방지용)
     const existingActivations = await db
       .select({
         customerName: activations.customerName,
         agencyId: activations.agencyId,
         activationDate: activations.activationDate,
         entryDate: activations.entryDate,
+        usimNumber: activations.usimNumber,
       })
       .from(activations);
 
-    const existingSet = new Set<string>();
+    // 중복 판별용 Set들 (날짜가 있는 경우만 키 등록)
+    const existingByActivationDate = new Set<string>();
+    const existingByEntryDate = new Set<string>();
+    const existingByUsim = new Set<string>();
     for (const ea of existingActivations) {
-      // 고객명 + 거래처 + (개통일자 또는 입국예정일)로 중복 판별
-      const key1 = `${ea.customerName?.toLowerCase()}|${ea.agencyId}|${ea.activationDate || ""}`;
-      const key2 = `${ea.customerName?.toLowerCase()}|${ea.agencyId}|${ea.entryDate || ""}`;
-      existingSet.add(key1);
-      if (ea.entryDate) existingSet.add(key2);
+      const name = ea.customerName?.toLowerCase() || "";
+      if (ea.activationDate) {
+        existingByActivationDate.add(`${name}|${ea.agencyId}|${ea.activationDate}`);
+      }
+      if (ea.entryDate) {
+        existingByEntryDate.add(`${name}|${ea.agencyId}|${ea.entryDate}`);
+      }
+      if (ea.usimNumber) {
+        existingByUsim.add(ea.usimNumber);
+      }
     }
 
     // 데이터 준비 (배치 인서트용)
@@ -223,17 +232,40 @@ export async function POST(request: NextRequest) {
         const activationDate = parseDate(row.activationDate || "") || parseDate(row.activationDate2 || "");
         const entryDate = parseDate(row.entryDate || "");
 
-        // 중복 체크: 고객명 + 거래처 + (개통일자 또는 입국예정일)
-        const dupKey1 = `${customerName.toLowerCase()}|${agencyId}|${activationDate || ""}`;
-        const dupKey2 = `${customerName.toLowerCase()}|${agencyId}|${entryDate || ""}`;
-        if (existingSet.has(dupKey1) || (entryDate && existingSet.has(dupKey2))) {
+        // 중복 체크: 날짜가 있는 경우만 해당 키로 비교, 둘 다 없으면 유심번호로 비교
+        const nameLower = customerName.toLowerCase();
+        let isDuplicate = false;
+
+        if (activationDate) {
+          const key = `${nameLower}|${agencyId}|${activationDate}`;
+          if (existingByActivationDate.has(key)) isDuplicate = true;
+        }
+        if (!isDuplicate && entryDate) {
+          const key = `${nameLower}|${agencyId}|${entryDate}`;
+          if (existingByEntryDate.has(key)) isDuplicate = true;
+        }
+        // 날짜가 모두 없는 경우: 유심번호로 중복 판별
+        const usimNumber = (row.usimNumber || "").trim();
+        if (!isDuplicate && !activationDate && !entryDate && usimNumber) {
+          if (existingByUsim.has(usimNumber)) isDuplicate = true;
+        }
+
+        if (isDuplicate) {
           results.duplicates++;
           rowStatuses[i] = "duplicate";
           continue;
         }
+
         // 같은 배치 내 중복도 방지
-        existingSet.add(dupKey1);
-        if (entryDate) existingSet.add(dupKey2);
+        if (activationDate) {
+          existingByActivationDate.add(`${nameLower}|${agencyId}|${activationDate}`);
+        }
+        if (entryDate) {
+          existingByEntryDate.add(`${nameLower}|${agencyId}|${entryDate}`);
+        }
+        if (usimNumber) {
+          existingByUsim.add(usimNumber);
+        }
 
         batchRowIndices.push(i);
         batchValues.push({
