@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { activations, agencies, usims } from "@/lib/db/schema";
-import { eq, and, gte, lt, sql, ne } from "drizzle-orm";
+import { eq, and, gte, lt, sql, ne, inArray, or } from "drizzle-orm";
 import {
   getAgencyIdsByMediumCategories,
   getAgencyIdsByMajorCategory,
@@ -10,7 +10,7 @@ import {
 
 export async function GET(request: NextRequest) {
   const user = await getSessionUser();
-  if (!user || user.role !== "ADMIN") {
+  if (!user || (user.role !== "ADMIN" && user.role !== "SUB_ADMIN")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -55,7 +55,17 @@ export async function GET(request: NextRequest) {
 
     const targetIds = targetAgencies.map((a) => a.id);
 
-    // 1) USIM received (assigned) counts per agency - single query
+    // 날짜 범위 조건 (활성화 또는 해지가 해당 월에 발생)
+    const activationDateInRange = and(
+      gte(activations.activationDate, monthStart),
+      lt(activations.activationDate, monthEnd)
+    );
+    const terminationDateInRange = and(
+      gte(activations.terminationDate, monthStart),
+      lt(activations.terminationDate, monthEnd)
+    );
+
+    // 1) USIM received (assigned) counts per agency
     const usimReceivedRows = await db
       .select({
         agencyId: usims.agencyId,
@@ -64,14 +74,14 @@ export async function GET(request: NextRequest) {
       .from(usims)
       .where(
         and(
-          sql`${usims.agencyId} = ANY(${targetIds})`,
+          inArray(usims.agencyId, targetIds),
           gte(usims.assignedDate, monthStart),
           lt(usims.assignedDate, monthEnd)
         )
       )
       .groupBy(usims.agencyId);
 
-    // 2) USIM used (activated) counts per agency - single query
+    // 2) USIM used (activated) counts per agency
     const usimUsedRows = await db
       .select({
         agencyId: usims.agencyId,
@@ -80,14 +90,14 @@ export async function GET(request: NextRequest) {
       .from(usims)
       .where(
         and(
-          sql`${usims.agencyId} = ANY(${targetIds})`,
+          inArray(usims.agencyId, targetIds),
           gte(usims.usedDate, monthStart),
           lt(usims.usedDate, monthEnd)
         )
       )
       .groupBy(usims.agencyId);
 
-    // 3) Activation counts per agency (normal + clawback categories) - single query
+    // 3) Activation counts per agency (normal + clawback categories)
     const activationRows = await db
       .select({
         agencyId: activations.agencyId,
@@ -99,17 +109,13 @@ export async function GET(request: NextRequest) {
       .from(activations)
       .where(
         and(
-          sql`${activations.agencyId} = ANY(${targetIds})`,
-          sql`(
-            (${activations.activationDate} >= ${monthStart} AND ${activations.activationDate} < ${monthEnd})
-            OR
-            (${activations.terminationDate} >= ${monthStart} AND ${activations.terminationDate} < ${monthEnd})
-          )`
+          inArray(activations.agencyId, targetIds),
+          or(activationDateInRange, terminationDateInRange)
         )
       )
       .groupBy(activations.agencyId);
 
-    // 4) Detail list - single query for all agencies
+    // 4) Detail list - all matching activations
     const detailList = await db
       .select({
         agencyId: activations.agencyId,
@@ -123,12 +129,8 @@ export async function GET(request: NextRequest) {
       .from(activations)
       .where(
         and(
-          sql`${activations.agencyId} = ANY(${targetIds})`,
-          sql`(
-            (${activations.activationDate} >= ${monthStart} AND ${activations.activationDate} < ${monthEnd})
-            OR
-            (${activations.terminationDate} >= ${monthStart} AND ${activations.terminationDate} < ${monthEnd})
-          )`
+          inArray(activations.agencyId, targetIds),
+          or(activationDateInRange, terminationDateInRange)
         )
       );
 

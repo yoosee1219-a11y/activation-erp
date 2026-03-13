@@ -19,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
 import {
   Calculator,
   Search,
@@ -29,6 +30,9 @@ import {
   ChevronDown,
   ChevronRight,
   Download,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
@@ -71,6 +75,8 @@ interface AgencySettlement {
   commission: CommissionData;
   total: number;
   details: DetailItem[];
+  // 수동 조정 (프론트 전용, API에서 오지 않음)
+  manualAdjustment?: number;
 }
 
 interface SettlementResponse {
@@ -138,6 +144,9 @@ export default function SettlementPage() {
   const [expandedAgencies, setExpandedAgencies] = useState<Set<string>>(
     new Set()
   );
+  const [manualAdjustments, setManualAdjustments] = useState<
+    Record<string, number>
+  >({});
 
   const monthOptions = getMonthOptions();
 
@@ -196,6 +205,87 @@ export default function SettlementPage() {
     }
   }, [selectedMonth, selectedMajor, selectedMedium]);
 
+  // 수수료 단가 수정 (DB 반영)
+  const handleCommissionRateUpdate = async (
+    agencyId: string,
+    newRate: number
+  ) => {
+    try {
+      const res = await fetch("/api/settlement/adjust", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agencyId, commissionRate: newRate }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "수수료 단가 수정 실패");
+      }
+      toast.success("수수료 단가가 수정되었습니다. 조회를 다시 실행하세요.");
+      // 로컬 데이터에도 즉시 반영
+      if (data) {
+        const updated = {
+          ...data,
+          agencies: data.agencies.map((a) => {
+            if (a.agencyId !== agencyId) return a;
+            const commissionRevenue = a.commission.normalCount * newRate;
+            const supplementClawback =
+              a.commission.supplementClawbackCount * -newRate;
+            const sixMonthClawback =
+              a.commission.sixMonthClawbackCount * -newRate;
+            const manualClawback =
+              a.commission.manualClawbackCount * -newRate;
+            const commissionSubtotal =
+              commissionRevenue + supplementClawback + sixMonthClawback + manualClawback;
+            const adj = manualAdjustments[agencyId] || 0;
+            return {
+              ...a,
+              commissionRate: newRate,
+              commission: {
+                ...a.commission,
+                normalAmount: commissionRevenue,
+                supplementClawback,
+                sixMonthClawback,
+                manualClawback,
+                subtotal: commissionSubtotal,
+              },
+              total: a.usim.subtotal + commissionSubtotal + adj,
+            };
+          }),
+        };
+        updated.grandTotal = updated.agencies.reduce(
+          (sum, r) => sum + r.total,
+          0
+        );
+        setData(updated);
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "수수료 단가 수정 실패");
+    }
+  };
+
+  // 수동 조정금액 변경 (프론트 전용)
+  const handleManualAdjustment = (agencyId: string, amount: number) => {
+    setManualAdjustments((prev) => ({ ...prev, [agencyId]: amount }));
+    if (data) {
+      const updated = {
+        ...data,
+        agencies: data.agencies.map((a) => {
+          if (a.agencyId !== agencyId) return a;
+          return {
+            ...a,
+            manualAdjustment: amount,
+            total: a.usim.subtotal + a.commission.subtotal + amount,
+          };
+        }),
+      };
+      updated.grandTotal = updated.agencies.reduce(
+        (sum, r) => sum + r.total,
+        0
+      );
+      setData(updated);
+    }
+  };
+
   const downloadExcel = () => {
     if (!data) return;
 
@@ -217,6 +307,7 @@ export default function SettlementPage() {
       "환수 (수동)": a.commission.manualClawbackCount,
       "환수 (수동) 금액": a.commission.manualClawback,
       "수수료 소계": a.commission.subtotal,
+      "수동 조정": a.manualAdjustment || 0,
       "최종 정산금액": a.total,
     }));
 
@@ -238,6 +329,7 @@ export default function SettlementPage() {
       "환수 (수동)": data.agencies.reduce((s, a) => s + a.commission.manualClawbackCount, 0),
       "환수 (수동) 금액": data.agencies.reduce((s, a) => s + a.commission.manualClawback, 0),
       "수수료 소계": data.agencies.reduce((s, a) => s + a.commission.subtotal, 0),
+      "수동 조정": data.agencies.reduce((s, a) => s + (a.manualAdjustment || 0), 0),
       "최종 정산금액": data.grandTotal,
     });
 
@@ -277,8 +369,8 @@ export default function SettlementPage() {
     });
   };
 
-  // Role guard: ADMIN 전용 (SUB_ADMIN 접근 불가)
-  if (userRole !== null && userRole !== "ADMIN") {
+  // Role guard: ADMIN, SUB_ADMIN 접근 가능
+  if (userRole !== null && userRole !== "ADMIN" && userRole !== "SUB_ADMIN") {
     return (
       <div className="flex items-center justify-center h-full p-12">
         <Card className="max-w-md w-full">
@@ -425,6 +517,8 @@ export default function SettlementPage() {
               unitCost={data.unitCost}
               expanded={expandedAgencies.has(agency.agencyId)}
               onToggle={() => toggleExpand(agency.agencyId)}
+              onCommissionRateUpdate={handleCommissionRateUpdate}
+              onManualAdjustment={handleManualAdjustment}
             />
           ))}
 
@@ -478,12 +572,23 @@ function AgencySettlementCard({
   unitCost,
   expanded,
   onToggle,
+  onCommissionRateUpdate,
+  onManualAdjustment,
 }: {
   agency: AgencySettlement;
   unitCost: number;
   expanded: boolean;
   onToggle: () => void;
+  onCommissionRateUpdate: (agencyId: string, newRate: number) => void;
+  onManualAdjustment: (agencyId: string, amount: number) => void;
 }) {
+  const [editingRate, setEditingRate] = useState(false);
+  const [rateValue, setRateValue] = useState(String(agency.commissionRate));
+  const [editingAdjust, setEditingAdjust] = useState(false);
+  const [adjustValue, setAdjustValue] = useState(
+    String(agency.manualAdjustment || 0)
+  );
+
   const totalIcon =
     agency.total > 0 ? (
       <TrendingUp className="h-5 w-5 text-blue-500" />
@@ -499,9 +604,65 @@ function AgencySettlementCard({
         <CardTitle className="text-base flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="font-bold">{agency.agencyName}</span>
-            <Badge variant="outline" className="text-xs font-normal">
-              수수료 단가: {formatKRW(agency.commissionRate)}원
-            </Badge>
+            {editingRate ? (
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-gray-500">수수료 단가:</span>
+                <Input
+                  type="number"
+                  value={rateValue}
+                  onChange={(e) => setRateValue(e.target.value)}
+                  className="w-28 h-7 text-xs"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const v = parseInt(rateValue, 10);
+                      if (!isNaN(v) && v >= 0) {
+                        onCommissionRateUpdate(agency.agencyId, v);
+                        setEditingRate(false);
+                      }
+                    }
+                    if (e.key === "Escape") {
+                      setRateValue(String(agency.commissionRate));
+                      setEditingRate(false);
+                    }
+                  }}
+                />
+                <span className="text-xs text-gray-500">원</span>
+                <button
+                  onClick={() => {
+                    const v = parseInt(rateValue, 10);
+                    if (!isNaN(v) && v >= 0) {
+                      onCommissionRateUpdate(agency.agencyId, v);
+                      setEditingRate(false);
+                    }
+                  }}
+                  className="p-0.5 hover:bg-green-50 rounded"
+                >
+                  <Check className="h-3.5 w-3.5 text-green-600" />
+                </button>
+                <button
+                  onClick={() => {
+                    setRateValue(String(agency.commissionRate));
+                    setEditingRate(false);
+                  }}
+                  className="p-0.5 hover:bg-red-50 rounded"
+                >
+                  <X className="h-3.5 w-3.5 text-red-500" />
+                </button>
+              </div>
+            ) : (
+              <Badge
+                variant="outline"
+                className="text-xs font-normal cursor-pointer hover:bg-gray-50 gap-1"
+                onClick={() => {
+                  setRateValue(String(agency.commissionRate));
+                  setEditingRate(true);
+                }}
+              >
+                수수료 단가: {formatKRW(agency.commissionRate)}원
+                <Pencil className="h-3 w-3 text-gray-400" />
+              </Badge>
+            )}
           </div>
           <div className="flex items-center gap-3">
             {totalIcon}
@@ -586,6 +747,71 @@ function AgencySettlementCard({
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Manual Adjustment */}
+        <div className="rounded-lg border border-dashed border-gray-300 p-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">수동 조정</span>
+            {editingAdjust ? (
+              <div className="flex items-center gap-1">
+                <Input
+                  type="number"
+                  value={adjustValue}
+                  onChange={(e) => setAdjustValue(e.target.value)}
+                  className="w-36 h-7 text-sm"
+                  placeholder="0"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const v = parseInt(adjustValue, 10) || 0;
+                      onManualAdjustment(agency.agencyId, v);
+                      setEditingAdjust(false);
+                    }
+                    if (e.key === "Escape") {
+                      setAdjustValue(String(agency.manualAdjustment || 0));
+                      setEditingAdjust(false);
+                    }
+                  }}
+                />
+                <span className="text-xs text-gray-500">원</span>
+                <button
+                  onClick={() => {
+                    const v = parseInt(adjustValue, 10) || 0;
+                    onManualAdjustment(agency.agencyId, v);
+                    setEditingAdjust(false);
+                  }}
+                  className="p-0.5 hover:bg-green-50 rounded"
+                >
+                  <Check className="h-3.5 w-3.5 text-green-600" />
+                </button>
+                <button
+                  onClick={() => {
+                    setAdjustValue(String(agency.manualAdjustment || 0));
+                    setEditingAdjust(false);
+                  }}
+                  className="p-0.5 hover:bg-red-50 rounded"
+                >
+                  <X className="h-3.5 w-3.5 text-red-500" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setAdjustValue(String(agency.manualAdjustment || 0));
+                  setEditingAdjust(true);
+                }}
+                className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <AmountCell value={agency.manualAdjustment || 0} />
+                <span className="text-xs">원</span>
+                <Pencil className="h-3 w-3 text-gray-400" />
+              </button>
+            )}
+          </div>
+          <span className="text-xs text-gray-400">
+            (엑셀 다운로드에 반영)
+          </span>
         </div>
 
         {/* Total Row */}
