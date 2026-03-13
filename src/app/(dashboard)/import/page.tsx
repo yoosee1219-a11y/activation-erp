@@ -7,24 +7,46 @@ import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Download } from "luc
 
 // CSV 헤더 → 내부 필드명 매핑
 const HEADER_MAP: Record<string, string> = {
+  // 기본 정보
   "업체명(유학원)": "agencyId",
   "업체명": "agencyId",
+  "거래처명": "agencyId",
   "고객명": "customerName",
   "유심번호": "usimNumber",
   "입국예정일": "entryDate",
+  // 가입 정보
   "가입번호": "subscriptionNumber",
   "신규개통번호": "newPhoneNumber",
   "가상계좌번호": "virtualAccount",
   "가입유형": "subscriptionType",
   "요금제": "ratePlan",
+  // 개통 상태
   "확정기변": "deviceChangeConfirmed",
   "선택약정": "selectedCommitment",
   "개통일자": "activationDate",
+  "개통날짜": "activationDate2",
   "개통여부": "activationStatus",
   "담당자": "personInCharge",
-  "비고": "notes",
+  // 서류 (고유 헤더명 지원)
+  "가입신청서류": "applicationDocs",
+  "가입신청서류 검수": "applicationDocsReview",
   "명의변경서류": "nameChangeDocs",
-  "개통날짜": "activationDate2",
+  "명의변경서류 검수": "nameChangeDocsReview",
+  // 외국인등록증 / 자동이체
+  "외국인등록증 정보": "arcInfo",
+  "외국인등록증": "arcInfo",
+  "외국인등록증 검수": "arcReview",
+  "자동이체 정보": "autopayInfo",
+  "자동이체": "autopayInfo",
+  "자동이체 검수": "autopayReview",
+  "외국인등록증 보완": "arcSupplement",
+  "외국인등록증 보완기한": "arcSupplementDeadline",
+  "보완기한": "arcSupplementDeadline",
+  "보완상태": "supplementStatus",
+  "자동이체 등록여부": "autopayRegistered",
+  // 기타
+  "확정기변 선택약정 날짜": "commitmentDate",
+  "비고": "notes",
 };
 
 // 멀티라인 헤더 정규화
@@ -191,10 +213,18 @@ export default function ImportPage() {
             구글 시트에서 다운로드한 CSV 파일을 가져오거나, 현재 데이터를 CSV로 내보낼 수 있습니다.
           </p>
         </div>
-        <Button variant="outline" onClick={handleExport}>
-          <Download className="mr-2 h-4 w-4" />
-          CSV 내보내기
-        </Button>
+        <div className="flex gap-2">
+          <a href="/import-template.csv" download="개통관리_임포트_템플릿.csv">
+            <Button variant="outline" type="button">
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              템플릿 다운로드
+            </Button>
+          </a>
+          <Button variant="outline" onClick={handleExport}>
+            <Download className="mr-2 h-4 w-4" />
+            CSV 내보내기
+          </Button>
+        </div>
       </div>
 
       {/* 드래그 앤 드롭 영역 */}
