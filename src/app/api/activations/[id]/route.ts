@@ -35,6 +35,8 @@ const PARTNER_EDITABLE_FIELDS = new Set([
   "workStatus",
   // 고객 추가메모
   "customerMemo",
+  // 개통방법
+  "activationMethod",
   // 명의변경 정보
   "combinedUnitNameChange",
   "billingAccountNameChange",
@@ -272,11 +274,21 @@ export async function PATCH(
           updateData.lockedBy = user.id;
           updateData.activationStatus = "개통완료";
 
-          // 개통완료 시 보완기한 자동 설정 (90일)
-          if (!existing.arcSupplementDeadline) {
-            const deadline = new Date();
-            deadline.setDate(deadline.getDate() + 90);
-            updateData.arcSupplementDeadline = deadline.toISOString().split("T")[0];
+          const method = (body as Record<string, unknown>).activationMethod ?? existing.activationMethod;
+
+          if (method === "ARC개통") {
+            // ARC개통: 검수/보완 불필요 → 바로 최종완료
+            updateData.workStatus = "최종완료";
+            updateData.supplementStatus = "완료";
+            // deadline 설정 안 함
+          } else {
+            // 여권개통(기본): activationDate 기준 D-99
+            const actDate = ((body as Record<string, unknown>).activationDate ?? existing.activationDate) as string | null;
+            if (actDate && !existing.arcSupplementDeadline) {
+              const deadline = new Date(actDate);
+              deadline.setDate(deadline.getDate() + 99);
+              updateData.arcSupplementDeadline = deadline.toISOString().split("T")[0];
+            }
           }
         } else if (body.workStatus === "해지") {
           // 해지 → 잠금 + 해지일 + 해지사유 설정
@@ -294,34 +306,46 @@ export async function PATCH(
         updateData.lockedAt = new Date();
         updateData.lockedBy = user.id;
 
-        // 보완기한 자동 설정
-        if (!existing.arcSupplementDeadline) {
-          const deadline = new Date();
-          deadline.setDate(deadline.getDate() + 90);
-          updateData.arcSupplementDeadline = deadline.toISOString().split("T")[0];
+        const method = (body as Record<string, unknown>).activationMethod ?? existing.activationMethod;
+        if (method === "ARC개통") {
+          updateData.workStatus = "최종완료";
+          updateData.supplementStatus = "완료";
+        } else {
+          // 보완기한 자동 설정 (D-99)
+          const actDate = ((body as Record<string, unknown>).activationDate ?? existing.activationDate) as string | null;
+          if (actDate && !existing.arcSupplementDeadline) {
+            const deadline = new Date(actDate);
+            deadline.setDate(deadline.getDate() + 99);
+            updateData.arcSupplementDeadline = deadline.toISOString().split("T")[0];
+          }
         }
       }
     }
 
-    // 3개 검수(nameChangeDocsReview, arcReview, autopayReview) 모두 "완료" → supplementStatus 자동 완료
+    // 4개 검수 모두 "완료" + workStatus "최종완료" → supplementStatus 자동 완료 + deadline 해제
+    const finalAppDocsReview = (body.applicationDocsReview ?? existing.applicationDocsReview) as string | null;
     const finalNameChangeReview = (body.nameChangeDocsReview ?? existing.nameChangeDocsReview) as string | null;
     const finalArcReview = (body.arcReview ?? existing.arcReview) as string | null;
     const finalAutopayReview = (body.autopayReview ?? existing.autopayReview) as string | null;
+    const finalWorkStatus = ((updateData.workStatus as string) ?? existing.workStatus) as string;
 
-    if (
+    const allReviewsComplete =
+      finalAppDocsReview === "완료" &&
       finalNameChangeReview === "완료" &&
       finalArcReview === "완료" &&
-      finalAutopayReview === "완료"
-    ) {
+      finalAutopayReview === "완료";
+
+    if (allReviewsComplete && finalWorkStatus === "최종완료") {
       updateData.supplementStatus = "완료";
+      updateData.arcSupplementDeadline = null; // D-day 해제
     } else if (existing.supplementStatus === "완료") {
-      // 이전에 완료였는데 검수가 변경되면 완료 해제
-      if (
-        finalNameChangeReview !== "완료" ||
-        finalArcReview !== "완료" ||
-        finalAutopayReview !== "완료"
-      ) {
-        updateData.supplementStatus = null;
+      // 이전에 완료였는데 검수/상태가 변경되면 완료 해제 (ARC개통은 제외)
+      const method = (updateData.activationMethod as string) ?? existing.activationMethod;
+      if (method !== "ARC개통") {
+        const stillComplete = allReviewsComplete && finalWorkStatus === "최종완료";
+        if (!stillComplete) {
+          updateData.supplementStatus = null;
+        }
       }
     }
 

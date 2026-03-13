@@ -62,6 +62,7 @@ export type ActivationRow = {
   terminationDate: string | null;
   terminationReason: string | null;
   terminationAlertDate: string | null;
+  activationMethod: string | null;
   customerMemo: string | null;
   notes: string | null;
   noteCount?: number;
@@ -81,7 +82,6 @@ const workStatusColors: Record<string, string> = {
 const reviewColors: Record<string, string> = {
   완료: "bg-green-100 text-green-700",
   보완요청: "bg-red-100 text-red-700",
-  개통요청: "bg-blue-100 text-blue-700",
   진행요청: "bg-orange-100 text-orange-700",
 };
 
@@ -174,7 +174,6 @@ function ReviewDropdown({
       <SelectContent>
         <SelectItem value="완료">완료</SelectItem>
         <SelectItem value="보완요청">보완요청</SelectItem>
-        <SelectItem value="개통요청">개통요청</SelectItem>
         <SelectItem value="진행요청">진행요청</SelectItem>
       </SelectContent>
     </Select>
@@ -373,6 +372,44 @@ export function getColumns(options: {
               <SelectItem value="최종완료">최종완료</SelectItem>
               <SelectItem value="보완요청">보완요청</SelectItem>
               <SelectItem value="해지">해지</SelectItem>
+            </SelectContent>
+          </Select>
+        );
+      },
+    },
+    // ─── 개통방법 ───
+    {
+      accessorKey: "activationMethod",
+      header: "개통방법",
+      cell: ({ row }) => {
+        const current = row.original.activationMethod || "";
+        if (!onInlineUpdate) {
+          if (!current) return <span className="text-xs text-gray-400">-</span>;
+          return (
+            <Badge
+              className={
+                current === "ARC개통"
+                  ? "bg-purple-100 text-purple-700"
+                  : "bg-sky-100 text-sky-700"
+              }
+            >
+              {current}
+            </Badge>
+          );
+        }
+        return (
+          <Select
+            value={current}
+            onValueChange={(v) =>
+              onInlineUpdate(row.original.id, "activationMethod", v)
+            }
+          >
+            <SelectTrigger className="h-7 w-[100px] text-[10px] border-dashed">
+              <SelectValue placeholder="-" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="여권개통">여권개통</SelectItem>
+              <SelectItem value="ARC개통">ARC개통</SelectItem>
             </SelectContent>
           </Select>
         );
@@ -673,40 +710,6 @@ export function getColumns(options: {
         );
       },
     },
-    // ─── 자동이체 등록 (인라인 체크박스) ───
-    {
-      accessorKey: "autopayRegistered",
-      header: "자동이체등록",
-      size: 80,
-      cell: ({ row }) => {
-        const val = !!row.original.autopayRegistered;
-        if (!onInlineUpdate) return val ? "✓" : "-";
-        return (
-          <InlineCheckboxCell
-            checked={val}
-            onToggle={(v) =>
-              onInlineUpdate(row.original.id, "autopayRegistered", v ? "true" : "false")
-            }
-          />
-        );
-      },
-    },
-    // ─── 외국인등록증 보완 (인라인 텍스트) ───
-    {
-      accessorKey: "arcSupplement",
-      header: "외등보완",
-      cell: ({ row }) => {
-        const val = row.original.arcSupplement || "";
-        if (!onInlineUpdate) return <span className="text-xs">{val || "-"}</span>;
-        return (
-          <InlineTextCell
-            value={val}
-            onSave={(v) => onInlineUpdate(row.original.id, "arcSupplement", v)}
-            width="w-[100px]"
-          />
-        );
-      },
-    },
     // ─── 보완기한 ───
     {
       id: "supplementDeadline",
@@ -737,10 +740,21 @@ export function getColumns(options: {
             </Badge>
           );
         }
+        // ARC개통 + 최종완료: 검수 불필요
+        if (r.activationMethod === "ARC개통" && r.workStatus === "최종완료") {
+          return (
+            <Badge className="bg-green-100 text-green-700 text-[10px]">
+              완료
+            </Badge>
+          );
+        }
+        // 여권개통: 4개 검수 모두 완료 + 최종완료
         if (
+          r.applicationDocsReview === "완료" &&
           r.nameChangeDocsReview === "완료" &&
           r.arcReview === "완료" &&
-          r.autopayReview === "완료"
+          r.autopayReview === "완료" &&
+          r.workStatus === "최종완료"
         ) {
           return (
             <Badge className="bg-green-100 text-green-700 text-[10px]">
@@ -893,39 +907,6 @@ export function getColumns(options: {
         );
       },
     },
-    // ─── 고객메모 (인라인 텍스트) ───
-    {
-      accessorKey: "customerMemo",
-      header: "고객메모",
-      cell: ({ row }) => {
-        const val = row.original.customerMemo || "";
-        if (!onInlineUpdate) return <span className="text-xs">{val || "-"}</span>;
-        return (
-          <InlineTextCell
-            value={val}
-            onSave={(v) => onInlineUpdate(row.original.id, "customerMemo", v)}
-            width="w-[120px]"
-          />
-        );
-      },
-    },
-    // ─── 비고 (인라인 텍스트) ───
-    {
-      accessorKey: "notes",
-      header: "비고",
-      cell: ({ row }) => {
-        const val = row.original.notes || "";
-        if (!onInlineUpdate) return <span className="text-xs">{val || "-"}</span>;
-        return (
-          <InlineTextCell
-            value={val}
-            onSave={(v) => onInlineUpdate(row.original.id, "notes", v)}
-            width="w-[120px]"
-          />
-        );
-      },
-    },
-
     // ─── 관리 (삭제만) ───
     {
       id: "actions",

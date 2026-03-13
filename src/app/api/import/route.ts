@@ -49,6 +49,7 @@ const HEADER_MAP: Record<string, string> = {
   // 기타
   "확정기변 선택약정 날짜": "commitmentDate",
   "비고": "notes",
+  "개통방법": "activationMethod",
 };
 
 // 멀티라인 헤더를 정규화하는 매핑

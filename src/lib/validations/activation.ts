@@ -19,6 +19,7 @@ export const createActivationSchema = z.object({
   selectedCommitment: z.boolean().optional(),
   commitmentDate: z.string().optional().nullable(),
   activationDate: z.string().optional().nullable(),
+  activationMethod: z.string().max(20).optional().nullable(),
   activationStatus: z.string().max(20).optional().nullable(),
   personInCharge: z.string().max(30).optional().nullable(),
   workStatus: z.string().max(20).optional().nullable(),

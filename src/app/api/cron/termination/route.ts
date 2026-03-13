@@ -72,6 +72,7 @@ export async function GET(request: Request) {
           isNotNull(activations.terminationAlertDate),
           lte(activations.terminationAlertDate, sevenDaysAgoStr),
           ne(activations.workStatus, "해지"),
+          ne(activations.workStatus, "최종완료"),
           ne(
             sql`COALESCE(${activations.supplementStatus}, '')`,
             "완료"

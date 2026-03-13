@@ -417,10 +417,10 @@ export async function getPendingByPeriod(agencyIds?: string[]) {
     SELECT
       COUNT(*) as "totalPending",
       COUNT(*) FILTER (
-        WHERE TO_CHAR(COALESCE(entry_date, created_at::date), 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
+        WHERE TO_CHAR(COALESCE(activation_date, entry_date, created_at::date), 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
       ) as "monthlyPending",
       COUNT(*) FILTER (
-        WHERE COALESCE(entry_date, created_at::date) = CURRENT_DATE
+        WHERE COALESCE(activation_date, entry_date, created_at::date) = CURRENT_DATE
       ) as "todayPending"
     FROM activations
     WHERE work_status IN ('입력중', '개통요청')
@@ -447,7 +447,7 @@ export async function getTodayPendingDetail(agencyIds?: string[]) {
     FROM activations a
     LEFT JOIN agencies ag ON a.agency_id = ag.id
     WHERE a.work_status IN ('입력중', '개통요청')
-      AND COALESCE(a.entry_date, a.created_at::date) = CURRENT_DATE
+      AND COALESCE(a.activation_date, a.entry_date, a.created_at::date) = CURRENT_DATE
       ${agencyFilter}
     ORDER BY a.entry_date ASC NULLS LAST
   `);
