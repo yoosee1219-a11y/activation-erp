@@ -300,6 +300,9 @@ export default function ActivationsPage() {
     return allAgencies;
   }, [twoLevelGrouped]);
 
+  // 대분류만 선택 + 중분류 미선택 → 하나로 합쳐서 표시
+  const shouldCombine = localMajors.length > 0 && localMediums.length === 0;
+
   // 선택된 거래처 필터링
   const filteredFlat = selectedAgency
     ? flatGrouped.filter(([id]) => id === selectedAgency)
@@ -489,7 +492,7 @@ export default function ActivationsPage() {
           )}
 
           {/* 2단계 그룹 카드: 대분류 → 중분류 */}
-          {hasCategories ? (
+          {hasCategories && !shouldCombine ? (
             twoLevelGrouped.map(([catId, catGroup]) => (
               <div key={catId}>
                 {/* 대분류 헤더 */}
@@ -562,17 +565,25 @@ export default function ActivationsPage() {
             </div>
           )}
 
-          {/* 중분류별 테이블 (선택된 중분류만 or 전체) */}
-          {filteredFlat.map(([agencyId, group]) => (
-            <div key={agencyId}>
+          {/* 대분류만 선택 시 하나의 테이블로 통합 표시 */}
+          {shouldCombine && !selectedAgency ? (
+            <div>
               <div className="flex items-center gap-3 mb-2 mt-4">
-                <h2 className="text-lg font-semibold">{group.name}</h2>
-                <Badge variant="secondary">{group.rows.length}건</Badge>
-                {renderStatusBadges(group.counts)}
+                <h2 className="text-lg font-semibold">
+                  {twoLevelGrouped.length > 0 ? twoLevelGrouped[0][1].categoryName : "전체"}
+                </h2>
+                <Badge variant="secondary">{filteredData.length}건</Badge>
+                {renderStatusBadges(
+                  filteredData.reduce((acc, row) => {
+                    const ws = row.workStatus || "입력중";
+                    acc[ws] = (acc[ws] || 0) + 1;
+                    return acc;
+                  }, {} as Record<string, number>)
+                )}
               </div>
               <DataTable
                 columns={columns}
-                data={group.rows}
+                data={filteredData}
                 pageSize={20}
                 searchPlaceholder="고객명으로 검색..."
                 highlightId={highlightId}
@@ -588,7 +599,35 @@ export default function ActivationsPage() {
                 }}
               />
             </div>
-          ))}
+          ) : (
+            /* 중분류별 테이블 (선택된 중분류만 or 전체) */
+            filteredFlat.map(([agencyId, group]) => (
+              <div key={agencyId}>
+                <div className="flex items-center gap-3 mb-2 mt-4">
+                  <h2 className="text-lg font-semibold">{group.name}</h2>
+                  <Badge variant="secondary">{group.rows.length}건</Badge>
+                  {renderStatusBadges(group.counts)}
+                </div>
+                <DataTable
+                  columns={columns}
+                  data={group.rows}
+                  pageSize={20}
+                  searchPlaceholder="고객명으로 검색..."
+                  highlightId={highlightId}
+                  getRowId={(row: ActivationRow) => row.id}
+                  getRowClassName={(row: ActivationRow) => {
+                    const hasSupp =
+                      row.workStatus === "보완요청" ||
+                      row.applicationDocsReview === "보완요청" ||
+                      row.nameChangeDocsReview === "보완요청" ||
+                      row.arcReview === "보완요청" ||
+                      row.autopayReview === "보완요청";
+                    return hasSupp ? "bg-red-50/70" : "";
+                  }}
+                />
+              </div>
+            ))
+          )}
 
           {filteredFlat.length === 0 && (
             <div className="flex h-32 items-center justify-center text-gray-500">
