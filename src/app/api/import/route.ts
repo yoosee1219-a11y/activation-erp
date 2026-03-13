@@ -139,6 +139,7 @@ export async function POST(request: NextRequest) {
       skipped: 0,
       duplicates: 0,
       errors: [] as string[],
+      duplicateDetails: [] as string[],
       newAgencies: [] as string[],
     };
 
@@ -222,6 +223,8 @@ export async function POST(request: NextRequest) {
         const dupKey2 = `${customerName.toLowerCase()}|${agencyId}|${entryDate || ""}`;
         if (existingSet.has(dupKey1) || (entryDate && existingSet.has(dupKey2))) {
           results.duplicates++;
+          const dateInfo = activationDate || entryDate || "날짜없음";
+          results.duplicateDetails.push(`행 ${i + 1}: ${customerName} (${agencyRaw}, ${dateInfo})`);
           continue;
         }
         // 같은 배치 내 중복도 방지

@@ -90,6 +90,7 @@ interface ImportResult {
   skipped: number;
   duplicates: number;
   errors: string[];
+  duplicateDetails: string[];
   newAgencies: string[];
 }
 
@@ -274,6 +275,19 @@ export default function ImportPage() {
             <p className="text-xs text-green-600 ml-8">
               새로 생성된 거래처: {result.newAgencies.join(", ")}
             </p>
+          )}
+          {result.duplicateDetails && result.duplicateDetails.length > 0 && (
+            <div className="ml-8 mt-2">
+              <p className="text-xs font-medium text-blue-600">중복 제외 목록 (이미 DB에 존재):</p>
+              <ul className="text-xs text-blue-600 list-disc list-inside max-h-40 overflow-y-auto">
+                {result.duplicateDetails.slice(0, 50).map((d, i) => (
+                  <li key={i}>{d}</li>
+                ))}
+                {result.duplicateDetails.length > 50 && (
+                  <li>... 외 {result.duplicateDetails.length - 50}건</li>
+                )}
+              </ul>
+            </div>
           )}
           {result.errors.length > 0 && (
             <div className="ml-8 mt-2">
