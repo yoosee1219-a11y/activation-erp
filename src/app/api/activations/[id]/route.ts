@@ -6,7 +6,7 @@ import {
 } from "@/lib/db/queries/activations";
 import { getSessionUser } from "@/lib/auth/session";
 import { canAccessAgency } from "@/lib/db/queries/users";
-import { markUsimUsed, markUsimCancelled } from "@/lib/db/queries/usims";
+
 import { addActivationLog } from "@/lib/db/queries/activation-logs";
 import { updateActivationSchema } from "@/lib/validations/activation";
 import { db } from "@/lib/db";
@@ -400,51 +400,6 @@ export async function PATCH(
       }
     } catch (logError) {
       console.warn("Activity log failed (non-critical):", logError);
-    }
-
-    // ─── 유심 재고 자동 연동 ───
-    try {
-      // 1) 개통완료 시 유심번호가 있으면 자동 USED 처리
-      const newUsimNumber = body.usimNumber || existing.usimNumber;
-      const isBecomingComplete =
-        body.workStatus === "개통완료" ||
-        body.activationStatus === "개통완료";
-      const wasNotComplete =
-        existing.workStatus !== "개통완료" &&
-        existing.activationStatus !== "개통완료";
-
-      if (isBecomingComplete && wasNotComplete && newUsimNumber) {
-        await markUsimUsed(newUsimNumber, existing.agencyId, id);
-      }
-
-      // 2) usimNumber가 새로 입력되고 이미 개통완료 상태면 자동 USED
-      if (
-        body.usimNumber &&
-        body.usimNumber !== existing.usimNumber &&
-        (existing.workStatus === "개통완료" || existing.activationStatus === "개통완료")
-      ) {
-        await markUsimUsed(body.usimNumber, existing.agencyId, id);
-      }
-
-      // 3) 개통취소 시 유심 CANCELLED 처리
-      if (
-        body.activationStatus === "개통취소" &&
-        existing.activationStatus !== "개통취소"
-      ) {
-        await markUsimCancelled(id);
-      }
-    } catch (usimError) {
-      // 유심 연동 실패해도 개통 업데이트는 성공 처리 (로그만 남김)
-      console.warn("USIM auto-link failed (non-critical):", usimError);
-    }
-
-    // 해지 시 유심 취소 처리
-    if (body.workStatus === "해지" && existing.workStatus !== "해지") {
-      try {
-        await markUsimCancelled(id);
-      } catch (usimError) {
-        console.warn("USIM cancellation on termination failed (non-critical):", usimError);
-      }
     }
 
     return NextResponse.json({ activation });

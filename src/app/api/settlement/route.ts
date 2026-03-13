@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { activations, agencies, usims } from "@/lib/db/schema";
-import { eq, and, gte, lt, sql, ne, inArray, or } from "drizzle-orm";
+import { activations, agencies, usimLogs } from "@/lib/db/schema";
+import { and, eq, gte, lt, sql, inArray, or } from "drizzle-orm";
 import {
   getAgencyIdsByMediumCategories,
   getAgencyIdsByMajorCategory,
@@ -65,37 +65,22 @@ export async function GET(request: NextRequest) {
       lt(activations.terminationDate, monthEnd)
     );
 
-    // 1) USIM received (assigned) counts per agency
+    // 1) USIM received (assigned) counts per agency — usimLogs SUM
     const usimReceivedRows = await db
       .select({
-        agencyId: usims.agencyId,
-        cnt: sql<number>`count(*)::int`,
+        agencyId: usimLogs.agencyId,
+        cnt: sql<number>`coalesce(sum(case when ${usimLogs.usimCount} > 0 then ${usimLogs.usimCount} else 0 end), 0)::int`,
       })
-      .from(usims)
+      .from(usimLogs)
       .where(
         and(
-          inArray(usims.agencyId, targetIds),
-          gte(usims.assignedDate, monthStart),
-          lt(usims.assignedDate, monthEnd)
+          inArray(usimLogs.agencyId, targetIds),
+          inArray(usimLogs.action, ["assign"]),
+          gte(usimLogs.createdAt, new Date(monthStart)),
+          lt(usimLogs.createdAt, new Date(monthEnd))
         )
       )
-      .groupBy(usims.agencyId);
-
-    // 2) USIM used (activated) counts per agency
-    const usimUsedRows = await db
-      .select({
-        agencyId: usims.agencyId,
-        cnt: sql<number>`count(*)::int`,
-      })
-      .from(usims)
-      .where(
-        and(
-          inArray(usims.agencyId, targetIds),
-          gte(usims.usedDate, monthStart),
-          lt(usims.usedDate, monthEnd)
-        )
-      )
-      .groupBy(usims.agencyId);
+      .groupBy(usimLogs.agencyId);
 
     // 3) Activation counts per agency (normal + clawback categories)
     const activationRows = await db
@@ -136,7 +121,6 @@ export async function GET(request: NextRequest) {
 
     // Build lookup maps
     const usimReceivedMap = new Map(usimReceivedRows.map((r) => [r.agencyId, r.cnt]));
-    const usimUsedMap = new Map(usimUsedRows.map((r) => [r.agencyId, r.cnt]));
     const activationMap = new Map(activationRows.map((r) => [r.agencyId, r]));
     const detailMap = new Map<string, typeof detailList>();
     for (const d of detailList) {
@@ -151,7 +135,6 @@ export async function GET(request: NextRequest) {
     for (const agency of targetAgencies) {
       const commissionRate = agency.commissionRate || 0;
       const receivedCount = usimReceivedMap.get(agency.id) || 0;
-      const usedCount = usimUsedMap.get(agency.id) || 0;
 
       const actRow = activationMap.get(agency.id);
       const normalCount = actRow?.normalCount || 0;

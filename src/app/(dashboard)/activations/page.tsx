@@ -177,14 +177,20 @@ export default function ActivationsPage() {
     field: string,
     value: string
   ) => {
+    // Boolean 필드 변환
+    const booleanFields = new Set(["deviceChangeConfirmed", "selectedCommitment", "autopayRegistered", "combinedUnitNameChange", "billingAccountNameChange"]);
+    const parsedValue: unknown = booleanFields.has(field)
+      ? value === "true"
+      : value;
+
     setData((prev) =>
-      prev.map((row) => (row.id === id ? { ...row, [field]: value } : row))
+      prev.map((row) => (row.id === id ? { ...row, [field]: parsedValue } : row))
     );
     try {
       const res = await fetch(`/api/activations/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ [field]: value }),
+        body: JSON.stringify({ [field]: parsedValue }),
       });
       if (!res.ok) {
         toast.error("수정에 실패했습니다.");

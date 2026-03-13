@@ -16,10 +16,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { MoreHorizontal, Eye, Pencil, Trash2, Lock, Unlock } from "lucide-react";
-import Link from "next/link";
+import { MoreHorizontal, Trash2, Lock, Unlock } from "lucide-react";
 import { format } from "date-fns";
 import { NoteIndicator } from "@/components/activations/note-indicator";
+import { useState } from "react";
 
 export type ActivationRow = {
   id: string;
@@ -30,9 +30,14 @@ export type ActivationRow = {
   customerName: string;
   usimNumber: string | null;
   entryDate: string | null;
+  subscriptionNumber: string | null;
   newPhoneNumber: string | null;
+  virtualAccount: string | null;
   subscriptionType: string | null;
   ratePlan: string | null;
+  deviceChangeConfirmed: boolean | null;
+  selectedCommitment: boolean | null;
+  commitmentDate: string | null;
   activationDate: string | null;
   activationStatus: string | null;
   personInCharge: string | null;
@@ -53,17 +58,14 @@ export type ActivationRow = {
   autopayReview: string | null;
   arcSupplementDeadline: string | null;
   supplementStatus: string | null;
+  holdReason: string | null;
   terminationDate: string | null;
   terminationReason: string | null;
   terminationAlertDate: string | null;
+  customerMemo: string | null;
+  notes: string | null;
   noteCount?: number;
   createdAt: string;
-};
-
-const statusColors: Record<string, string> = {
-  대기: "bg-yellow-100 text-yellow-800",
-  개통완료: "bg-green-100 text-green-800",
-  개통취소: "bg-red-100 text-red-800",
 };
 
 const workStatusColors: Record<string, string> = {
@@ -77,11 +79,107 @@ const workStatusColors: Record<string, string> = {
 };
 
 const reviewColors: Record<string, string> = {
-  "완료": "bg-green-100 text-green-700",
-  "보완요청": "bg-red-100 text-red-700",
-  "개통요청": "bg-blue-100 text-blue-700",
-  "진행요청": "bg-orange-100 text-orange-700",
+  완료: "bg-green-100 text-green-700",
+  보완요청: "bg-red-100 text-red-700",
+  개통요청: "bg-blue-100 text-blue-700",
+  진행요청: "bg-orange-100 text-orange-700",
 };
+
+// ─── Inline editable text cell ───
+function InlineTextCell({
+  value,
+  onSave,
+  placeholder = "-",
+  width = "w-[100px]",
+}: {
+  value: string;
+  onSave: (v: string) => void;
+  placeholder?: string;
+  width?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  if (!editing) {
+    return (
+      <span
+        className={`text-xs cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5 ${!value ? "text-gray-400" : ""}`}
+        onClick={() => {
+          setDraft(value);
+          setEditing(true);
+        }}
+      >
+        {value || placeholder}
+      </span>
+    );
+  }
+
+  return (
+    <input
+      autoFocus
+      className={`h-7 ${width} rounded border border-blue-400 bg-white px-2 text-xs focus:outline-none`}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        setEditing(false);
+        if (draft !== value) onSave(draft);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          setEditing(false);
+          if (draft !== value) onSave(draft);
+        }
+        if (e.key === "Escape") {
+          setEditing(false);
+          setDraft(value);
+        }
+      }}
+    />
+  );
+}
+
+// ─── Inline checkbox cell ───
+function InlineCheckboxCell({
+  checked,
+  onToggle,
+}: {
+  checked: boolean;
+  onToggle: (v: boolean) => void;
+}) {
+  return (
+    <input
+      type="checkbox"
+      className="h-4 w-4 cursor-pointer accent-blue-600"
+      checked={checked}
+      onChange={(e) => onToggle(e.target.checked)}
+    />
+  );
+}
+
+// ─── Review dropdown (reusable) ───
+function ReviewDropdown({
+  current,
+  onUpdate,
+}: {
+  current: string;
+  onUpdate: (v: string) => void;
+}) {
+  return (
+    <Select value={current} onValueChange={onUpdate}>
+      <SelectTrigger
+        className={`h-7 w-[90px] text-[10px] border-dashed ${reviewColors[current] || ""}`}
+      >
+        <SelectValue placeholder="검수" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="완료">완료</SelectItem>
+        <SelectItem value="보완요청">보완요청</SelectItem>
+        <SelectItem value="개통요청">개통요청</SelectItem>
+        <SelectItem value="진행요청">진행요청</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
 
 export function getColumns(options: {
   onDelete?: (id: string) => void;
@@ -91,7 +189,14 @@ export function getColumns(options: {
   canLock?: boolean;
   staffList?: string[];
 }): ColumnDef<ActivationRow>[] {
-  const { onDelete, canDelete, onInlineUpdate, onToggleLock, canLock, staffList = [] } = options;
+  const {
+    onDelete,
+    canDelete,
+    onInlineUpdate,
+    onToggleLock,
+    canLock,
+    staffList = [],
+  } = options;
 
   return [
     // ─── 기본 ───
@@ -107,8 +212,8 @@ export function getColumns(options: {
     },
     {
       id: "noteIndicator",
-      header: "특이사항",
-      size: 60,
+      header: "메모",
+      size: 50,
       cell: ({ row }: { row: { original: ActivationRow } }) => (
         <NoteIndicator
           activationId={row.original.id}
@@ -169,7 +274,39 @@ export function getColumns(options: {
         <span className="font-medium">{row.getValue("customerName")}</span>
       ),
     },
-    // 담당자 - 고객명 바로 뒤 배치
+    // ─── 유심번호 (인라인 텍스트) ───
+    {
+      accessorKey: "usimNumber",
+      header: "유심번호",
+      cell: ({ row }) => {
+        const val = row.original.usimNumber || "";
+        if (!onInlineUpdate) return <span className="text-xs">{val || "-"}</span>;
+        return (
+          <InlineTextCell
+            value={val}
+            onSave={(v) => onInlineUpdate(row.original.id, "usimNumber", v)}
+            width="w-[120px]"
+          />
+        );
+      },
+    },
+    // ─── 가입번호 (인라인 텍스트) ───
+    {
+      accessorKey: "subscriptionNumber",
+      header: "가입번호",
+      cell: ({ row }) => {
+        const val = row.original.subscriptionNumber || "";
+        if (!onInlineUpdate) return <span className="text-xs">{val || "-"}</span>;
+        return (
+          <InlineTextCell
+            value={val}
+            onSave={(v) => onInlineUpdate(row.original.id, "subscriptionNumber", v)}
+            width="w-[120px]"
+          />
+        );
+      },
+    },
+    // ─── 담당자 ───
     {
       accessorKey: "personInCharge",
       header: "담당자",
@@ -199,7 +336,7 @@ export function getColumns(options: {
         );
       },
     },
-    // 진행상황 - 담당자 바로 뒤 배치
+    // ─── 진행상황 ───
     {
       accessorKey: "workStatus",
       header: "진행상황",
@@ -207,7 +344,11 @@ export function getColumns(options: {
         const current = (row.getValue("workStatus") as string) || "입력중";
         if (!onInlineUpdate) {
           return (
-            <Badge className={workStatusColors[current] || workStatusColors["입력중"]}>
+            <Badge
+              className={
+                workStatusColors[current] || workStatusColors["입력중"]
+              }
+            >
               {current}
             </Badge>
           );
@@ -219,7 +360,9 @@ export function getColumns(options: {
               onInlineUpdate(row.original.id, "workStatus", v)
             }
           >
-            <SelectTrigger className={`h-7 w-[100px] text-xs border-dashed ${workStatusColors[current] || ""}`}>
+            <SelectTrigger
+              className={`h-7 w-[100px] text-xs border-dashed ${workStatusColors[current] || ""}`}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -238,6 +381,33 @@ export function getColumns(options: {
     {
       accessorKey: "newPhoneNumber",
       header: "신규번호",
+      cell: ({ row }) => {
+        const val = row.original.newPhoneNumber || "";
+        if (!onInlineUpdate) return <span className="text-xs">{val || "-"}</span>;
+        return (
+          <InlineTextCell
+            value={val}
+            onSave={(v) => onInlineUpdate(row.original.id, "newPhoneNumber", v)}
+            width="w-[120px]"
+          />
+        );
+      },
+    },
+    // ─── 가상계좌 (인라인 텍스트) ───
+    {
+      accessorKey: "virtualAccount",
+      header: "가상계좌",
+      cell: ({ row }) => {
+        const val = row.original.virtualAccount || "";
+        if (!onInlineUpdate) return <span className="text-xs">{val || "-"}</span>;
+        return (
+          <InlineTextCell
+            value={val}
+            onSave={(v) => onInlineUpdate(row.original.id, "virtualAccount", v)}
+            width="w-[120px]"
+          />
+        );
+      },
     },
     {
       accessorKey: "subscriptionType",
@@ -246,6 +416,76 @@ export function getColumns(options: {
     {
       accessorKey: "ratePlan",
       header: "요금제",
+      cell: ({ row }) => {
+        const val = row.original.ratePlan || "";
+        if (!onInlineUpdate) return <span className="text-xs">{val || "-"}</span>;
+        return (
+          <InlineTextCell
+            value={val}
+            onSave={(v) => onInlineUpdate(row.original.id, "ratePlan", v)}
+            width="w-[100px]"
+          />
+        );
+      },
+    },
+    // ─── 확정기변 (인라인 체크박스) ───
+    {
+      accessorKey: "deviceChangeConfirmed",
+      header: "확정기변",
+      size: 60,
+      cell: ({ row }) => {
+        const val = !!row.original.deviceChangeConfirmed;
+        if (!onInlineUpdate) return val ? "✓" : "-";
+        return (
+          <InlineCheckboxCell
+            checked={val}
+            onToggle={(v) =>
+              onInlineUpdate(row.original.id, "deviceChangeConfirmed", v ? "true" : "false")
+            }
+          />
+        );
+      },
+    },
+    // ─── 선택약정 (인라인 체크박스) ───
+    {
+      accessorKey: "selectedCommitment",
+      header: "선택약정",
+      size: 60,
+      cell: ({ row }) => {
+        const val = !!row.original.selectedCommitment;
+        if (!onInlineUpdate) return val ? "✓" : "-";
+        return (
+          <InlineCheckboxCell
+            checked={val}
+            onToggle={(v) =>
+              onInlineUpdate(row.original.id, "selectedCommitment", v ? "true" : "false")
+            }
+          />
+        );
+      },
+    },
+    // ─── 약정날짜 (인라인 날짜) ───
+    {
+      accessorKey: "commitmentDate",
+      header: "약정날짜",
+      cell: ({ row }) => {
+        const date = row.original.commitmentDate;
+        if (!onInlineUpdate) {
+          return date ? format(new Date(date), "yyyy-MM-dd") : "-";
+        }
+        return (
+          <input
+            type="date"
+            className="h-7 w-[130px] rounded border border-dashed border-gray-300 bg-transparent px-2 text-xs focus:border-blue-500 focus:outline-none"
+            value={date ? new Date(date).toISOString().slice(0, 10) : ""}
+            onChange={(e) => {
+              if (e.target.value) {
+                onInlineUpdate(row.original.id, "commitmentDate", e.target.value);
+              }
+            }}
+          />
+        );
+      },
     },
     {
       accessorKey: "entryDate",
@@ -256,7 +496,7 @@ export function getColumns(options: {
       },
     },
 
-    // ─── 서류 + 검수 (나란히 배치) ───
+    // ─── 서류 + 검수 ───
     {
       accessorKey: "applicationDocs",
       header: "가입신청서",
@@ -264,7 +504,12 @@ export function getColumns(options: {
         const v = row.original.applicationDocs;
         if (!v) return <span className="text-xs text-gray-400">-</span>;
         return (
-          <a href={v} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
+          <a
+            href={v}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-blue-600 hover:underline"
+          >
             보기
           </a>
         );
@@ -272,32 +517,27 @@ export function getColumns(options: {
     },
     {
       accessorKey: "applicationDocsReview",
-      header: "검수",
+      header: "검수①",
       cell: ({ row }) => {
         const current = row.original.applicationDocsReview || "";
         if (!onInlineUpdate) {
-          if (!current) return <span className="text-xs text-gray-400">-</span>;
+          if (!current)
+            return <span className="text-xs text-gray-400">-</span>;
           return (
-            <Badge className={`text-[10px] ${reviewColors[current] || "bg-gray-100 text-gray-600"}`}>
+            <Badge
+              className={`text-[10px] ${reviewColors[current] || "bg-gray-100 text-gray-600"}`}
+            >
               {current}
             </Badge>
           );
         }
         return (
-          <Select
-            value={current}
-            onValueChange={(v) => onInlineUpdate(row.original.id, "applicationDocsReview", v)}
-          >
-            <SelectTrigger className={`h-7 w-[90px] text-[10px] border-dashed ${reviewColors[current] || ""}`}>
-              <SelectValue placeholder="검수" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="완료">완료</SelectItem>
-              <SelectItem value="보완요청">보완요청</SelectItem>
-              <SelectItem value="개통요청">개통요청</SelectItem>
-              <SelectItem value="진행요청">진행요청</SelectItem>
-            </SelectContent>
-          </Select>
+          <ReviewDropdown
+            current={current}
+            onUpdate={(v) =>
+              onInlineUpdate(row.original.id, "applicationDocsReview", v)
+            }
+          />
         );
       },
     },
@@ -308,7 +548,12 @@ export function getColumns(options: {
         const v = row.original.nameChangeDocs;
         if (!v) return <span className="text-xs text-gray-400">-</span>;
         return (
-          <a href={v} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
+          <a
+            href={v}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-blue-600 hover:underline"
+          >
             보기
           </a>
         );
@@ -316,36 +561,30 @@ export function getColumns(options: {
     },
     {
       accessorKey: "nameChangeDocsReview",
-      header: "검수",
+      header: "검수②",
       cell: ({ row }) => {
         const current = row.original.nameChangeDocsReview || "";
         if (!onInlineUpdate) {
-          if (!current) return <span className="text-xs text-gray-400">-</span>;
+          if (!current)
+            return <span className="text-xs text-gray-400">-</span>;
           return (
-            <Badge className={`text-[10px] ${reviewColors[current] || "bg-gray-100 text-gray-600"}`}>
+            <Badge
+              className={`text-[10px] ${reviewColors[current] || "bg-gray-100 text-gray-600"}`}
+            >
               {current}
             </Badge>
           );
         }
         return (
-          <Select
-            value={current}
-            onValueChange={(v) => onInlineUpdate(row.original.id, "nameChangeDocsReview", v)}
-          >
-            <SelectTrigger className={`h-7 w-[90px] text-[10px] border-dashed ${reviewColors[current] || ""}`}>
-              <SelectValue placeholder="검수" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="완료">완료</SelectItem>
-              <SelectItem value="보완요청">보완요청</SelectItem>
-              <SelectItem value="개통요청">개통요청</SelectItem>
-              <SelectItem value="진행요청">진행요청</SelectItem>
-            </SelectContent>
-          </Select>
+          <ReviewDropdown
+            current={current}
+            onUpdate={(v) =>
+              onInlineUpdate(row.original.id, "nameChangeDocsReview", v)
+            }
+          />
         );
       },
     },
-    // 외국인등록증
     {
       accessorKey: "arcInfo",
       header: "외국인등록증",
@@ -353,45 +592,43 @@ export function getColumns(options: {
         const v = row.original.arcInfo;
         if (!v) return <span className="text-xs text-gray-400">-</span>;
         return (
-          <a href={v} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
+          <a
+            href={v}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-blue-600 hover:underline"
+          >
             보기
           </a>
         );
       },
     },
-    // 검수 (외국인등록증)
     {
       accessorKey: "arcReview",
-      header: "검수",
+      header: "검수③",
       cell: ({ row }) => {
         const current = row.original.arcReview || "";
         if (!onInlineUpdate) {
-          if (!current) return <span className="text-xs text-gray-400">-</span>;
+          if (!current)
+            return <span className="text-xs text-gray-400">-</span>;
           return (
-            <Badge className={`text-[10px] ${reviewColors[current] || "bg-gray-100 text-gray-600"}`}>
+            <Badge
+              className={`text-[10px] ${reviewColors[current] || "bg-gray-100 text-gray-600"}`}
+            >
               {current}
             </Badge>
           );
         }
         return (
-          <Select
-            value={current}
-            onValueChange={(v) => onInlineUpdate(row.original.id, "arcReview", v)}
-          >
-            <SelectTrigger className={`h-7 w-[90px] text-[10px] border-dashed ${reviewColors[current] || ""}`}>
-              <SelectValue placeholder="검수" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="완료">완료</SelectItem>
-              <SelectItem value="보완요청">보완요청</SelectItem>
-              <SelectItem value="개통요청">개통요청</SelectItem>
-              <SelectItem value="진행요청">진행요청</SelectItem>
-            </SelectContent>
-          </Select>
+          <ReviewDropdown
+            current={current}
+            onUpdate={(v) =>
+              onInlineUpdate(row.original.id, "arcReview", v)
+            }
+          />
         );
       },
     },
-    // 자동이체 서류
     {
       accessorKey: "autopayInfo",
       header: "자동이체",
@@ -399,80 +636,152 @@ export function getColumns(options: {
         const v = row.original.autopayInfo;
         if (!v) return <span className="text-xs text-gray-400">-</span>;
         return (
-          <a href={v} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
+          <a
+            href={v}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-blue-600 hover:underline"
+          >
             보기
           </a>
         );
       },
     },
-    // 검수 (자동이체)
     {
       accessorKey: "autopayReview",
-      header: "검수",
+      header: "검수④",
       cell: ({ row }) => {
         const current = row.original.autopayReview || "";
         if (!onInlineUpdate) {
-          if (!current) return <span className="text-xs text-gray-400">-</span>;
+          if (!current)
+            return <span className="text-xs text-gray-400">-</span>;
           return (
-            <Badge className={`text-[10px] ${reviewColors[current] || "bg-gray-100 text-gray-600"}`}>
+            <Badge
+              className={`text-[10px] ${reviewColors[current] || "bg-gray-100 text-gray-600"}`}
+            >
               {current}
             </Badge>
           );
         }
         return (
-          <Select
-            value={current}
-            onValueChange={(v) => onInlineUpdate(row.original.id, "autopayReview", v)}
-          >
-            <SelectTrigger className={`h-7 w-[90px] text-[10px] border-dashed ${reviewColors[current] || ""}`}>
-              <SelectValue placeholder="검수" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="완료">완료</SelectItem>
-              <SelectItem value="보완요청">보완요청</SelectItem>
-              <SelectItem value="개통요청">개통요청</SelectItem>
-              <SelectItem value="진행요청">진행요청</SelectItem>
-            </SelectContent>
-          </Select>
+          <ReviewDropdown
+            current={current}
+            onUpdate={(v) =>
+              onInlineUpdate(row.original.id, "autopayReview", v)
+            }
+          />
         );
       },
     },
-    // 보완기한
+    // ─── 자동이체 등록 (인라인 체크박스) ───
+    {
+      accessorKey: "autopayRegistered",
+      header: "자동이체등록",
+      size: 80,
+      cell: ({ row }) => {
+        const val = !!row.original.autopayRegistered;
+        if (!onInlineUpdate) return val ? "✓" : "-";
+        return (
+          <InlineCheckboxCell
+            checked={val}
+            onToggle={(v) =>
+              onInlineUpdate(row.original.id, "autopayRegistered", v ? "true" : "false")
+            }
+          />
+        );
+      },
+    },
+    // ─── 외국인등록증 보완 (인라인 텍스트) ───
+    {
+      accessorKey: "arcSupplement",
+      header: "외등보완",
+      cell: ({ row }) => {
+        const val = row.original.arcSupplement || "";
+        if (!onInlineUpdate) return <span className="text-xs">{val || "-"}</span>;
+        return (
+          <InlineTextCell
+            value={val}
+            onSave={(v) => onInlineUpdate(row.original.id, "arcSupplement", v)}
+            width="w-[100px]"
+          />
+        );
+      },
+    },
+    // ─── 보완기한 ───
     {
       id: "supplementDeadline",
       header: "보완기한",
       cell: ({ row }) => {
         const r = row.original;
-        // 해지 완료
         if (r.workStatus === "해지") {
-          return <Badge variant="destructive" className="bg-gray-900 text-white text-[10px]">해지완료</Badge>;
+          return (
+            <Badge
+              variant="destructive"
+              className="bg-gray-900 text-white text-[10px]"
+            >
+              해지완료
+            </Badge>
+          );
         }
-        // 해지예고
         if (r.terminationAlertDate && !r.terminationDate) {
           const alertDate = new Date(r.terminationAlertDate);
           const today = new Date();
-          const graceDaysLeft = 7 - Math.floor((today.getTime() - alertDate.getTime()) / (1000 * 60 * 60 * 24));
+          const graceDaysLeft =
+            7 -
+            Math.floor(
+              (today.getTime() - alertDate.getTime()) / (1000 * 60 * 60 * 24)
+            );
           return (
             <Badge variant="destructive" className="animate-pulse text-[10px]">
               해지예고 D-{Math.max(graceDaysLeft, 0)}
             </Badge>
           );
         }
-        // 3가지 검수 모두 완료면 "완료"
-        if (r.nameChangeDocsReview === "완료" && r.arcReview === "완료" && r.autopayReview === "완료") {
-          return <Badge className="bg-green-100 text-green-700 text-[10px]">완료</Badge>;
+        if (
+          r.nameChangeDocsReview === "완료" &&
+          r.arcReview === "완료" &&
+          r.autopayReview === "완료"
+        ) {
+          return (
+            <Badge className="bg-green-100 text-green-700 text-[10px]">
+              완료
+            </Badge>
+          );
         }
         const deadline = r.arcSupplementDeadline;
-        if (!deadline) return <span className="text-xs text-gray-400">-</span>;
-        const daysLeft = Math.ceil((new Date(deadline).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
-        if (daysLeft < 0) return <Badge className="bg-red-100 text-red-700 text-[10px]">기한초과</Badge>;
-        if (daysLeft <= 30) return <Badge className="bg-red-100 text-red-700 text-[10px]">D-{daysLeft}</Badge>;
-        if (daysLeft <= 60) return <Badge className="bg-orange-100 text-orange-700 text-[10px]">D-{daysLeft}</Badge>;
-        return <Badge className="bg-gray-100 text-gray-600 text-[10px]">D-{daysLeft}</Badge>;
+        if (!deadline)
+          return <span className="text-xs text-gray-400">-</span>;
+        const daysLeft = Math.ceil(
+          (new Date(deadline).getTime() - new Date().getTime()) /
+            (1000 * 60 * 60 * 24)
+        );
+        if (daysLeft < 0)
+          return (
+            <Badge className="bg-red-100 text-red-700 text-[10px]">
+              기한초과
+            </Badge>
+          );
+        if (daysLeft <= 30)
+          return (
+            <Badge className="bg-red-100 text-red-700 text-[10px]">
+              D-{daysLeft}
+            </Badge>
+          );
+        if (daysLeft <= 60)
+          return (
+            <Badge className="bg-orange-100 text-orange-700 text-[10px]">
+              D-{daysLeft}
+            </Badge>
+          );
+        return (
+          <Badge className="bg-gray-100 text-gray-600 text-[10px]">
+            D-{daysLeft}
+          </Badge>
+        );
       },
     },
 
-    // ─── 상태/관리 ───
+    // ─── 개통일자 ───
     {
       accessorKey: "activationDate",
       header: "개통일자",
@@ -488,18 +797,143 @@ export function getColumns(options: {
             value={date ? new Date(date).toISOString().slice(0, 10) : ""}
             onChange={(e) => {
               if (e.target.value) {
-                onInlineUpdate(row.original.id, "activationDate", e.target.value);
+                onInlineUpdate(
+                  row.original.id,
+                  "activationDate",
+                  e.target.value
+                );
               }
             }}
           />
         );
       },
     },
+    // ─── 보류사유 (인라인 드롭다운) ───
+    {
+      accessorKey: "holdReason",
+      header: "보류사유",
+      cell: ({ row }) => {
+        const current = row.original.holdReason || "";
+        if (!onInlineUpdate) {
+          return <span className="text-xs">{current || "-"}</span>;
+        }
+        return (
+          <Select
+            value={current}
+            onValueChange={(v) =>
+              onInlineUpdate(row.original.id, "holdReason", v)
+            }
+          >
+            <SelectTrigger className="h-7 w-[100px] text-[10px] border-dashed">
+              <SelectValue placeholder="-" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="서류">서류</SelectItem>
+              <SelectItem value="체납">체납</SelectItem>
+              <SelectItem value="신분증">신분증</SelectItem>
+              <SelectItem value="계좌정보">계좌정보</SelectItem>
+              <SelectItem value="기타">기타</SelectItem>
+            </SelectContent>
+          </Select>
+        );
+      },
+    },
+    // ─── 해지일자 (인라인 날짜) ───
+    {
+      accessorKey: "terminationDate",
+      header: "해지일자",
+      cell: ({ row }) => {
+        const date = row.original.terminationDate;
+        if (!onInlineUpdate) {
+          return date ? format(new Date(date), "yyyy-MM-dd") : "-";
+        }
+        return (
+          <input
+            type="date"
+            className="h-7 w-[130px] rounded border border-dashed border-gray-300 bg-transparent px-2 text-xs focus:border-blue-500 focus:outline-none"
+            value={date ? new Date(date).toISOString().slice(0, 10) : ""}
+            onChange={(e) => {
+              if (e.target.value) {
+                onInlineUpdate(
+                  row.original.id,
+                  "terminationDate",
+                  e.target.value
+                );
+              }
+            }}
+          />
+        );
+      },
+    },
+    // ─── 해지사유 (인라인 드롭다운) ───
+    {
+      accessorKey: "terminationReason",
+      header: "해지사유",
+      cell: ({ row }) => {
+        const current = row.original.terminationReason || "";
+        if (!onInlineUpdate) {
+          return <span className="text-xs">{current || "-"}</span>;
+        }
+        return (
+          <Select
+            value={current}
+            onValueChange={(v) =>
+              onInlineUpdate(row.original.id, "terminationReason", v)
+            }
+          >
+            <SelectTrigger className="h-7 w-[110px] text-[10px] border-dashed">
+              <SelectValue placeholder="-" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="보완기한초과">보완기한초과</SelectItem>
+              <SelectItem value="6개월해지">6개월해지</SelectItem>
+              <SelectItem value="수동해지">수동해지</SelectItem>
+            </SelectContent>
+          </Select>
+        );
+      },
+    },
+    // ─── 고객메모 (인라인 텍스트) ───
+    {
+      accessorKey: "customerMemo",
+      header: "고객메모",
+      cell: ({ row }) => {
+        const val = row.original.customerMemo || "";
+        if (!onInlineUpdate) return <span className="text-xs">{val || "-"}</span>;
+        return (
+          <InlineTextCell
+            value={val}
+            onSave={(v) => onInlineUpdate(row.original.id, "customerMemo", v)}
+            width="w-[120px]"
+          />
+        );
+      },
+    },
+    // ─── 비고 (인라인 텍스트) ───
+    {
+      accessorKey: "notes",
+      header: "비고",
+      cell: ({ row }) => {
+        const val = row.original.notes || "";
+        if (!onInlineUpdate) return <span className="text-xs">{val || "-"}</span>;
+        return (
+          <InlineTextCell
+            value={val}
+            onSave={(v) => onInlineUpdate(row.original.id, "notes", v)}
+            width="w-[120px]"
+          />
+        );
+      },
+    },
+
+    // ─── 관리 (삭제만) ───
     {
       id: "actions",
       header: "관리",
+      size: 60,
       cell: ({ row }) => {
         const id = row.original.id;
+        if (!canDelete || !onDelete) return null;
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -508,27 +942,13 @@ export function getColumns(options: {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem asChild>
-                <Link href={`/activations/${id}`}>
-                  <Eye className="mr-2 h-4 w-4" />
-                  상세보기
-                </Link>
+              <DropdownMenuItem
+                onClick={() => onDelete(id)}
+                className="text-red-600"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                삭제
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href={`/activations/${id}?edit=true`}>
-                  <Pencil className="mr-2 h-4 w-4" />
-                  수정
-                </Link>
-              </DropdownMenuItem>
-              {canDelete && onDelete && (
-                <DropdownMenuItem
-                  onClick={() => onDelete(id)}
-                  className="text-red-600"
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  삭제
-                </DropdownMenuItem>
-              )}
             </DropdownMenuContent>
           </DropdownMenu>
         );

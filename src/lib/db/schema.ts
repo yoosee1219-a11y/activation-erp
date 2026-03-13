@@ -169,31 +169,13 @@ export const documentFiles = pgTable("document_files", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
-// 5. usims (유심 재고 관리)
-export const usims = pgTable("usims", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  usimSerialNumber: text("usim_serial_number").unique().notNull(), // 유심 일련번호 (고유)
-  agencyId: text("agency_id")
-    .notNull()
-    .references(() => agencies.id),
-  status: text("status").notNull().default("ASSIGNED"), // ASSIGNED | USED | CANCELLED | RESET_READY
-  assignedDate: date("assigned_date").notNull(), // 배정일자
-  usedDate: date("used_date"), // 사용(개통)일자
-  cancelledDate: date("cancelled_date"), // 개통취소일자
-  resetDate: date("reset_date"), // 유심초기화 완료일자
-  usedActivationId: uuid("used_activation_id").references(() => activations.id), // 사용된 개통건 ID
-  notes: text("notes"), // 메모
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-});
-
-// 5-1. usim_logs (유심 작업이력)
+// 5. usim_logs (유심 수량 원장 - 배정/이송 수량 기록)
 export const usimLogs = pgTable("usim_logs", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id").notNull(),
   userName: text("user_name").notNull(),
   userRole: text("user_role").notNull(),
-  action: text("action").notNull(), // "assign"|"move"|"cancel"|"reset"|"manual_adjust"|"delete"
+  action: text("action").notNull(), // "assign"|"transfer"|"adjust"
   details: text("details").notNull(),
   agencyId: text("agency_id"),
   agencyName: text("agency_name"),

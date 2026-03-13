@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { activations, activationLogs } from "@/lib/db/schema";
 import { and, eq, lt, lte, isNull, isNotNull, ne, sql } from "drizzle-orm";
-import { markUsimCancelled } from "@/lib/db/queries/usims";
+
 
 export const dynamic = "force-dynamic";
 
@@ -91,12 +91,6 @@ export async function GET(request: Request) {
           lockedBy: "system",
         })
         .where(eq(activations.id, item.id));
-
-      try {
-        await markUsimCancelled(item.id);
-      } catch {
-        /* non-critical */
-      }
 
       await db.insert(activationLogs).values({
         activationId: item.id,
