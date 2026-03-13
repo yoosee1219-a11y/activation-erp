@@ -160,13 +160,21 @@ export default function ActivationsPage() {
   }, [fetchData]);
 
   const handleDelete = async (id: string) => {
-    if (!confirm("정말 삭제하시겠습니까?")) return;
+    const password = prompt("삭제하려면 관리자 비밀번호를 입력하세요:");
+    if (!password) return;
     try {
-      const res = await fetch(`/api/activations/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/activations/${id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
       if (res.ok) {
         toast.success("삭제되었습니다.");
         fetchData();
-      } else toast.error("삭제에 실패했습니다.");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || "삭제에 실패했습니다.");
+      }
     } catch {
       toast.error("삭제 중 오류가 발생했습니다.");
     }

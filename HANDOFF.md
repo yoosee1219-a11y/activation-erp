@@ -413,3 +413,122 @@ ASSIGNED (배정됨, 재고 O)
 ### 빌드 상태
 - `npm run build` 성공 (30 pages, 0 TypeScript errors)
 - Vercel 배포 완료
+
+---
+
+## 2026-03-13: 개통방법 추가 + 검수/컬럼 정리 + 임포트 버그 수정 + 삭제 보안
+
+### 개통방법(activationMethod) 컬럼 추가
+- **DB**: `activations` 테이블에 `activation_method TEXT` 컬럼 추가 (Neon SQL Editor에서 ALTER TABLE 실행)
+- **Schema**: `src/lib/db/schema.ts` — `activationMethod: text("activation_method")` 추가
+- **Validation**: `src/lib/validations/activation.ts` — Zod 스키마에 `activationMethod` 추가
+- **Columns**: `src/components/activations/columns.tsx` — 개통방법 컬럼 추가 (일반개통/ARC개통/여권개통)
+- **Import**: `src/app/(dashboard)/import/page.tsx` — HEADER_MAP에 `"개통방법": "activationMethod"` 매핑 추가
+- ARC개통 선택 시 보완기한 자동설정(+99일), 여권개통 시 보완기한 비활성
+
+### 검수 드롭다운/컬럼 정리
+- 검수(review) 드롭다운에서 "개통요청" 제거
+- 4개 컬럼 삭제: 자동이체등록, 외등보완, 고객메모, 비고
+- 보완기한 90일 → 99일로 변경
+
+### 대시보드 날짜 집계 버그 수정 (`src/lib/db/queries/activations.ts`)
+- **원인**: `getPendingByPeriod()`, `getTodayPendingDetail()`에서 `COALESCE(entry_date, created_at::date)` 사용
+- entry_date가 NULL이면 created_at(임포트 날짜=오늘)로 폴백 → 전부 "오늘" 건으로 집계
+- **수정**: `COALESCE(activation_date, entry_date, created_at::date)` — activation_date 우선 참조
+
+### CSV 임포트 가입번호 과학표기법 수정 (`src/app/api/import/route.ts`)
+- **원인**: `parseFloat("5.11041E+11").toFixed(0)` → 12자리 정수 정밀도 손실
+- **수정**: 문자열 기반 변환 (mantissa + exponent 분리 후 zero-pad, 부동소수점 미사용)
+- `123.0` 형태도 정수로 변환 (소수점 제거)
+
+### CSV 임포트 날짜 파싱 확장 (`src/app/api/import/route.ts`)
+- 기존: `25/12/03`, `2025. 12. 18` 형식만 지원
+- 추가: `2025.12.18` (공백없음), `12/18/2025` (US형식), `2025-12-18T00:00:00` (ISO datetime), Excel serial date (40000~50000 범위)
+
+### 임포트 시 보완기한 자동설정 (`src/app/api/import/route.ts`)
+- 개통완료 + 개통날짜 있음 + ARC개통 아님 + 기존 보완기한 없음 → `activationDate + 99일` 자동 계산
+- 임포트 배치 INSERT 값에 인라인으로 계산
+
+### 삭제 시 비밀번호 인증
+- **Backend** (`src/app/api/activations/[id]/route.ts`):
+  - DELETE 요청 body에서 password 추출
+  - `better-auth/crypto`의 `verifyPassword`로 로그인 계정 비밀번호 검증
+  - 불일치 시 403, 계정 없음 시 400
+- **Frontend** (`src/app/(dashboard)/activations/page.tsx`):
+  - `confirm()` → `prompt("삭제하려면 관리자 비밀번호를 입력하세요:")` 변경
+  - JSON body로 password 전송
+
+### Cron 해지 제외 로직
+- `src/app/api/cron/termination/route.ts` — `최종완료` 상태 건은 자동해지 제외 (`ne(activations.workStatus, "최종완료")`)
+
+### 빌드 상태
+- `npm run build` 성공 (0 TypeScript errors)
+- DB 마이그레이션: `ALTER TABLE activations ADD COLUMN activation_method text;` (Neon SQL Editor에서 수동 실행 완료)
+
+---
+
+## Termius 원격 작업 가이드 (모바일/SSH)
+
+### 접속 방법
+```bash
+# 프로젝트 디렉토리 이동
+cd /c/Users/woosol/OneDrive/Desktop/activation-erp
+
+# 또는 (Git Bash 기준)
+cd ~/OneDrive/Desktop/activation-erp
+```
+
+### 자주 쓰는 명령어
+```bash
+# 개발 서버
+npm run dev                # localhost:3000 (로컬 테스트)
+npm run build              # 프로덕션 빌드 (에러 확인)
+
+# Git
+git status                 # 변경파일 확인
+git add <file>             # 스테이징
+git commit -m "메시지"     # 커밋
+git push origin main       # Vercel 자동배포 트리거
+
+# DB
+npm run db:push            # 스키마 변경 → DB 반영 (Drizzle)
+npm run db:studio          # Drizzle Studio (브라우저 DB 관리)
+
+# Claude Code (AI 코딩 어시스턴트)
+claude                     # Claude Code 시작
+```
+
+### 핵심 파일 경로
+```
+src/app/api/import/route.ts          # CSV 임포트 (파싱/변환/DB삽입)
+src/app/api/activations/[id]/route.ts # 개통 PATCH/DELETE API
+src/app/(dashboard)/activations/page.tsx  # 개통관리 메인 페이지
+src/components/activations/columns.tsx    # 개통관리 테이블 컬럼 정의
+src/lib/db/queries/activations.ts    # DB 쿼리 (대시보드 통계 포함)
+src/lib/db/schema.ts                 # Drizzle DB 스키마
+```
+
+### 배포 흐름
+```
+코드수정 → npm run build → git add/commit/push → Vercel 자동배포
+```
+- Vercel은 `main` 브랜치 push 시 자동 빌드+배포
+- 빌드 실패 시 이전 버전 유지
+
+### 현재 알려진 이슈 / 남은 작업
+- [ ] 임포트 후 실제 데이터 검증 (과학표기법 변환, 날짜 파싱, 보완기한 확인)
+- [ ] UI E2E 브라우저 테스트
+- [ ] 모바일 반응형 개선
+- [ ] 알림 시스템 (서류 보완 요청 → 거래처 알림)
+
+### 환경변수 (.env.local)
+```
+DATABASE_URL=postgresql://...@ep-muddy-poetry-a169oxq7-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+BETTER_AUTH_SECRET=...
+BETTER_AUTH_URL=http://localhost:3000
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+GOOGLE_SERVICE_ACCOUNT_EMAIL=...
+GOOGLE_PRIVATE_KEY=...
+GOOGLE_DRIVE_FOLDER_ID=...
+```
+> `.env.local`은 이미 서버에 있으므로 별도 설정 불필요

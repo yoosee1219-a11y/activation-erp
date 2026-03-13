@@ -10,8 +10,8 @@ import { canAccessAgency } from "@/lib/db/queries/users";
 import { addActivationLog } from "@/lib/db/queries/activation-logs";
 import { updateActivationSchema } from "@/lib/validations/activation";
 import { db } from "@/lib/db";
-import { agencies } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { agencies, account } from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
 
 // 거래처(PARTNER)가 편집할 수 있는 필드 (전체 목록)
 const PARTNER_EDITABLE_FIELDS = new Set([
@@ -444,6 +444,32 @@ export async function DELETE(
     const user = await getSessionUser();
     if (!user || user.role !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // 비밀번호 확인
+    const body = await request.json().catch(() => ({}));
+    const { password } = body as { password?: string };
+    if (!password) {
+      return NextResponse.json({ error: "비밀번호를 입력해주세요." }, { status: 400 });
+    }
+
+    // 현재 로그인 사용자의 계정 비밀번호로 검증
+    const { verifyPassword } = await import("better-auth/crypto");
+    const accounts = await db
+      .select()
+      .from(account)
+      .where(and(eq(account.userId, user.id), eq(account.providerId, "credential")));
+
+    if (accounts.length === 0 || !accounts[0].password) {
+      return NextResponse.json({ error: "계정 정보를 찾을 수 없습니다." }, { status: 400 });
+    }
+
+    const isValid = await verifyPassword({
+      hash: accounts[0].password,
+      password,
+    });
+    if (!isValid) {
+      return NextResponse.json({ error: "비밀번호가 일치하지 않습니다." }, { status: 403 });
     }
 
     const { id } = await params;

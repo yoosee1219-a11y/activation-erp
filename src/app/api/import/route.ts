@@ -71,19 +71,19 @@ const MULTILINE_HEADER_MAP: Record<string, string> = {
   "보완상태": "supplementStatus",
 };
 
-// 날짜 변환: 25/12/03 → 2025-12-03, 2025. 12. 18 → 2025-12-18
+// 날짜 변환: 다양한 형식 → YYYY-MM-DD
 function parseDate(value: string): string | null {
   if (!value || value.trim() === "") return null;
   const v = value.trim();
 
-  // 25/12/03 형식
+  // 25/12/03 형식 (YY/MM/DD)
   const shortMatch = v.match(/^(\d{2})\/(\d{2})\/(\d{2})$/);
   if (shortMatch) {
     return `20${shortMatch[1]}-${shortMatch[2]}-${shortMatch[3]}`;
   }
 
-  // 2025. 12. 18 형식
-  const dotMatch = v.match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})$/);
+  // 2025. 12. 18 또는 2025.12.18 형식
+  const dotMatch = v.match(/^(\d{4})\.?\s*(\d{1,2})\.?\s*(\d{1,2})\.?$/);
   if (dotMatch) {
     return `${dotMatch[1]}-${dotMatch[2].padStart(2, "0")}-${dotMatch[3].padStart(2, "0")}`;
   }
@@ -98,24 +98,54 @@ function parseDate(value: string): string | null {
     return `${slashMatch[1]}-${slashMatch[2].padStart(2, "0")}-${slashMatch[3].padStart(2, "0")}`;
   }
 
+  // 12/18/2025 형식 (MM/DD/YYYY — 미국식)
+  const usMatch = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (usMatch) {
+    return `${usMatch[3]}-${usMatch[1].padStart(2, "0")}-${usMatch[2].padStart(2, "0")}`;
+  }
+
+  // 2025-12-18T00:00:00 형식 (ISO datetime)
+  const isoDatetimeMatch = v.match(/^(\d{4}-\d{2}-\d{2})T/);
+  if (isoDatetimeMatch) return isoDatetimeMatch[1];
+
+  // Excel 시리얼 날짜 (44000~47000 범위 = 2020~2028년)
+  const numVal = Number(v);
+  if (!isNaN(numVal) && numVal >= 40000 && numVal <= 50000) {
+    const epoch = new Date(1899, 11, 30); // Excel epoch
+    epoch.setDate(epoch.getDate() + numVal);
+    const y = epoch.getFullYear();
+    const m = String(epoch.getMonth() + 1).padStart(2, "0");
+    const d = String(epoch.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
   return null;
 }
 
 // 과학표기법(5.14784E+11) → 원래 숫자 문자열로 변환
+// parseFloat 대신 문자열 조작으로 부동소수점 정밀도 손실 방지
 function parseNumericText(value: string): string {
   if (!value) return "";
   const v = value.trim();
-  // 과학표기법 패턴: 1.23E+10, 5.14784E+11, 1E+12 등
-  if (/^[\d.]+[eE][+\-]?\d+$/.test(v)) {
-    try {
-      const num = parseFloat(v);
-      if (!isNaN(num) && isFinite(num)) {
-        // 소수점 없는 정수로 변환 (전화번호/가입번호는 정수)
-        return num.toFixed(0);
-      }
-    } catch {
-      // 변환 실패 시 원본 반환
+  // 과학표기법 패턴: 5.11041E+11, 1.23e+10, 5.11041234567E+11 등
+  const sciMatch = v.match(/^(\d+\.?\d*)[eE][+]?(\d+)$/);
+  if (sciMatch) {
+    const mantissa = sciMatch[1]; // "5.11041" or "5"
+    const exp = parseInt(sciMatch[2], 10); // 11
+    const parts = mantissa.split(".");
+    const intPart = parts[0]; // "5"
+    const decPart = parts[1] || ""; // "11041"
+    const combined = intPart + decPart; // "511041"
+    const zerosNeeded = exp - decPart.length; // 11 - 5 = 6
+    if (zerosNeeded >= 0) {
+      return combined + "0".repeat(zerosNeeded);
     }
+    // 소수점이 필요한 경우 (전화번호/가입번호에서는 발생 안 함)
+    return combined.slice(0, combined.length + zerosNeeded);
+  }
+  // 숫자에 소수점 있으면 제거 (511041000000.0 → 511041000000)
+  if (/^\d+\.0*$/.test(v)) {
+    return v.split(".")[0];
   }
   return v;
 }
@@ -319,7 +349,16 @@ export async function POST(request: NextRequest) {
           autopayRegistered: parseBool(row.autopayRegistered || ""),
           notes: row.notes || null,
           commitmentDate: parseDate(row.commitmentDate || ""),
+          activationMethod: row.activationMethod || null,
           workStatus: row.activationStatus === "개통완료" ? "개통완료" : "입력중",
+          // 개통완료 + 개통날짜 있으면 보완기한 자동설정 (ARC개통 제외)
+          ...(row.activationStatus === "개통완료" && activationDate && row.activationMethod !== "ARC개통" && !parseDate(row.arcSupplementDeadline || "")
+            ? (() => {
+                const dl = new Date(activationDate);
+                dl.setDate(dl.getDate() + 99);
+                return { arcSupplementDeadline: dl.toISOString().split("T")[0] };
+              })()
+            : {}),
         });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
