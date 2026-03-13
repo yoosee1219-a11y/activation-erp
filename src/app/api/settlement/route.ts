@@ -159,6 +159,17 @@ export async function GET(request: NextRequest) {
       const sixMonthClawbackCount = actRow?.sixMonthClawbackCount || 0;
       const manualClawbackCount = actRow?.manualClawbackCount || 0;
 
+      // 해당 월에 데이터가 하나도 없는 거래처(소분류)는 결과에서 제외
+      const hasAnyData =
+        receivedCount > 0 ||
+        usedCount > 0 ||
+        normalCount > 0 ||
+        supplementClawbackCount > 0 ||
+        sixMonthClawbackCount > 0 ||
+        manualClawbackCount > 0;
+
+      if (!hasAnyData) continue;
+
       const usimCost = receivedCount * -USIM_UNIT_COST;
       const usimRevenue = usedCount * USIM_UNIT_COST;
       const usimSubtotal = usimCost + usimRevenue;
