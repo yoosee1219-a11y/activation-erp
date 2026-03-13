@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { activations, agencies } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
+
+// Vercel 서버리스 타임아웃 연장
+export const maxDuration = 60;
 
 // CSV 헤더 → DB 필드 매핑
 const HEADER_MAP: Record<string, string> = {
@@ -50,8 +53,8 @@ const HEADER_MAP: Record<string, string> = {
 
 // 멀티라인 헤더를 정규화하는 매핑
 const MULTILINE_HEADER_MAP: Record<string, string> = {
-  "서류\n검수": "_reviewField", // 순서에 따라 다른 필드로 매핑
-  "외국인등록증\n+ 자동이체 정보": "arcInfo", // 기존 합본 → 외국인등록증으로 매핑
+  "서류\n검수": "_reviewField",
+  "외국인등록증\n+ 자동이체 정보": "arcInfo",
   "외국인등록증 정보": "arcInfo",
   "외국인등록증": "arcInfo",
   "자동이체 정보": "autopayInfo",
@@ -87,6 +90,12 @@ function parseDate(value: string): string | null {
   // 2025-12-18 형식 (이미 정상)
   const isoMatch = v.match(/^\d{4}-\d{2}-\d{2}$/);
   if (isoMatch) return v;
+
+  // 2025/12/18 형식
+  const slashMatch = v.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+  if (slashMatch) {
+    return `${slashMatch[1]}-${slashMatch[2].padStart(2, "0")}-${slashMatch[3].padStart(2, "0")}`;
+  }
 
   return null;
 }
@@ -128,6 +137,7 @@ export async function POST(request: NextRequest) {
     const results = {
       inserted: 0,
       skipped: 0,
+      duplicates: 0,
       errors: [] as string[],
       newAgencies: [] as string[],
     };
@@ -155,7 +165,6 @@ export async function POST(request: NextRequest) {
         agencyNameMap.set(name.toLowerCase(), id);
         results.newAgencies.push(name);
       } catch {
-        // 이미 존재할 수 있음
         const existing = allAgencies.find(
           (a) => a.name.toLowerCase() === name.toLowerCase()
         );
@@ -165,7 +174,28 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 데이터 삽입
+    // 기존 데이터 조회 (중복 방지용) - 고객명+거래처+개통일자 기준
+    const existingActivations = await db
+      .select({
+        customerName: activations.customerName,
+        agencyId: activations.agencyId,
+        activationDate: activations.activationDate,
+        entryDate: activations.entryDate,
+      })
+      .from(activations);
+
+    const existingSet = new Set<string>();
+    for (const ea of existingActivations) {
+      // 고객명 + 거래처 + (개통일자 또는 입국예정일)로 중복 판별
+      const key1 = `${ea.customerName?.toLowerCase()}|${ea.agencyId}|${ea.activationDate || ""}`;
+      const key2 = `${ea.customerName?.toLowerCase()}|${ea.agencyId}|${ea.entryDate || ""}`;
+      existingSet.add(key1);
+      if (ea.entryDate) existingSet.add(key2);
+    }
+
+    // 데이터 준비 (배치 인서트용)
+    const batchValues: (typeof activations.$inferInsert)[] = [];
+
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       try {
@@ -177,18 +207,32 @@ export async function POST(request: NextRequest) {
 
         // 거래처 ID 결정
         const agencyRaw = (row.agencyId || "").trim();
-        let agencyId = agencyNameMap.get(agencyRaw.toLowerCase()) || defaultAgencyId || "";
+        const agencyId = agencyNameMap.get(agencyRaw.toLowerCase()) || defaultAgencyId || "";
         if (!agencyId) {
           results.errors.push(`행 ${i + 1}: 거래처를 찾을 수 없음 (${agencyRaw})`);
           results.skipped++;
           continue;
         }
 
-        const insertData: typeof activations.$inferInsert = {
+        const activationDate = parseDate(row.activationDate || "") || parseDate(row.activationDate2 || "");
+        const entryDate = parseDate(row.entryDate || "");
+
+        // 중복 체크: 고객명 + 거래처 + (개통일자 또는 입국예정일)
+        const dupKey1 = `${customerName.toLowerCase()}|${agencyId}|${activationDate || ""}`;
+        const dupKey2 = `${customerName.toLowerCase()}|${agencyId}|${entryDate || ""}`;
+        if (existingSet.has(dupKey1) || (entryDate && existingSet.has(dupKey2))) {
+          results.duplicates++;
+          continue;
+        }
+        // 같은 배치 내 중복도 방지
+        existingSet.add(dupKey1);
+        if (entryDate) existingSet.add(dupKey2);
+
+        batchValues.push({
           agencyId,
           customerName,
           usimNumber: row.usimNumber || null,
-          entryDate: parseDate(row.entryDate || ""),
+          entryDate,
           subscriptionNumber: row.subscriptionNumber || null,
           newPhoneNumber: row.newPhoneNumber || null,
           virtualAccount: row.virtualAccount || null,
@@ -196,7 +240,7 @@ export async function POST(request: NextRequest) {
           ratePlan: row.ratePlan || null,
           deviceChangeConfirmed: parseBool(row.deviceChangeConfirmed || ""),
           selectedCommitment: parseBool(row.selectedCommitment || ""),
-          activationDate: parseDate(row.activationDate || "") || parseDate(row.activationDate2 || ""),
+          activationDate,
           activationStatus: row.activationStatus || "대기",
           personInCharge: row.personInCharge || null,
           applicationDocs: row.applicationDocs || null,
@@ -216,14 +260,33 @@ export async function POST(request: NextRequest) {
           notes: row.notes || null,
           commitmentDate: parseDate(row.commitmentDate || ""),
           workStatus: row.activationStatus === "개통완료" ? "개통완료" : "입력중",
-        };
-
-        await db.insert(activations).values(insertData);
-        results.inserted++;
+        });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         results.errors.push(`행 ${i + 1}: ${message}`);
         results.skipped++;
+      }
+    }
+
+    // 배치 인서트 (50건씩 나눠서)
+    const BATCH_SIZE = 50;
+    for (let i = 0; i < batchValues.length; i += BATCH_SIZE) {
+      const batch = batchValues.slice(i, i + BATCH_SIZE);
+      try {
+        await db.insert(activations).values(batch);
+        results.inserted += batch.length;
+      } catch (err: unknown) {
+        // 배치 실패 시 개별 삽입으로 폴백
+        for (const item of batch) {
+          try {
+            await db.insert(activations).values(item);
+            results.inserted++;
+          } catch (innerErr: unknown) {
+            const message = innerErr instanceof Error ? innerErr.message : String(innerErr);
+            results.errors.push(`${item.customerName}: ${message}`);
+            results.skipped++;
+          }
+        }
       }
     }
 

@@ -88,6 +88,7 @@ type MappedRow = Record<string, string>;
 interface ImportResult {
   inserted: number;
   skipped: number;
+  duplicates: number;
   errors: string[];
   newAgencies: string[];
 }
@@ -264,7 +265,9 @@ export default function ImportPage() {
           <div className="flex items-center gap-3">
             <CheckCircle className="h-5 w-5 text-green-500 shrink-0" />
             <p className="text-sm font-medium text-green-700">
-              가져오기 완료: {result.inserted}건 추가, {result.skipped}건 스킵
+              가져오기 완료: {result.inserted}건 추가
+              {result.duplicates > 0 && `, ${result.duplicates}건 중복 제외`}
+              {result.skipped > 0 && `, ${result.skipped}건 스킵`}
             </p>
           </div>
           {result.newAgencies.length > 0 && (
