@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, ChevronDown, ChevronRight, Video, Download, FileText } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, Video, Download, FileText, ExternalLink } from "lucide-react";
 
 interface Notice {
   id: string;
@@ -136,20 +136,16 @@ export default function PartnerNoticesPage() {
                             />
                           </div>
                         ) : (
-                          <video
-                            src={notice.videoUrl}
-                            controls
-                            className="w-full rounded max-h-[400px]"
-                          >
+                          <Button variant="outline" size="sm" asChild>
                             <a
                               href={notice.videoUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-blue-600 underline"
                             >
-                              동영상 보기
+                              <ExternalLink className="mr-2 h-4 w-4" />
+                              링크 열기
                             </a>
-                          </video>
+                          </Button>
                         )}
                       </div>
                     )}

@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { getNotices, createNotice } from "@/lib/db/queries/notices";
 
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "2mb",
+    },
+  },
+};
+
 export async function GET() {
   try {
     const user = await getSessionUser();

@@ -70,8 +70,8 @@ export function NoticeForm({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 500 * 1024) {
-      toast.error("파일 크기는 500KB 이하만 가능합니다.");
+    if (file.size > 1024 * 1024) {
+      toast.error("파일 크기는 1MB 이하만 가능합니다.");
       return;
     }
 
@@ -215,19 +215,22 @@ export function NoticeForm({
             />
           </div>
 
-          {/* 동영상 URL */}
+          {/* 링크 URL */}
           <div>
             <Label htmlFor="notice-video" className="flex items-center gap-1">
               <Video className="h-3.5 w-3.5" />
-              동영상 URL (선택)
+              링크 URL (선택)
             </Label>
             <Input
               id="notice-video"
               value={videoUrl}
               onChange={(e) => setVideoUrl(e.target.value)}
-              placeholder="YouTube 또는 동영상 링크를 입력하세요"
+              placeholder="YouTube, 구글드라이브 등 링크를 입력하세요"
               disabled={loading}
             />
+            <p className="text-xs text-muted-foreground mt-1">
+              YouTube는 임베드 재생, 그 외 링크는 새 탭에서 열립니다.
+            </p>
           </div>
 
           <div className="flex items-center gap-2">

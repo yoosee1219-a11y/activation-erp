@@ -6,7 +6,18 @@ import { NoticeForm } from "@/components/admin/notice-form";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, AlertTriangle, Video, FileText } from "lucide-react";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  AlertTriangle,
+  Video,
+  FileText,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  Download,
+} from "lucide-react";
 import { toast } from "sonner";
 
 interface Notice {
@@ -21,12 +32,32 @@ interface Notice {
   updatedAt: string;
 }
 
+/** YouTube URL → embed URL 변환 */
+function getYouTubeEmbedUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes("youtube.com") && u.searchParams.get("v")) {
+      return `https://www.youtube.com/embed/${u.searchParams.get("v")}`;
+    }
+    if (u.hostname === "youtu.be") {
+      return `https://www.youtube.com/embed${u.pathname}`;
+    }
+    if (u.pathname.includes("/embed/")) {
+      return url;
+    }
+  } catch {
+    // invalid URL
+  }
+  return null;
+}
+
 export default function AdminNoticesPage() {
   const { user } = useDashboard();
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editNotice, setEditNotice] = useState<Notice | undefined>();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const fetchNotices = useCallback(async () => {
     try {
@@ -87,55 +118,132 @@ export default function AdminNoticesPage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {notices.map((notice) => (
-            <Card key={notice.id} className="p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    {notice.isImportant && (
-                      <Badge variant="destructive" className="shrink-0">
-                        <AlertTriangle className="mr-1 h-3 w-3" />
-                        중요
-                      </Badge>
+          {notices.map((notice) => {
+            const isExpanded = expandedId === notice.id;
+            const youtubeEmbed = notice.videoUrl
+              ? getYouTubeEmbedUrl(notice.videoUrl)
+              : null;
+
+            return (
+              <Card key={notice.id} className="overflow-hidden">
+                <div className="flex items-start gap-2">
+                  {/* 클릭하여 상세 보기 */}
+                  <button
+                    type="button"
+                    className="flex flex-1 items-center gap-3 p-4 text-left hover:bg-muted/50 transition-colors min-w-0"
+                    onClick={() =>
+                      setExpandedId(isExpanded ? null : notice.id)
+                    }
+                  >
+                    {isExpanded ? (
+                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                     )}
-                    {notice.videoUrl && (
-                      <Video className="h-4 w-4 shrink-0 text-blue-500" />
-                    )}
-                    {notice.attachmentName && (
-                      <FileText className="h-4 w-4 shrink-0 text-green-600" />
-                    )}
-                    <h3 className="font-semibold truncate">{notice.title}</h3>
+                    <div className="flex flex-1 items-center gap-2 min-w-0">
+                      {notice.isImportant && (
+                        <Badge variant="destructive" className="shrink-0">
+                          <AlertTriangle className="mr-1 h-3 w-3" />
+                          중요
+                        </Badge>
+                      )}
+                      {notice.videoUrl && (
+                        <Video className="h-4 w-4 shrink-0 text-blue-500" />
+                      )}
+                      {notice.attachmentName && (
+                        <FileText className="h-4 w-4 shrink-0 text-green-600" />
+                      )}
+                      <span className="font-semibold truncate">
+                        {notice.title}
+                      </span>
+                    </div>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {new Date(notice.createdAt).toLocaleDateString("ko-KR")}
+                    </span>
+                  </button>
+
+                  {/* 수정/삭제 버튼 */}
+                  <div className="flex shrink-0 gap-1 p-3">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => {
+                        setEditNotice(notice);
+                        setFormOpen(true);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => handleDelete(notice.id)}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
                   </div>
-                  <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
-                    {notice.content.replace(/<[^>]*>/g, "").slice(0, 200)}
-                  </p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {notice.createdByName} &middot;{" "}
-                    {new Date(notice.createdAt).toLocaleDateString("ko-KR")}
-                  </p>
                 </div>
-                <div className="flex shrink-0 gap-1">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => {
-                      setEditNotice(notice);
-                      setFormOpen(true);
-                    }}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => handleDelete(notice.id)}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          ))}
+
+                {/* 상세 내용 */}
+                {isExpanded && (
+                  <div className="border-t px-4 py-3">
+                    {/* 동영상 / 외부 링크 */}
+                    {notice.videoUrl && (
+                      <div className="mb-4">
+                        {youtubeEmbed ? (
+                          <div className="aspect-video rounded overflow-hidden">
+                            <iframe
+                              src={youtubeEmbed}
+                              className="w-full h-full"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                              title={notice.title}
+                            />
+                          </div>
+                        ) : (
+                          <Button variant="outline" size="sm" asChild>
+                            <a
+                              href={notice.videoUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <ExternalLink className="mr-2 h-4 w-4" />
+                              링크 열기
+                            </a>
+                          </Button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 내용 */}
+                    <div className="whitespace-pre-wrap text-sm">
+                      {notice.content}
+                    </div>
+
+                    {/* 첨부파일 다운로드 */}
+                    {notice.attachmentName && (
+                      <div className="mt-4">
+                        <Button variant="outline" size="sm" asChild>
+                          <a
+                            href={`/api/notices/${notice.id}/download`}
+                            download
+                          >
+                            <Download className="mr-2 h-4 w-4" />
+                            {notice.attachmentName}
+                          </a>
+                        </Button>
+                      </div>
+                    )}
+
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      작성자: {notice.createdByName} &middot;{" "}
+                      {new Date(notice.createdAt).toLocaleDateString("ko-KR")}
+                    </p>
+                  </div>
+                )}
+              </Card>
+            );
+          })}
         </div>
       )}
 
