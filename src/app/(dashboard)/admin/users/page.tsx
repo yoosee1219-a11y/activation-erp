@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useDashboard } from "../../layout";
+import { useDashboard } from "../../dashboard-context";
 import { UserForm } from "@/components/admin/user-form";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";

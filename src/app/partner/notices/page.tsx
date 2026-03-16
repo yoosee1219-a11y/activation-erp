@@ -3,15 +3,37 @@
 import { useEffect, useState, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { AlertTriangle, ChevronDown, ChevronRight, Video, Download, FileText } from "lucide-react";
 
 interface Notice {
   id: string;
   title: string;
   content: string;
   isImportant: boolean | null;
+  videoUrl?: string | null;
+  attachmentName?: string | null;
   createdByName: string;
   createdAt: string;
+}
+
+/** YouTube URL → embed URL 변환 */
+function getYouTubeEmbedUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes("youtube.com") && u.searchParams.get("v")) {
+      return `https://www.youtube.com/embed/${u.searchParams.get("v")}`;
+    }
+    if (u.hostname === "youtu.be") {
+      return `https://www.youtube.com/embed${u.pathname}`;
+    }
+    if (u.pathname.includes("/embed/")) {
+      return url;
+    }
+  } catch {
+    // invalid URL
+  }
+  return null;
 }
 
 export default function PartnerNoticesPage() {
@@ -56,6 +78,10 @@ export default function PartnerNoticesPage() {
         <div className="space-y-2">
           {sorted.map((notice) => {
             const isExpanded = expandedId === notice.id;
+            const youtubeEmbed = notice.videoUrl
+              ? getYouTubeEmbedUrl(notice.videoUrl)
+              : null;
+
             return (
               <Card
                 key={notice.id}
@@ -80,6 +106,12 @@ export default function PartnerNoticesPage() {
                         중요
                       </Badge>
                     )}
+                    {notice.videoUrl && (
+                      <Video className="h-4 w-4 shrink-0 text-blue-500" />
+                    )}
+                    {notice.attachmentName && (
+                      <FileText className="h-4 w-4 shrink-0 text-green-600" />
+                    )}
                     <span className="font-medium truncate">
                       {notice.title}
                     </span>
@@ -90,10 +122,60 @@ export default function PartnerNoticesPage() {
                 </button>
                 {isExpanded && (
                   <div className="border-t px-4 py-3">
+                    {/* 동영상 */}
+                    {notice.videoUrl && (
+                      <div className="mb-4">
+                        {youtubeEmbed ? (
+                          <div className="aspect-video rounded overflow-hidden">
+                            <iframe
+                              src={youtubeEmbed}
+                              className="w-full h-full"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                              title={notice.title}
+                            />
+                          </div>
+                        ) : (
+                          <video
+                            src={notice.videoUrl}
+                            controls
+                            className="w-full rounded max-h-[400px]"
+                          >
+                            <a
+                              href={notice.videoUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 underline"
+                            >
+                              동영상 보기
+                            </a>
+                          </video>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 내용 */}
                     <div
                       className="prose prose-sm max-w-none text-sm"
                       dangerouslySetInnerHTML={{ __html: notice.content }}
                     />
+
+                    {/* 첨부파일 다운로드 */}
+                    {notice.attachmentName && (
+                      <div className="mt-4">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          asChild
+                        >
+                          <a href={`/api/notices/${notice.id}/download`} download>
+                            <Download className="mr-2 h-4 w-4" />
+                            {notice.attachmentName}
+                          </a>
+                        </Button>
+                      </div>
+                    )}
+
                     <p className="mt-3 text-xs text-muted-foreground">
                       작성자: {notice.createdByName}
                     </p>

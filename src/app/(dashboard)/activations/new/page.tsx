@@ -1,6 +1,6 @@
 "use client";
 
-import { useDashboard } from "../../layout";
+import { useDashboard } from "../../dashboard-context";
 import { ActivationForm } from "@/components/activations/activation-form";
 
 export default function NewActivationPage() {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { useDashboard } from "../layout";
+import { useDashboard } from "../dashboard-context";
 import { DataTable } from "@/components/activations/data-table";
 import { Filters } from "@/components/activations/filters";
 import { CascadingFilter } from "@/components/layout/cascading-filter";

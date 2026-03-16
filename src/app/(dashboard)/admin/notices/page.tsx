@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useDashboard } from "../../layout";
+import { useDashboard } from "../../dashboard-context";
 import { NoticeForm } from "@/components/admin/notice-form";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, AlertTriangle } from "lucide-react";
+import { Plus, Pencil, Trash2, AlertTriangle, Video, FileText } from "lucide-react";
 import { toast } from "sonner";
 
 interface Notice {
@@ -14,6 +14,8 @@ interface Notice {
   title: string;
   content: string;
   isImportant: boolean | null;
+  videoUrl?: string | null;
+  attachmentName?: string | null;
   createdByName: string;
   createdAt: string;
   updatedAt: string;
@@ -95,6 +97,12 @@ export default function AdminNoticesPage() {
                         <AlertTriangle className="mr-1 h-3 w-3" />
                         중요
                       </Badge>
+                    )}
+                    {notice.videoUrl && (
+                      <Video className="h-4 w-4 shrink-0 text-blue-500" />
+                    )}
+                    {notice.attachmentName && (
+                      <FileText className="h-4 w-4 shrink-0 text-green-600" />
                     )}
                     <h3 className="font-semibold truncate">{notice.title}</h3>
                   </div>

@@ -3,37 +3,10 @@
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { useAuth } from "@/hooks/use-auth";
-import { useAgencyFilter, type CategoryNode, type Agency } from "@/hooks/use-agency-filter";
-import { createContext, useContext, useEffect, useMemo } from "react";
+import { useAgencyFilter } from "@/hooks/use-agency-filter";
+import { useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import type { SessionUser } from "@/types";
-
-interface DashboardContextType {
-  user: SessionUser | null;
-  selectedMajors: string[];
-  setSelectedMajors: (ids: string[]) => void;
-  selectedMediums: string[];
-  setSelectedMediums: (ids: string[]) => void;
-  agencies: Agency[];
-  categories: CategoryNode[];
-  /** 선택된 값을 API 쿼리 파라미터로 변환 */
-  getFilterParams: () => Record<string, string>;
-  refreshCategories: () => void;
-}
-
-const DashboardContext = createContext<DashboardContextType>({
-  user: null,
-  selectedMajors: [],
-  setSelectedMajors: () => {},
-  selectedMediums: [],
-  setSelectedMediums: () => {},
-  agencies: [],
-  categories: [],
-  getFilterParams: () => ({}),
-  refreshCategories: () => {},
-});
-
-export const useDashboard = () => useContext(DashboardContext);
+import { DashboardContext } from "./dashboard-context";
 
 export default function DashboardLayout({
   children,

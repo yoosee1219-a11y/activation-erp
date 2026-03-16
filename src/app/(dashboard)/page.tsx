@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useDashboard } from "./layout";
+import { useDashboard } from "./dashboard-context";
 import { DashboardTabs } from "@/components/dashboard/dashboard-tabs";
 
 interface TimeSeriesItem {

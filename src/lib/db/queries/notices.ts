@@ -4,7 +4,18 @@ import { eq, desc } from "drizzle-orm";
 
 export async function getNotices(limit = 50, offset = 0) {
   return db
-    .select()
+    .select({
+      id: notices.id,
+      title: notices.title,
+      content: notices.content,
+      isImportant: notices.isImportant,
+      videoUrl: notices.videoUrl,
+      attachmentName: notices.attachmentName,
+      createdBy: notices.createdBy,
+      createdByName: notices.createdByName,
+      createdAt: notices.createdAt,
+      updatedAt: notices.updatedAt,
+    })
     .from(notices)
     .orderBy(desc(notices.createdAt))
     .limit(limit)
@@ -24,6 +35,9 @@ export async function createNotice(params: {
   title: string;
   content: string;
   isImportant?: boolean;
+  videoUrl?: string;
+  attachmentName?: string;
+  attachmentData?: string;
   createdBy: string;
   createdByName: string;
 }) {
@@ -33,7 +47,14 @@ export async function createNotice(params: {
 
 export async function updateNotice(
   id: string,
-  params: { title?: string; content?: string; isImportant?: boolean }
+  params: {
+    title?: string;
+    content?: string;
+    isImportant?: boolean;
+    videoUrl?: string | null;
+    attachmentName?: string | null;
+    attachmentData?: string | null;
+  }
 ) {
   const result = await db
     .update(notices)

@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { title, content, isImportant } = body;
+    const { title, content, isImportant, videoUrl, attachmentName, attachmentData } = body;
 
     if (!title?.trim() || !content?.trim()) {
       return NextResponse.json(
@@ -41,6 +41,9 @@ export async function POST(request: NextRequest) {
       title: title.trim(),
       content: content.trim(),
       isImportant: !!isImportant,
+      videoUrl: videoUrl?.trim() || undefined,
+      attachmentName: attachmentName || undefined,
+      attachmentData: attachmentData || undefined,
       createdBy: user.id,
       createdByName: user.name,
     });

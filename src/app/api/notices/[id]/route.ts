@@ -55,11 +55,17 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const updateData: { title?: string; content?: string; isImportant?: boolean } = {};
+    const updateData: {
+      title?: string; content?: string; isImportant?: boolean;
+      videoUrl?: string | null; attachmentName?: string | null; attachmentData?: string | null;
+    } = {};
 
     if (body.title !== undefined) updateData.title = body.title.trim();
     if (body.content !== undefined) updateData.content = body.content.trim();
     if (body.isImportant !== undefined) updateData.isImportant = !!body.isImportant;
+    if (body.videoUrl !== undefined) updateData.videoUrl = body.videoUrl?.trim() || null;
+    if (body.attachmentName !== undefined) updateData.attachmentName = body.attachmentName || null;
+    if (body.attachmentData !== undefined) updateData.attachmentData = body.attachmentData || null;
 
     const updated = await updateNotice(id, updateData);
     return NextResponse.json({ notice: updated });
