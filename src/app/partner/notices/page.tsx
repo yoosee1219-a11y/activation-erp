@@ -13,6 +13,7 @@ interface Notice {
   isImportant: boolean | null;
   videoUrl?: string | null;
   attachmentName?: string | null;
+  attachmentUrl?: string | null;
   createdByName: string;
   createdAt: string;
 }
@@ -161,7 +162,7 @@ export default function PartnerNoticesPage() {
                       <div className="mt-4 flex items-center gap-2 flex-wrap">
                         <Button variant="default" size="sm" asChild>
                           <a
-                            href={`/api/notices/${notice.id}/download`}
+                            href={notice.attachmentUrl || `/api/notices/${notice.id}/download`}
                             target="_blank"
                             rel="noopener noreferrer"
                           >
@@ -171,8 +172,8 @@ export default function PartnerNoticesPage() {
                         </Button>
                         <Button variant="outline" size="sm" asChild>
                           <a
-                            href={`/api/notices/${notice.id}/download?download=true`}
-                            download
+                            href={notice.attachmentUrl || `/api/notices/${notice.id}/download?download=true`}
+                            download={notice.attachmentName}
                           >
                             <Download className="mr-2 h-4 w-4" />
                             다운로드

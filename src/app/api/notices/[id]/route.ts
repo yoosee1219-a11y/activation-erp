@@ -57,7 +57,8 @@ export async function PATCH(
     const body = await request.json();
     const updateData: {
       title?: string; content?: string; isImportant?: boolean;
-      videoUrl?: string | null; attachmentName?: string | null; attachmentData?: string | null;
+      videoUrl?: string | null; attachmentName?: string | null;
+      attachmentData?: string | null; attachmentUrl?: string | null;
     } = {};
 
     if (body.title !== undefined) updateData.title = body.title.trim();
@@ -66,6 +67,7 @@ export async function PATCH(
     if (body.videoUrl !== undefined) updateData.videoUrl = body.videoUrl?.trim() || null;
     if (body.attachmentName !== undefined) updateData.attachmentName = body.attachmentName || null;
     if (body.attachmentData !== undefined) updateData.attachmentData = body.attachmentData || null;
+    if (body.attachmentUrl !== undefined) updateData.attachmentUrl = body.attachmentUrl || null;
 
     const updated = await updateNotice(id, updateData);
     return NextResponse.json({ notice: updated });

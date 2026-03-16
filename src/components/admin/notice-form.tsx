@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Upload, Video, X, FileText } from "lucide-react";
+import { Upload, Video, X, FileText, Loader2 } from "lucide-react";
 
 interface NoticeFormProps {
   open: boolean;
@@ -27,6 +27,7 @@ interface NoticeFormProps {
     isImportant: boolean | null;
     videoUrl?: string | null;
     attachmentName?: string | null;
+    attachmentUrl?: string | null;
   };
 }
 
@@ -38,12 +39,13 @@ export function NoticeForm({
 }: NoticeFormProps) {
   const isEdit = !!initialData;
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [isImportant, setIsImportant] = useState(false);
   const [videoUrl, setVideoUrl] = useState("");
   const [attachmentName, setAttachmentName] = useState("");
-  const [attachmentData, setAttachmentData] = useState("");
+  const [attachmentUrl, setAttachmentUrl] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -54,44 +56,57 @@ export function NoticeForm({
         setIsImportant(!!initialData.isImportant);
         setVideoUrl(initialData.videoUrl || "");
         setAttachmentName(initialData.attachmentName || "");
-        setAttachmentData("");
+        setAttachmentUrl(initialData.attachmentUrl || "");
       } else {
         setTitle("");
         setContent("");
         setIsImportant(false);
         setVideoUrl("");
         setAttachmentName("");
-        setAttachmentData("");
+        setAttachmentUrl("");
       }
     }
   }, [open, initialData]);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("파일 크기는 5MB 이하만 가능합니다.");
+    if (file.size > 100 * 1024 * 1024) {
+      toast.error("파일 크기는 100MB 이하만 가능합니다.");
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const fileContent = ev.target?.result as string;
-      setAttachmentName(file.name);
-      setAttachmentData(fileContent);
-      toast.success(`${file.name} 파일이 첨부되었습니다.`);
-    };
-    reader.onerror = () => {
-      toast.error("파일 읽기에 실패했습니다.");
-    };
-    reader.readAsText(file, "utf-8");
-    e.target.value = "";
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "업로드 실패");
+      }
+
+      const data = await res.json();
+      setAttachmentName(data.filename);
+      setAttachmentUrl(data.url);
+      toast.success(`${data.filename} 파일이 업로드되었습니다.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "파일 업로드에 실패했습니다.");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
   };
 
   const handleRemoveAttachment = () => {
     setAttachmentName("");
-    setAttachmentData("");
+    setAttachmentUrl("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -113,11 +128,15 @@ export function NoticeForm({
         videoUrl: videoUrl.trim() || undefined,
       };
 
-      if (attachmentData) {
+      // 첨부파일 처리
+      if (attachmentUrl) {
         payload.attachmentName = attachmentName;
-        payload.attachmentData = attachmentData;
+        payload.attachmentUrl = attachmentUrl;
+        payload.attachmentData = null; // 이전 DB 저장 데이터 정리
       } else if (!attachmentName && isEdit && initialData.attachmentName) {
+        // 첨부파일 제거
         payload.attachmentName = null;
+        payload.attachmentUrl = null;
         payload.attachmentData = null;
       }
 
@@ -189,7 +208,7 @@ export function NoticeForm({
                   variant="ghost"
                   size="sm"
                   onClick={handleRemoveAttachment}
-                  disabled={loading}
+                  disabled={loading || uploading}
                 >
                   <X className="h-4 w-4" />
                 </Button>
@@ -200,16 +219,24 @@ export function NoticeForm({
                 variant="outline"
                 className="w-full"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={loading}
+                disabled={loading || uploading}
               >
-                <Upload className="mr-2 h-4 w-4" />
-                파일 첨부 (HTML, TXT 등)
+                {uploading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    업로드 중...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" />
+                    파일 첨부 (HTML, PDF 등 모든 파일)
+                  </>
+                )}
               </Button>
             )}
             <input
               ref={fileInputRef}
               type="file"
-              accept=".html,.htm,.txt"
               className="hidden"
               onChange={handleFileUpload}
             />
@@ -249,11 +276,11 @@ export function NoticeForm({
               type="button"
               variant="outline"
               onClick={onClose}
-              disabled={loading}
+              disabled={loading || uploading}
             >
               취소
             </Button>
-            <Button type="submit" disabled={loading}>
+            <Button type="submit" disabled={loading || uploading}>
               {loading ? "저장 중..." : isEdit ? "수정" : "등록"}
             </Button>
           </div>

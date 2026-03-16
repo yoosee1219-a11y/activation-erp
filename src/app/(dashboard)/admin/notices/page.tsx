@@ -27,6 +27,7 @@ interface Notice {
   isImportant: boolean | null;
   videoUrl?: string | null;
   attachmentName?: string | null;
+  attachmentUrl?: string | null;
   createdByName: string;
   createdAt: string;
   updatedAt: string;
@@ -221,11 +222,11 @@ export default function AdminNoticesPage() {
                     </div>
 
                     {/* 첨부파일 미리보기 / 다운로드 */}
-                    {notice.attachmentName && (
+                    {notice.attachmentName && (notice.attachmentUrl || true) && (
                       <div className="mt-4 flex items-center gap-2 flex-wrap">
                         <Button variant="default" size="sm" asChild>
                           <a
-                            href={`/api/notices/${notice.id}/download`}
+                            href={notice.attachmentUrl || `/api/notices/${notice.id}/download`}
                             target="_blank"
                             rel="noopener noreferrer"
                           >
@@ -235,8 +236,8 @@ export default function AdminNoticesPage() {
                         </Button>
                         <Button variant="outline" size="sm" asChild>
                           <a
-                            href={`/api/notices/${notice.id}/download?download=true`}
-                            download
+                            href={notice.attachmentUrl || `/api/notices/${notice.id}/download?download=true`}
+                            download={notice.attachmentName}
                           >
                             <Download className="mr-2 h-4 w-4" />
                             다운로드

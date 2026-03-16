@@ -195,6 +195,7 @@ export const notices = pgTable("notices", {
   videoUrl: text("video_url"),
   attachmentName: text("attachment_name"),
   attachmentData: text("attachment_data"),
+  attachmentUrl: text("attachment_url"),
   createdBy: text("created_by").notNull(),
   createdByName: text("created_by_name").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),

@@ -11,6 +11,7 @@ export async function getNotices(limit = 50, offset = 0) {
       isImportant: notices.isImportant,
       videoUrl: notices.videoUrl,
       attachmentName: notices.attachmentName,
+      attachmentUrl: notices.attachmentUrl,
       createdBy: notices.createdBy,
       createdByName: notices.createdByName,
       createdAt: notices.createdAt,
@@ -38,6 +39,7 @@ export async function createNotice(params: {
   videoUrl?: string;
   attachmentName?: string;
   attachmentData?: string;
+  attachmentUrl?: string;
   createdBy: string;
   createdByName: string;
 }) {
@@ -54,6 +56,7 @@ export async function updateNotice(
     videoUrl?: string | null;
     attachmentName?: string | null;
     attachmentData?: string | null;
+    attachmentUrl?: string | null;
   }
 ) {
   const result = await db
