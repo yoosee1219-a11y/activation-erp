@@ -40,7 +40,7 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
-    minPasswordLength: 4,
+    minPasswordLength: 8,
   },
   rateLimit: {
     window: 60,      // 60초 윈도우

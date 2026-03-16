@@ -436,6 +436,9 @@ export async function PATCH(
   }
 }
 
+// 삭제 비밀번호 브루트포스 방지: IP별 실패 횟수 추적
+const deleteAttempts = new Map<string, { count: number; lockedUntil: number }>();
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -444,6 +447,19 @@ export async function DELETE(
     const user = await getSessionUser();
     if (!user || user.role !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // 레이트리밋: IP + 사용자 ID 기반 (5회 실패 시 15분 잠금)
+    const clientIp = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const attemptKey = `${clientIp}:${user.id}`;
+    const attempt = deleteAttempts.get(attemptKey);
+
+    if (attempt && attempt.lockedUntil > Date.now()) {
+      const remainSec = Math.ceil((attempt.lockedUntil - Date.now()) / 1000);
+      return NextResponse.json(
+        { error: `너무 많은 시도입니다. ${remainSec}초 후 다시 시도해주세요.` },
+        { status: 429 }
+      );
     }
 
     // 비밀번호 확인
@@ -469,8 +485,19 @@ export async function DELETE(
       password,
     });
     if (!isValid) {
+      // 실패 횟수 증가, 5회 초과 시 15분 잠금
+      const current = deleteAttempts.get(attemptKey) || { count: 0, lockedUntil: 0 };
+      current.count += 1;
+      if (current.count >= 5) {
+        current.lockedUntil = Date.now() + 15 * 60 * 1000; // 15분
+        current.count = 0;
+      }
+      deleteAttempts.set(attemptKey, current);
       return NextResponse.json({ error: "비밀번호가 일치하지 않습니다." }, { status: 403 });
     }
+
+    // 성공 시 실패 카운터 초기화
+    deleteAttempts.delete(attemptKey);
 
     const { id } = await params;
     await deleteActivation(id);
