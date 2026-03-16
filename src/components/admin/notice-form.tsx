@@ -70,8 +70,8 @@ export function NoticeForm({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 1024 * 1024) {
-      toast.error("파일 크기는 1MB 이하만 가능합니다.");
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("파일 크기는 5MB 이하만 가능합니다.");
       return;
     }
 

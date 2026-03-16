@@ -6,14 +6,6 @@ import {
   deleteNotice,
 } from "@/lib/db/queries/notices";
 
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: "2mb",
-    },
-  },
-};
-
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

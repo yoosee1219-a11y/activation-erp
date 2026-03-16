@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // API body size 제한 (첨부파일 업로드용)
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "8mb",
+    },
+  },
   // 보안 헤더 설정
   async headers() {
     return [
