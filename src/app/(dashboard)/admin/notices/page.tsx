@@ -220,18 +220,31 @@ export default function AdminNoticesPage() {
                       {notice.content}
                     </div>
 
-                    {/* 첨부파일 다운로드 */}
+                    {/* 첨부파일 미리보기 / 다운로드 */}
                     {notice.attachmentName && (
-                      <div className="mt-4">
-                        <Button variant="outline" size="sm" asChild>
+                      <div className="mt-4 flex items-center gap-2 flex-wrap">
+                        <Button variant="default" size="sm" asChild>
                           <a
                             href={`/api/notices/${notice.id}/download`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <ExternalLink className="mr-2 h-4 w-4" />
+                            미리보기
+                          </a>
+                        </Button>
+                        <Button variant="outline" size="sm" asChild>
+                          <a
+                            href={`/api/notices/${notice.id}/download?download=true`}
                             download
                           >
                             <Download className="mr-2 h-4 w-4" />
-                            {notice.attachmentName}
+                            다운로드
                           </a>
                         </Button>
+                        <span className="text-xs text-muted-foreground">
+                          {notice.attachmentName}
+                        </span>
                       </div>
                     )}
 

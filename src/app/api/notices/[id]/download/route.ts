@@ -3,7 +3,7 @@ import { getSessionUser } from "@/lib/auth/session";
 import { getNoticeById } from "@/lib/db/queries/notices";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -34,10 +34,16 @@ export async function GET(
     };
     const contentType = mimeMap[ext || ""] || "application/octet-stream";
 
+    // ?download=true 이면 다운로드, 기본은 미리보기 (inline)
+    const isDownload = request.nextUrl.searchParams.get("download") === "true";
+    const disposition = isDownload
+      ? `attachment; filename*=UTF-8''${encodeURIComponent(notice.attachmentName)}`
+      : `inline; filename*=UTF-8''${encodeURIComponent(notice.attachmentName)}`;
+
     return new NextResponse(data, {
       headers: {
         "Content-Type": `${contentType}; charset=utf-8`,
-        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(notice.attachmentName)}`,
+        "Content-Disposition": disposition,
       },
     });
   } catch (error) {
