@@ -724,7 +724,7 @@ export async function getTerminationStats(filters?: {
 }
 
 // ── KPI 카드: 당월 개통완료 (거래처별 breakdown 포함) ──
-// 기준: work_status가 '개통완료'(또는 레거시 '완료')이고 updated_at이 당월인 건
+// 기준: work_status가 '개통완료'이고 개통일(activation_date) 기준 당월인 건
 export async function getMonthlyCompletedStats(agencyIds?: string[]) {
   const agencyFilter = agencyIds && agencyIds.length > 0
     ? sql`AND a.agency_id IN (${inList(agencyIds)})`
@@ -739,7 +739,7 @@ export async function getMonthlyCompletedStats(agencyIds?: string[]) {
       FROM activations a
       LEFT JOIN agencies ag ON a.agency_id = ag.id
       WHERE a.work_status IN ('개통완료', '완료')
-        AND TO_CHAR(a.updated_at, 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
+        AND TO_CHAR(COALESCE(a.activation_date, a.entry_date, a.created_at::date), 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
         ${agencyFilter}
       GROUP BY a.agency_id, ag.name
     ) sub
@@ -752,7 +752,7 @@ export async function getMonthlyCompletedStats(agencyIds?: string[]) {
 }
 
 // ── KPI 카드: 당일 개통완료 상세 ──
-// 기준: work_status가 '개통완료'이고 updated_at이 오늘인 건
+// 기준: work_status가 '개통완료'이고 개통일(activation_date) 기준 오늘인 건
 export async function getTodayCompletedStats(agencyIds?: string[]) {
   const agencyFilter = agencyIds && agencyIds.length > 0
     ? sql`AND a.agency_id IN (${inList(agencyIds)})`
@@ -769,9 +769,9 @@ export async function getTodayCompletedStats(agencyIds?: string[]) {
     FROM activations a
     LEFT JOIN agencies ag ON a.agency_id = ag.id
     WHERE a.work_status IN ('개통완료', '완료')
-      AND a.updated_at::date = CURRENT_DATE
+      AND COALESCE(a.activation_date, a.entry_date, a.created_at::date) = CURRENT_DATE
       ${agencyFilter}
-    ORDER BY a.updated_at DESC
+    ORDER BY a.activation_date DESC NULLS LAST
   `);
   return result.rows;
 }

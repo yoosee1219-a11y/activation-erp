@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo } from "react";
 import Papa from "papaparse";
+import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Download } from "lucide-react";
 
@@ -113,6 +114,118 @@ export default function ImportPage() {
   const [error, setError] = useState<string>("");
   const [filterTab, setFilterTab] = useState<FilterTab>("all");
 
+  // 공통: 파싱된 raw 행 → 헤더 정규화 + 정리
+  const processRawRows = useCallback((headers: string[], rawRows: string[][]) => {
+    reviewCount = 0;
+    // 헤더 정규화
+    const mappedHeaders = headers.map((header) => {
+      const h = header.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+      if (h === "서류 검수" || h === "서류검수") {
+        return resolveReviewField();
+      }
+      return normalizeHeader(header);
+    });
+
+    // 행을 객체로 변환
+    const rows: MappedRow[] = [];
+    for (const rawRow of rawRows) {
+      const row: MappedRow = {};
+      for (let c = 0; c < mappedHeaders.length; c++) {
+        const key = mappedHeaders[c];
+        const val = rawRow[c] ?? "";
+        if (key && !key.startsWith("_") && val !== "") {
+          row[key] = val;
+        }
+      }
+      // 고객명 있는 행만
+      if ((row.customerName || "").trim().length > 0) {
+        rows.push(row);
+      }
+    }
+    return rows;
+  }, []);
+
+  // XLSX 파싱: 숫자 원본 보존 (과학표기법 문제 해결)
+  const parseXlsx = useCallback((data: ArrayBuffer) => {
+    try {
+      const workbook = XLSX.read(data, { type: "array" });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      if (!worksheet) {
+        setError("시트를 찾을 수 없습니다.");
+        return;
+      }
+
+      // raw: true → 숫자가 JavaScript Number 타입으로 (12자리까진 정밀도 보존)
+      // header: 1 → 배열의 배열로 반환 (헤더 수동 처리)
+      const jsonData = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
+        header: 1,
+        raw: true,
+        defval: "",
+      });
+
+      if (jsonData.length < 2) {
+        setError("데이터가 없습니다.");
+        return;
+      }
+
+      // 첫 행 = 헤더
+      const headers = jsonData[0].map((h) => String(h ?? ""));
+
+      // 나머지 행 = 데이터 (숫자 → 문자열 변환, 정밀도 보존)
+      const dataRows = jsonData.slice(1).map((row) =>
+        row.map((cell) => {
+          if (cell === null || cell === undefined || cell === "") return "";
+          if (typeof cell === "number") {
+            // 숫자를 문자열로 변환 (과학표기법 방지)
+            // 12자리 이하 정수는 Number.toString()으로 정확히 변환됨
+            return cell.toString();
+          }
+          return String(cell);
+        })
+      );
+
+      const rows = processRawRows(headers, dataRows);
+      setMappedRows(rows);
+    } catch (err) {
+      setError(`엑셀 파싱 오류: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }, [processRawRows]);
+
+  // CSV 파싱: 기존 PapaParse 로직
+  const parseCsv = useCallback((text: string) => {
+    Papa.parse(text, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: (header: string) => {
+        const h = header.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+        if (h === "서류 검수" || h === "서류검수") {
+          return resolveReviewField();
+        }
+        return normalizeHeader(header);
+      },
+      complete: (results) => {
+        const rows = (results.data as MappedRow[]).filter((row) => {
+          const customerName = row.customerName || "";
+          return customerName.trim().length > 0;
+        });
+        const cleaned = rows.map((row) => {
+          const clean: MappedRow = {};
+          for (const [key, value] of Object.entries(row)) {
+            if (!key.startsWith("_") && value !== undefined) {
+              clean[key] = value;
+            }
+          }
+          return clean;
+        });
+        setMappedRows(cleaned);
+      },
+      error: (err: Error) => {
+        setError(`CSV 파싱 오류: ${err.message}`);
+      },
+    });
+  }, []);
+
   const handleFile = useCallback((file: File) => {
     setError("");
     setResult(null);
@@ -120,58 +233,37 @@ export default function ImportPage() {
     setFilterTab("all");
     reviewCount = 0;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    const isExcel = ext === "xlsx" || ext === "xls";
 
-      Papa.parse(text, {
-        header: true,
-        skipEmptyLines: true,
-        transformHeader: (header: string) => {
-          const h = header.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
-
-          // "서류 검수" 패턴 감지
-          if (h === "서류 검수" || h === "서류검수") {
-            return resolveReviewField();
-          }
-
-          return normalizeHeader(header);
-        },
-        complete: (results) => {
-          const rows = (results.data as MappedRow[]).filter((row) => {
-            const customerName = row.customerName || "";
-            return customerName.trim().length > 0;
-          });
-
-          // _skip 필드 제거
-          const cleaned = rows.map((row) => {
-            const clean: MappedRow = {};
-            for (const [key, value] of Object.entries(row)) {
-              if (!key.startsWith("_") && value !== undefined) {
-                clean[key] = value;
-              }
-            }
-            return clean;
-          });
-
-          setMappedRows(cleaned);
-        },
-        error: (err: Error) => {
-          setError(`CSV 파싱 오류: ${err.message}`);
-        },
-      });
-    };
-    reader.readAsText(file, "utf-8");
-  }, []);
+    if (isExcel) {
+      // XLSX/XLS → ArrayBuffer → SheetJS 파싱
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const data = e.target?.result as ArrayBuffer;
+        parseXlsx(data);
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      // CSV → 텍스트 → PapaParse
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        parseCsv(text);
+      };
+      reader.readAsText(file, "utf-8");
+    }
+  }, [parseXlsx, parseCsv]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
       const file = e.dataTransfer.files[0];
-      if (file && file.name.endsWith(".csv")) {
+      const ext = file?.name.split(".").pop()?.toLowerCase();
+      if (file && (ext === "csv" || ext === "xlsx" || ext === "xls")) {
         handleFile(file);
       } else {
-        setError("CSV 파일만 지원합니다.");
+        setError("CSV 또는 엑셀(.xlsx) 파일만 지원합니다.");
       }
     },
     [handleFile]
@@ -251,7 +343,7 @@ export default function ImportPage() {
         <div>
           <h1 className="text-2xl font-bold">데이터 가져오기 / 내보내기</h1>
           <p className="text-sm text-gray-500 mt-1">
-            구글 시트에서 다운로드한 CSV 파일을 가져오거나, 현재 데이터를 CSV로 내보낼 수 있습니다.
+            엑셀(.xlsx) 또는 CSV 파일을 가져오거나, 현재 데이터를 CSV로 내보낼 수 있습니다.
           </p>
         </div>
         <div className="flex gap-2">
@@ -278,16 +370,16 @@ export default function ImportPage() {
         <input
           id="csv-input"
           type="file"
-          accept=".csv"
+          accept=".csv,.xlsx,.xls"
           className="hidden"
           onChange={handleInputChange}
         />
         <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
         <p className="text-lg font-medium text-gray-700">
-          CSV 파일을 여기에 끌어다 놓거나 클릭하여 선택
+          엑셀(.xlsx) 또는 CSV 파일을 끌어다 놓거나 클릭하여 선택
         </p>
         <p className="text-sm text-gray-500 mt-2">
-          구글 시트에서 &quot;파일 &gt; 다운로드 &gt; CSV&quot;로 다운로드한 파일
+          구글 시트 &gt; &quot;파일 &gt; 다운로드 &gt; xlsx&quot; 권장 (숫자 정밀도 보존)
         </p>
       </div>
 
