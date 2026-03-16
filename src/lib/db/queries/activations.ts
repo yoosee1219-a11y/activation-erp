@@ -45,10 +45,14 @@ export async function getActivations(params: {
     conditions.push(ilike(activations.customerName, `%${search}%`));
   }
   if (dateFrom) {
-    conditions.push(gte(activations.createdAt, new Date(dateFrom)));
+    conditions.push(
+      sql`COALESCE(${activations.activationDate}, ${activations.entryDate}, ${activations.createdAt}::date) >= ${dateFrom}`
+    );
   }
   if (dateTo) {
-    conditions.push(lte(activations.createdAt, new Date(dateTo)));
+    conditions.push(
+      sql`COALESCE(${activations.activationDate}, ${activations.entryDate}, ${activations.createdAt}::date) <= ${dateTo}`
+    );
   }
   if (month) {
     conditions.push(
