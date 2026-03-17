@@ -15,19 +15,65 @@ import {
   Calendar,
   FileText,
   AlertTriangle,
-  CheckCircle2,
-  Clock,
   XCircle,
-  Shield,
-  Building2,
+  MessageSquare,
+  Settings,
 } from "lucide-react";
 import { format } from "date-fns";
-import type { PartnerActivationRow } from "./partner-columns";
+
+// 파트너 + 어드민 모두 지원하는 공통 타입
+export interface CustomerDetailData {
+  id: string;
+  agencyId: string;
+  agencyName?: string;
+  customerName: string;
+  usimNumber: string | null;
+  entryDate: string | null;
+  subscriptionNumber: string | null;
+  newPhoneNumber: string | null;
+  virtualAccount: string | null;
+  subscriptionType: string | null;
+  ratePlan: string | null;
+  activationDate: string | null;
+  activationStatus: string | null;
+  personInCharge: string | null;
+  workStatus: string | null;
+  autopayRegistered: boolean | null;
+  // 서류
+  applicationDocs: string | null;
+  applicationDocsReview: string | null;
+  nameChangeDocs: string | null;
+  nameChangeDocsReview: string | null;
+  arcInfo: string | null;
+  arcReview: string | null;
+  autopayInfo: string | null;
+  autopayReview: string | null;
+  arcSupplementDeadline: string | null;
+  supplementStatus: string | null;
+  terminationDate: string | null;
+  terminationReason: string | null;
+  terminationAlertDate: string | null;
+  isLocked: boolean | null;
+  createdAt: string;
+  // 어드민 전용 (optional)
+  majorCategoryName?: string;
+  mediumCategoryName?: string;
+  deviceChangeConfirmed?: boolean | null;
+  selectedCommitment?: boolean | null;
+  commitmentDate?: string | null;
+  activationMethod?: string | null;
+  customerMemo?: string | null;
+  holdReason?: string | null;
+  notes?: string | null;
+  noteCount?: number;
+  // 기타
+  [key: string]: unknown;
+}
 
 interface CustomerDetailDialogProps {
   open: boolean;
   onClose: () => void;
-  customer: PartnerActivationRow | null;
+  customer: CustomerDetailData | null;
 }
 
 const workStatusColors: Record<string, string> = {
@@ -62,19 +108,6 @@ function InfoRow({ label, value, icon }: { label: string; value: string | null |
 }
 
 function DocStatus({ label, hasFile, review }: { label: string; hasFile: boolean; review: string | null }) {
-  const getFileLinks = (value: string | null): { name: string; url: string }[] => {
-    if (!value) return [];
-    try {
-      const parsed = JSON.parse(value);
-      if (Array.isArray(parsed)) return parsed;
-      return [];
-    } catch {
-      // URL 문자열
-      if (value.startsWith("http")) return [{ name: "파일", url: value }];
-      return [];
-    }
-  };
-
   return (
     <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-gray-50">
       <div className="flex items-center gap-2">
@@ -105,7 +138,7 @@ export function CustomerDetailDialog({ open, onClose, customer }: CustomerDetail
   if (!customer) return null;
 
   const ws = customer.workStatus || "입력중";
-  const formatDate = (d: string | null) => {
+  const formatDate = (d: string | null | undefined) => {
     if (!d) return null;
     try {
       return format(new Date(d), "yyyy-MM-dd");
@@ -141,6 +174,12 @@ export function CustomerDetailDialog({ open, onClose, customer }: CustomerDetail
 
   const supplementInfo = getSupplementInfo();
 
+  // 어드민 전용 필드 존재 여부
+  const hasAdminFields = customer.activationMethod !== undefined ||
+    customer.customerMemo !== undefined ||
+    customer.holdReason !== undefined ||
+    customer.deviceChangeConfirmed !== undefined;
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-0">
@@ -156,6 +195,12 @@ export function CustomerDetailDialog({ open, onClose, customer }: CustomerDetail
                   <DialogTitle className="text-lg">{customer.customerName}</DialogTitle>
                   <p className="text-xs text-gray-500 mt-0.5">
                     {customer.agencyName || customer.agencyId}
+                    {customer.majorCategoryName && (
+                      <span className="ml-1 text-gray-400">
+                        ({customer.majorCategoryName}
+                        {customer.mediumCategoryName && ` > ${customer.mediumCategoryName}`})
+                      </span>
+                    )}
                   </p>
                 </div>
               </div>
@@ -194,6 +239,20 @@ export function CustomerDetailDialog({ open, onClose, customer }: CustomerDetail
               <InfoRow label="가입번호" value={customer.subscriptionNumber} />
               <InfoRow label="가상계좌" value={customer.virtualAccount} />
               <InfoRow label="개통일자" value={formatDate(customer.activationDate)} />
+              {hasAdminFields && (
+                <>
+                  <InfoRow label="개통방법" value={customer.activationMethod} />
+                  <InfoRow
+                    label="기기변경"
+                    value={customer.deviceChangeConfirmed ? "확인" : customer.deviceChangeConfirmed === false ? "미확인" : null}
+                  />
+                  <InfoRow
+                    label="약정선택"
+                    value={customer.selectedCommitment ? "선택" : customer.selectedCommitment === false ? "미선택" : null}
+                  />
+                  <InfoRow label="약정일" value={formatDate(customer.commitmentDate)} />
+                </>
+              )}
             </div>
           </section>
 
@@ -271,8 +330,38 @@ export function CustomerDetailDialog({ open, onClose, customer }: CustomerDetail
                   icon={<AlertTriangle className="h-3.5 w-3.5 text-orange-400" />}
                 />
               )}
+              {customer.holdReason && (
+                <InfoRow label="보류사유" value={customer.holdReason} />
+              )}
             </div>
           </section>
+
+          {/* 메모/비고 (어드민 전용) */}
+          {hasAdminFields && (customer.customerMemo || customer.notes) && (
+            <>
+              <Separator />
+              <section>
+                <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
+                  <MessageSquare className="h-4 w-4" />
+                  메모 / 비고
+                </h3>
+                <div className="space-y-2">
+                  {customer.customerMemo && (
+                    <div className="rounded-lg bg-yellow-50 border border-yellow-100 p-3">
+                      <p className="text-xs text-yellow-700 font-medium mb-1">고객 메모</p>
+                      <p className="text-sm text-gray-800 whitespace-pre-wrap">{customer.customerMemo}</p>
+                    </div>
+                  )}
+                  {customer.notes && (
+                    <div className="rounded-lg bg-blue-50 border border-blue-100 p-3">
+                      <p className="text-xs text-blue-700 font-medium mb-1">비고</p>
+                      <p className="text-sm text-gray-800 whitespace-pre-wrap">{customer.notes}</p>
+                    </div>
+                  )}
+                </div>
+              </section>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>

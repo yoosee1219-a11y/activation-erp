@@ -16,6 +16,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Plus, List, LayoutGrid, X } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { CustomerDetailDialog, type CustomerDetailData } from "@/components/partner/customer-detail-dialog";
 
 const STAFF_LIST = ["권보미", "박서연", "김유림", "이아라"];
 
@@ -56,6 +57,7 @@ export default function ActivationsPage() {
   const [selectedAgency, setSelectedAgency] = useState<string | null>(null);
   const [localMajors, setLocalMajors] = useState<string[]>([]);
   const [localMediums, setLocalMediums] = useState<string[]>([]);
+  const [detailCustomer, setDetailCustomer] = useState<CustomerDetailData | null>(null);
 
   const agencyMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -479,6 +481,7 @@ export default function ActivationsPage() {
               row.autopayReview === "보완요청";
             return hasSupp ? "bg-red-50/70" : "";
           }}
+          onRowClick={(row: ActivationRow) => setDetailCustomer(row as unknown as CustomerDetailData)}
         />
       ) : (
         <div className="space-y-4">
@@ -605,6 +608,7 @@ export default function ActivationsPage() {
                     row.autopayReview === "보완요청";
                   return hasSupp ? "bg-red-50/70" : "";
                 }}
+                onRowClick={(row: ActivationRow) => setDetailCustomer(row as unknown as CustomerDetailData)}
               />
             </div>
           ) : (
@@ -632,6 +636,7 @@ export default function ActivationsPage() {
                       row.autopayReview === "보완요청";
                     return hasSupp ? "bg-red-50/70" : "";
                   }}
+                  onRowClick={(row: ActivationRow) => setDetailCustomer(row as unknown as CustomerDetailData)}
                 />
               </div>
             ))
@@ -644,6 +649,13 @@ export default function ActivationsPage() {
           )}
         </div>
       )}
+
+      {/* 고객 상세 팝업 */}
+      <CustomerDetailDialog
+        open={!!detailCustomer}
+        onClose={() => setDetailCustomer(null)}
+        customer={detailCustomer}
+      />
     </div>
   );
 }
