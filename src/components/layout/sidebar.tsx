@@ -92,8 +92,9 @@ export function Sidebar({ user }: SidebarProps) {
   return (
     <aside className="flex h-screen w-64 flex-col border-r bg-white">
       <div className="flex h-16 items-center border-b px-6">
-        <a href="/" className="text-lg font-bold hover:text-blue-600 transition-colors">
-          NBKOREA 고객관리 프로그램
+        <a href="/" className="hover:text-blue-600 transition-colors">
+          <div className="text-lg font-bold leading-tight">NBKOREA</div>
+          <div className="text-xs text-gray-500">고객관리 프로그램</div>
         </a>
       </div>
 
