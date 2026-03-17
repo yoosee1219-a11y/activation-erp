@@ -68,8 +68,8 @@ export default function LoginPage() {
   return (
     <Card className="w-full max-w-md mx-4">
       <CardHeader className="text-center">
-        <CardTitle className="text-2xl font-bold">Activation ERP</CardTitle>
-        <CardDescription>통신 개통 관리 시스템</CardDescription>
+        <CardTitle className="text-2xl font-bold">NBKOREA 고객관리 프로그램</CardTitle>
+        <CardDescription>NBKOREA 고객관리 프로그램</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">

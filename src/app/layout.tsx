@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Activation ERP - 통신 개통 관리 시스템",
-  description: "통신 개통 대행 ERP 관리 시스템",
+  title: "NBKOREA 고객관리 프로그램",
+  description: "NBKOREA 고객관리 프로그램",
 };
 
 export default function RootLayout({

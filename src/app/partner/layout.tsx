@@ -38,8 +38,10 @@ export default function PartnerLayout({
       <header className="flex h-14 items-center justify-between border-b bg-white px-6 shrink-0">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
-            <Smartphone className="h-5 w-5 text-blue-600" />
-            <span className="text-lg font-bold">Activation ERP</span>
+            <a href="/partner" className="flex items-center gap-2">
+              <Smartphone className="h-5 w-5 text-blue-600" />
+              <span className="text-lg font-bold">NBKOREA 고객관리 프로그램</span>
+            </a>
             <Badge className="bg-blue-100 text-blue-800">거래처</Badge>
           </div>
           <nav className="flex items-center gap-1">
