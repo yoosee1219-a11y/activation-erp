@@ -8,6 +8,7 @@ import {
   getPartnerColumns,
   type PartnerActivationRow,
 } from "@/components/partner/partner-columns";
+import { MonthSelector } from "@/components/partner/month-selector";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -18,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Clock, CheckCircle2, Loader2, RotateCcw, X, RefreshCw, FileEdit, Package, ChevronDown, ChevronRight, XCircle, Lock } from "lucide-react";
+import { Plus, Clock, CheckCircle2, Loader2, RotateCcw, X, RefreshCw, FileEdit, Package, ChevronDown, ChevronRight, ChevronUp, XCircle, Lock } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -44,6 +45,14 @@ interface UsimAgencyStats {
   resetReady: number;
 }
 
+interface MonthSummary {
+  month: string;
+  total: string;
+  completed: string;
+  pending: string;
+  cancelled: string;
+}
+
 export default function PartnerPage() {
   const { user } = useAuth();
   const { agencies, categories } = useAgencyFilter();
@@ -54,6 +63,13 @@ export default function PartnerPage() {
   const [creating, setCreating] = useState(false);
   const [selectedAgency, setSelectedAgency] = useState("all");
   const [statusFilter, setStatusFilter] = useState<WorkStatusFilter>(null);
+
+  // 월별 필터
+  const [selectedMonth, setSelectedMonth] = useState<string>("all");
+  const [availableMonths, setAvailableMonths] = useState<MonthSummary[]>([]);
+
+  // 대시보드 접기/펼치기
+  const [dashboardCollapsed, setDashboardCollapsed] = useState(false);
 
   // 유심 재고 현황
   const [usimStats, setUsimStats] = useState<UsimAgencyStats[]>([]);
@@ -84,7 +100,6 @@ export default function PartnerPage() {
     if (!user?.allowedMajorCategory || !categories.length) return [];
     const majorNode = categories.find((c) => c.id === user.allowedMajorCategory);
     if (!majorNode?.children) return [];
-    // allowedMediumCategories가 비어있으면 해당 대분류의 전체 중분류
     if (!user.allowedMediumCategories.length) return majorNode.children;
     return majorNode.children.filter((c) => user.allowedMediumCategories.includes(c.id));
   }, [user, categories]);
@@ -100,7 +115,7 @@ export default function PartnerPage() {
   // 허용된 거래처 목록 (직접 배정 방식)
   const allowedAgencies = useMemo(() => {
     if (!user) return [];
-    if (hasCategoryAccess) return agencies; // 카테고리 기반이면 agencies API가 이미 필터링
+    if (hasCategoryAccess) return agencies;
     if (user.allowedAgencies.includes("ALL")) return agencies;
     return agencies.filter((a) => user.allowedAgencies.includes(a.id));
   }, [user, agencies, hasCategoryAccess]);
@@ -112,6 +127,23 @@ export default function PartnerPage() {
     return major?.name || user.allowedMajorCategory;
   }, [user, categories]);
 
+  // 월별 데이터 fetch
+  const fetchMonths = useCallback(async () => {
+    try {
+      const res = await fetch("/api/activations/months");
+      if (res.ok) {
+        const result = await res.json();
+        setAvailableMonths(result.months || []);
+      }
+    } catch {
+      // 무시
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchMonths();
+  }, [fetchMonths]);
+
   // 유심 재고 통계 fetch
   const fetchUsimStats = useCallback(async () => {
     try {
@@ -121,7 +153,7 @@ export default function PartnerPage() {
         setUsimStats(result.stats || []);
       }
     } catch {
-      // 유심 통계 실패해도 무시 (메인 기능 아님)
+      // 유심 통계 실패해도 무시
     }
   }, []);
 
@@ -148,22 +180,31 @@ export default function PartnerPage() {
     }
   }, [hasCategoryAccess, selectedMediumCategories, allowedMediumCats.length, selectedAgency]);
 
+  // 현재 YYYY-MM 계산
+  const getCurrentYM = () => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  };
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
 
       if (hasCategoryAccess) {
-        // 카테고리 기반 필터링
         if (selectedMediumCategories.length > 0 && selectedMediumCategories.length < allowedMediumCats.length) {
           params.set("mediumCategories", selectedMediumCategories.join(","));
         }
-        // 전체 선택이면 파라미터 없이 (서버에서 카테고리 기반 필터링)
       } else {
-        // 직접 에이전시 필터링
         if (selectedAgency !== "all") {
           params.set("agencyId", selectedAgency);
         }
+      }
+
+      // 월별 필터 적용
+      if (selectedMonth !== "all") {
+        const monthValue = selectedMonth === "current" ? getCurrentYM() : selectedMonth;
+        params.set("month", monthValue);
       }
 
       params.set("page", page.toString());
@@ -187,10 +228,10 @@ export default function PartnerPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, selectedAgency, selectedMediumCategories, agencies, hasCategoryAccess, allowedMediumCats.length]);
+  }, [page, selectedAgency, selectedMediumCategories, agencies, hasCategoryAccess, allowedMediumCats.length, selectedMonth]);
 
   useEffect(() => {
-    if (hasCategoryAccess && !categoryFilterInitialized) return; // 초기화 전에는 fetch하지 않음
+    if (hasCategoryAccess && !categoryFilterInitialized) return;
     fetchData();
     fetchUsimStats();
     fetchSupplementData();
@@ -202,7 +243,6 @@ export default function PartnerPage() {
 
   const handleUpdate = useCallback(
     async (id: string, field: string, value: string) => {
-      // 낙관적 업데이트
       setData((prev) =>
         prev.map((row) => (row.id === id ? { ...row, [field]: value } : row))
       );
@@ -226,11 +266,9 @@ export default function PartnerPage() {
   );
 
   const handleAddRow = async () => {
-    // 거래처 결정
     let agencyId: string;
 
     if (hasCategoryAccess) {
-      // 카테고리 기반: 선택된 중분류에 속한 첫 번째 거래처
       const selectedAgencies = agencies.filter((a) =>
         selectedMediumCategories.includes(a.mediumCategory || "")
       );
@@ -293,24 +331,12 @@ export default function PartnerPage() {
 
   // 요약 통계 (workStatus 기준 - 6개)
   const stats = useMemo(() => {
-    const drafting = data.filter(
-      (r) => !r.workStatus || r.workStatus === "입력중"
-    ).length;
-    const requested = data.filter(
-      (r) => r.workStatus === "개통요청"
-    ).length;
-    const working = data.filter(
-      (r) => r.workStatus === "진행중"
-    ).length;
-    const completed = data.filter(
-      (r) => r.workStatus === "개통완료"
-    ).length;
-    const needsFix = data.filter(
-      (r) => r.workStatus === "보완요청"
-    ).length;
-    const terminated = data.filter(
-      (r) => r.workStatus === "해지"
-    ).length;
+    const drafting = data.filter((r) => !r.workStatus || r.workStatus === "입력중").length;
+    const requested = data.filter((r) => r.workStatus === "개통요청").length;
+    const working = data.filter((r) => r.workStatus === "진행중").length;
+    const completed = data.filter((r) => r.workStatus === "개통완료").length;
+    const needsFix = data.filter((r) => r.workStatus === "보완요청").length;
+    const terminated = data.filter((r) => r.workStatus === "해지").length;
     return { drafting, requested, working, completed, needsFix, terminated };
   }, [data]);
 
@@ -338,6 +364,11 @@ export default function PartnerPage() {
 
   const handleCardClick = (filter: WorkStatusFilter) => {
     setStatusFilter((prev) => (prev === filter ? null : filter));
+  };
+
+  const handleMonthChange = (month: string) => {
+    setSelectedMonth(month);
+    setPage(1);
   };
 
   const handleChangePassword = async () => {
@@ -381,7 +412,6 @@ export default function PartnerPage() {
   const handleMediumCategoryToggle = (catId: string) => {
     setSelectedMediumCategories((prev) => {
       if (prev.includes(catId)) {
-        // 최소 1개는 선택 유지
         if (prev.length <= 1) return prev;
         return prev.filter((id) => id !== catId);
       }
@@ -394,7 +424,6 @@ export default function PartnerPage() {
   const handleSelectAll = () => {
     const allIds = allowedMediumCats.map((c) => c.id);
     if (selectedMediumCategories.length === allIds.length) {
-      // 전체 해제 → 첫 번째만 남기기 (최소 1개)
       setSelectedMediumCategories([allIds[0]]);
     } else {
       setSelectedMediumCategories(allIds);
@@ -413,318 +442,351 @@ export default function PartnerPage() {
   });
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">개통 현황</h1>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setPasswordDialogOpen(true)}>
-            <Lock className="h-4 w-4 mr-1" />
-            비밀번호 변경
-          </Button>
-          <div className="rounded-lg bg-gray-900 px-3 py-1.5 text-white shadow">
-            <span className="text-xs font-medium">{dateStr}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 요약 카드 6개 (workStatus 기준, 클릭 필터링) */}
-      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
-        <Card
-          className={`cursor-pointer transition-all hover:shadow-md ${
-            statusFilter === "입력중"
-              ? "ring-2 ring-gray-500 shadow-md"
-              : "hover:ring-1 hover:ring-gray-200"
-          }`}
-          onClick={() => handleCardClick("입력중")}
-        >
-          <CardContent className="flex items-center gap-2.5 p-3">
-            <div className="rounded-md bg-gray-100 p-1.5">
-              <FileEdit className="h-4 w-4 text-gray-700" />
+    <div className="space-y-6">
+      {/* ═══════════════════════════════════════════════════════════
+          섹션 A: 대시보드 (접기 가능)
+          ═══════════════════════════════════════════════════════════ */}
+      <Card className="shadow-sm">
+        <CardContent className="p-4 space-y-4">
+          {/* 헤더 */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-bold">개통 현황</h1>
+              <button
+                onClick={() => setDashboardCollapsed(!dashboardCollapsed)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+                title={dashboardCollapsed ? "펼치기" : "접기"}
+              >
+                {dashboardCollapsed ? (
+                  <ChevronDown className="h-5 w-5" />
+                ) : (
+                  <ChevronUp className="h-5 w-5" />
+                )}
+              </button>
             </div>
-            <div>
-              <p className="text-xs text-gray-500">입력중</p>
-              <p className="text-xl font-bold">{stats.drafting}건</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card
-          className={`cursor-pointer transition-all hover:shadow-md ${
-            statusFilter === "개통요청"
-              ? "ring-2 ring-blue-500 shadow-md"
-              : "hover:ring-1 hover:ring-blue-200"
-          }`}
-          onClick={() => handleCardClick("개통요청")}
-        >
-          <CardContent className="flex items-center gap-2.5 p-3">
-            <div className="rounded-md bg-blue-100 p-1.5">
-              <Clock className="h-4 w-4 text-blue-700" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">개통요청</p>
-              <p className="text-xl font-bold">{stats.requested}건</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card
-          className={`cursor-pointer transition-all hover:shadow-md ${
-            statusFilter === "진행중"
-              ? "ring-2 ring-yellow-500 shadow-md"
-              : "hover:ring-1 hover:ring-yellow-200"
-          }`}
-          onClick={() => handleCardClick("진행중")}
-        >
-          <CardContent className="flex items-center gap-2.5 p-3">
-            <div className="rounded-md bg-yellow-100 p-1.5">
-              <Loader2 className="h-4 w-4 text-yellow-700" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">진행중</p>
-              <p className="text-xl font-bold">{stats.working}건</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card
-          className={`cursor-pointer transition-all hover:shadow-md ${
-            statusFilter === "개통완료"
-              ? "ring-2 ring-green-500 shadow-md"
-              : "hover:ring-1 hover:ring-green-200"
-          }`}
-          onClick={() => handleCardClick("개통완료")}
-        >
-          <CardContent className="flex items-center gap-2.5 p-3">
-            <div className="rounded-md bg-green-100 p-1.5">
-              <CheckCircle2 className="h-4 w-4 text-green-700" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">개통완료</p>
-              <p className="text-xl font-bold">{stats.completed}건</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card
-          className={`cursor-pointer transition-all hover:shadow-md ${
-            statusFilter === "보완요청"
-              ? "ring-2 ring-red-500 shadow-md"
-              : "hover:ring-1 hover:ring-red-200"
-          }`}
-          onClick={() => handleCardClick("보완요청")}
-        >
-          <CardContent className="flex items-center gap-2.5 p-3">
-            <div className="rounded-md bg-red-100 p-1.5">
-              <RotateCcw className="h-4 w-4 text-red-700" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">보완요청</p>
-              <p className="text-xl font-bold">{stats.needsFix}건</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card
-          className={`cursor-pointer transition-all hover:shadow-md ${
-            statusFilter === "해지"
-              ? "ring-2 ring-gray-900 shadow-md"
-              : "hover:ring-1 hover:ring-gray-300"
-          }`}
-          onClick={() => handleCardClick("해지")}
-        >
-          <CardContent className="flex items-center gap-2.5 p-3">
-            <div className="rounded-md bg-red-100 p-1.5">
-              <XCircle className="h-4 w-4 text-gray-900" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">해지</p>
-              <p className="text-xl font-bold">{stats.terminated}건</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* 유심 재고 현황 (항상 표시) */}
-      <Card className="border-blue-100 bg-blue-50/30">
-        <div
-          className={`flex items-center justify-between px-4 py-3 ${usimStats.length > 1 ? "cursor-pointer" : ""}`}
-          onClick={() => usimStats.length > 1 && setUsimExpanded(!usimExpanded)}
-        >
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-blue-100 p-2">
-              <Package className="h-5 w-5 text-blue-700" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-blue-900">유심 재고 현황</p>
-              {usimTotals.totalAssigned > 0 ? (
-                <p className="text-xs text-blue-600">
-                  총 배정 {usimTotals.totalAssigned}장 · 잔여 재고{" "}
-                  <span className="font-bold text-blue-800">{usimTotals.currentStock}장</span> · 사용{" "}
-                  {usimTotals.used}장 · 취소 {usimTotals.cancelled}장
-                </p>
-              ) : (
-                <p className="text-xs text-gray-400">배정된 유심이 없습니다</p>
-              )}
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setPasswordDialogOpen(true)}>
+                <Lock className="h-4 w-4 mr-1" />
+                비밀번호 변경
+              </Button>
+              <div className="rounded-lg bg-gray-900 px-3 py-1.5 text-white shadow">
+                <span className="text-xs font-medium">{dateStr}</span>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {usimStats.length > 1 && (
-              <span className="text-xs text-blue-500">
-                {usimStats.length}개 거래처
-              </span>
-            )}
-            {usimStats.length > 1 ? (
-              usimExpanded ? (
-                <ChevronDown className="h-4 w-4 text-blue-500" />
-              ) : (
-                <ChevronRight className="h-4 w-4 text-blue-500" />
-              )
-            ) : null}
-          </div>
-        </div>
 
-        {/* 거래처별 상세 (다중 거래처일 때만 펼침) */}
-        {usimExpanded && usimStats.length > 1 && (
-          <div className="border-t border-blue-100 px-4 py-2">
-            <div className="space-y-1.5">
-              {usimStats.map((s) => (
-                <div
-                  key={s.agencyId}
-                  className="flex items-center justify-between rounded-md bg-white/60 px-3 py-2 text-sm"
+          {/* 월 선택기 */}
+          <MonthSelector
+            availableMonths={availableMonths}
+            selectedMonth={selectedMonth}
+            onMonthChange={handleMonthChange}
+          />
+
+          {!dashboardCollapsed && (
+            <>
+              {/* 요약 카드 6개 */}
+              <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+                <Card
+                  className={`cursor-pointer transition-all hover:shadow-md ${
+                    statusFilter === "입력중"
+                      ? "ring-2 ring-gray-500 shadow-md"
+                      : "hover:ring-1 hover:ring-gray-200"
+                  }`}
+                  onClick={() => handleCardClick("입력중")}
                 >
-                  <span className="font-medium text-gray-700">{s.agencyName}</span>
-                  <div className="flex items-center gap-4 text-xs text-gray-500">
-                    <span>배정 <span className="font-medium text-gray-700">{s.totalAssigned}</span>장</span>
-                    <span>재고 <span className="font-bold text-blue-700">{s.currentStock}</span>장</span>
-                    <span>사용 <span className="font-medium text-gray-700">{s.used}</span>장</span>
-                    <span>취소 <span className="font-medium text-red-600">{s.cancelled}</span>장</span>
+                  <CardContent className="flex items-center gap-2.5 p-3">
+                    <div className="rounded-md bg-gray-100 p-1.5">
+                      <FileEdit className="h-4 w-4 text-gray-700" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">입력중</p>
+                      <p className="text-xl font-bold">{stats.drafting}건</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card
+                  className={`cursor-pointer transition-all hover:shadow-md ${
+                    statusFilter === "개통요청"
+                      ? "ring-2 ring-blue-500 shadow-md"
+                      : "hover:ring-1 hover:ring-blue-200"
+                  }`}
+                  onClick={() => handleCardClick("개통요청")}
+                >
+                  <CardContent className="flex items-center gap-2.5 p-3">
+                    <div className="rounded-md bg-blue-100 p-1.5">
+                      <Clock className="h-4 w-4 text-blue-700" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">개통요청</p>
+                      <p className="text-xl font-bold">{stats.requested}건</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card
+                  className={`cursor-pointer transition-all hover:shadow-md ${
+                    statusFilter === "진행중"
+                      ? "ring-2 ring-yellow-500 shadow-md"
+                      : "hover:ring-1 hover:ring-yellow-200"
+                  }`}
+                  onClick={() => handleCardClick("진행중")}
+                >
+                  <CardContent className="flex items-center gap-2.5 p-3">
+                    <div className="rounded-md bg-yellow-100 p-1.5">
+                      <Loader2 className="h-4 w-4 text-yellow-700" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">진행중</p>
+                      <p className="text-xl font-bold">{stats.working}건</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card
+                  className={`cursor-pointer transition-all hover:shadow-md ${
+                    statusFilter === "개통완료"
+                      ? "ring-2 ring-green-500 shadow-md"
+                      : "hover:ring-1 hover:ring-green-200"
+                  }`}
+                  onClick={() => handleCardClick("개통완료")}
+                >
+                  <CardContent className="flex items-center gap-2.5 p-3">
+                    <div className="rounded-md bg-green-100 p-1.5">
+                      <CheckCircle2 className="h-4 w-4 text-green-700" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">개통완료</p>
+                      <p className="text-xl font-bold">{stats.completed}건</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card
+                  className={`cursor-pointer transition-all hover:shadow-md ${
+                    statusFilter === "보완요청"
+                      ? "ring-2 ring-red-500 shadow-md"
+                      : "hover:ring-1 hover:ring-red-200"
+                  }`}
+                  onClick={() => handleCardClick("보완요청")}
+                >
+                  <CardContent className="flex items-center gap-2.5 p-3">
+                    <div className="rounded-md bg-red-100 p-1.5">
+                      <RotateCcw className="h-4 w-4 text-red-700" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">보완요청</p>
+                      <p className="text-xl font-bold">{stats.needsFix}건</p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card
+                  className={`cursor-pointer transition-all hover:shadow-md ${
+                    statusFilter === "해지"
+                      ? "ring-2 ring-gray-900 shadow-md"
+                      : "hover:ring-1 hover:ring-gray-300"
+                  }`}
+                  onClick={() => handleCardClick("해지")}
+                >
+                  <CardContent className="flex items-center gap-2.5 p-3">
+                    <div className="rounded-md bg-red-100 p-1.5">
+                      <XCircle className="h-4 w-4 text-gray-900" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">해지</p>
+                      <p className="text-xl font-bold">{stats.terminated}건</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* 유심 재고 현황 */}
+              <Card className="border-blue-100 bg-blue-50/30">
+                <div
+                  className={`flex items-center justify-between px-4 py-3 ${usimStats.length > 1 ? "cursor-pointer" : ""}`}
+                  onClick={() => usimStats.length > 1 && setUsimExpanded(!usimExpanded)}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-lg bg-blue-100 p-2">
+                      <Package className="h-5 w-5 text-blue-700" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-blue-900">유심 재고 현황</p>
+                      {usimTotals.totalAssigned > 0 ? (
+                        <p className="text-xs text-blue-600">
+                          총 배정 {usimTotals.totalAssigned}장 · 잔여 재고{" "}
+                          <span className="font-bold text-blue-800">{usimTotals.currentStock}장</span> · 사용{" "}
+                          {usimTotals.used}장 · 취소 {usimTotals.cancelled}장
+                        </p>
+                      ) : (
+                        <p className="text-xs text-gray-400">배정된 유심이 없습니다</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {usimStats.length > 1 && (
+                      <span className="text-xs text-blue-500">{usimStats.length}개 거래처</span>
+                    )}
+                    {usimStats.length > 1 ? (
+                      usimExpanded ? (
+                        <ChevronDown className="h-4 w-4 text-blue-500" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 text-blue-500" />
+                      )
+                    ) : null}
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+
+                {usimExpanded && usimStats.length > 1 && (
+                  <div className="border-t border-blue-100 px-4 py-2">
+                    <div className="space-y-1.5">
+                      {usimStats.map((s) => (
+                        <div
+                          key={s.agencyId}
+                          className="flex items-center justify-between rounded-md bg-white/60 px-3 py-2 text-sm"
+                        >
+                          <span className="font-medium text-gray-700">{s.agencyName}</span>
+                          <div className="flex items-center gap-4 text-xs text-gray-500">
+                            <span>배정 <span className="font-medium text-gray-700">{s.totalAssigned}</span>장</span>
+                            <span>재고 <span className="font-bold text-blue-700">{s.currentStock}</span>장</span>
+                            <span>사용 <span className="font-medium text-gray-700">{s.used}</span>장</span>
+                            <span>취소 <span className="font-medium text-red-600">{s.cancelled}</span>장</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </Card>
+
+              {/* 서류 보완 현황 */}
+              {(supplementStats.length > 0 || supplementList.length > 0) && (
+                <div>
+                  <h2 className="text-base font-bold mb-2">서류 보완 현황</h2>
+                  <SupplementPanel
+                    supplementStats={supplementStats}
+                    supplementList={supplementList}
+                  />
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
       </Card>
 
-      {/* 서류 보완 현황 */}
-      {(supplementStats.length > 0 || supplementList.length > 0) && (
-        <div>
-          <h2 className="text-base font-bold mb-2">서류 보완 현황</h2>
-          <SupplementPanel
-            supplementStats={supplementStats}
-            supplementList={supplementList}
-          />
-        </div>
-      )}
-
-      {/* 구분선 */}
-      <div className="border-t border-gray-200" />
-
-      {/* 헤더 + 필터 */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-bold">고객 개통 관리</h1>
-          {statusFilter && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setStatusFilter(null)}
-              className="h-7 gap-1 text-xs"
-            >
-              {statusFilter} 필터 해제
-              <X className="h-3 w-3" />
-            </Button>
-          )}
-
-          {/* 카테고리 기반 필터 (중분류 체크박스) */}
-          {hasCategoryAccess && allowedMediumCats.length > 0 ? (
-            <div className="flex items-center gap-3 rounded-lg border bg-white px-3 py-1.5">
-              <span className="text-sm font-medium text-gray-700">{majorCategoryName}</span>
-              <div className="h-4 w-px bg-gray-300" />
-              {allowedMediumCats.length > 1 && (
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <Checkbox
-                    checked={isAllSelected}
-                    onCheckedChange={handleSelectAll}
-                  />
-                  <span className="text-xs font-medium text-gray-500">전체</span>
-                </label>
+      {/* ═══════════════════════════════════════════════════════════
+          섹션 B: 고객 개통 관리
+          ═══════════════════════════════════════════════════════════ */}
+      <Card className="shadow-sm">
+        <CardContent className="p-4 space-y-4">
+          {/* 헤더 + 필터 */}
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-xl font-bold">고객 개통 관리</h1>
+              {statusFilter && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setStatusFilter(null)}
+                  className="h-7 gap-1 text-xs"
+                >
+                  {statusFilter} 필터 해제
+                  <X className="h-3 w-3" />
+                </Button>
               )}
-              {allowedMediumCats.map((cat) => (
-                <label key={cat.id} className="flex items-center gap-1.5 cursor-pointer">
-                  <Checkbox
-                    checked={selectedMediumCategories.includes(cat.id)}
-                    onCheckedChange={() => handleMediumCategoryToggle(cat.id)}
-                  />
-                  <span className="text-sm">{cat.name}</span>
-                </label>
-              ))}
+
+              {/* 카테고리 기반 필터 */}
+              {hasCategoryAccess && allowedMediumCats.length > 0 ? (
+                <div className="flex items-center gap-3 rounded-lg border bg-white px-3 py-1.5">
+                  <span className="text-sm font-medium text-gray-700">{majorCategoryName}</span>
+                  <div className="h-4 w-px bg-gray-300" />
+                  {allowedMediumCats.length > 1 && (
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <Checkbox
+                        checked={isAllSelected}
+                        onCheckedChange={handleSelectAll}
+                      />
+                      <span className="text-xs font-medium text-gray-500">전체</span>
+                    </label>
+                  )}
+                  {allowedMediumCats.map((cat) => (
+                    <label key={cat.id} className="flex items-center gap-1.5 cursor-pointer">
+                      <Checkbox
+                        checked={selectedMediumCategories.includes(cat.id)}
+                        onCheckedChange={() => handleMediumCategoryToggle(cat.id)}
+                      />
+                      <span className="text-sm">{cat.name}</span>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                allowedAgencies.length > 1 && (
+                  <Select
+                    value={selectedAgency}
+                    onValueChange={(v) => {
+                      setSelectedAgency(v);
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="전체 거래처" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">전체 거래처</SelectItem>
+                      {allowedAgencies.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => fetchData()}
+                disabled={loading}
+                title="새로고침"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              </Button>
+              <Button onClick={handleAddRow} disabled={creating}>
+                <Plus className="mr-2 h-4 w-4" />
+                {creating ? "추가 중..." : "새 고객 추가"}
+              </Button>
+            </div>
+          </div>
+
+          {/* 스프레드시트 테이블 */}
+          {loading ? (
+            <div className="flex h-64 items-center justify-center text-gray-500">
+              로딩 중...
             </div>
           ) : (
-            /* 직접 에이전시 필터 (기존 방식) */
-            allowedAgencies.length > 1 && (
-              <Select
-                value={selectedAgency}
-                onValueChange={(v) => {
-                  setSelectedAgency(v);
-                  setPage(1);
+            <div className="min-h-[60vh]">
+              <DataTable
+                columns={columns}
+                data={filteredData}
+                total={statusFilter ? filteredData.length : total}
+                page={page}
+                pageSize={200}
+                onPageChange={setPage}
+                searchPlaceholder="고객명으로 검색..."
+                getRowClassName={(row: PartnerActivationRow) => {
+                  const hasSupp =
+                    row.workStatus === "보완요청" ||
+                    row.applicationDocsReview === "보완요청" ||
+                    row.nameChangeDocsReview === "보완요청" ||
+                    row.arcReview === "보완요청" ||
+                    row.autopayReview === "보완요청";
+                  return hasSupp ? "bg-red-50/70" : "";
                 }}
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="전체 거래처" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">전체 거래처</SelectItem>
-                  {allowedAgencies.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )
+              />
+            </div>
           )}
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => fetchData()}
-            disabled={loading}
-            title="새로고침"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          </Button>
-          <Button onClick={handleAddRow} disabled={creating}>
-            <Plus className="mr-2 h-4 w-4" />
-            {creating ? "추가 중..." : "새 고객 추가"}
-          </Button>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
-      {/* 스프레드시트 테이블 */}
-      {loading ? (
-        <div className="flex h-64 items-center justify-center text-gray-500">
-          로딩 중...
-        </div>
-      ) : (
-        <div className="min-h-[60vh]">
-        <DataTable
-          columns={columns}
-          data={filteredData}
-          total={statusFilter ? filteredData.length : total}
-          page={page}
-          pageSize={200}
-          onPageChange={setPage}
-          searchPlaceholder="고객명으로 검색..."
-          getRowClassName={(row: PartnerActivationRow) => {
-            const hasSupp =
-              row.workStatus === "보완요청" ||
-              row.applicationDocsReview === "보완요청" ||
-              row.nameChangeDocsReview === "보완요청" ||
-              row.arcReview === "보완요청" ||
-              row.autopayReview === "보완요청";
-            return hasSupp ? "bg-red-50/70" : "";
-          }}
-        />
-        </div>
-      )}
-
+      {/* 비밀번호 변경 다이얼로그 */}
       <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
         <DialogContent>
           <DialogHeader>
