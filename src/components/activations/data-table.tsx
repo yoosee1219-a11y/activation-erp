@@ -54,6 +54,7 @@ interface DataTableProps<TData, TValue> {
   getRowId?: (row: TData) => string;
   pageSizeOptions?: number[];
   showPagination?: boolean;
+  onRowClick?: (row: TData) => void;
 }
 
 export function DataTable<TData, TValue>({
@@ -70,6 +71,7 @@ export function DataTable<TData, TValue>({
   getRowId,
   pageSizeOptions = [20, 50, 100],
   showPagination = true,
+  onRowClick,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -312,6 +314,9 @@ export function DataTable<TData, TValue>({
                     onClick={() => {
                       if (rowId) {
                         setSelectedRowId((prev) => (prev === rowId ? null : rowId));
+                      }
+                      if (onRowClick) {
+                        onRowClick(row.original);
                       }
                     }}
                   >

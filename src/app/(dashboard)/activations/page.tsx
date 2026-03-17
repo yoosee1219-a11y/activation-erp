@@ -236,7 +236,7 @@ export default function ActivationsPage() {
 
   const columns = getColumns({
     onDelete: handleDelete,
-    canDelete: user?.role === "ADMIN",
+    canDelete: user?.role === "ADMIN" || user?.role === "SUB_ADMIN",
     onInlineUpdate: user?.role !== "GUEST" ? handleInlineUpdate : undefined,
     onToggleLock: isAdmin ? handleToggleLock : undefined,
     canLock: isAdmin,

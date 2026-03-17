@@ -32,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SupplementPanel } from "@/components/dashboard/supplement-panel";
 import type { SupplementStat, SupplementItem } from "@/components/dashboard/supplement-panel";
+import { CustomerDetailDialog } from "@/components/partner/customer-detail-dialog";
 
 type WorkStatusFilter = "입력중" | "개통요청" | "진행중" | "개통완료" | "최종완료" | "보완요청" | "해지" | null;
 
@@ -85,6 +86,9 @@ export default function PartnerPage() {
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [changingPw, setChangingPw] = useState(false);
+
+  // 고객 상세 팝업
+  const [detailCustomer, setDetailCustomer] = useState<PartnerActivationRow | null>(null);
 
   // 카테고리 기반 필터 상태
   const [selectedMediumCategories, setSelectedMediumCategories] = useState<string[]>([]);
@@ -780,6 +784,7 @@ export default function PartnerPage() {
                     row.autopayReview === "보완요청";
                   return hasSupp ? "bg-red-50/70" : "";
                 }}
+                onRowClick={(row: PartnerActivationRow) => setDetailCustomer(row)}
               />
             </div>
           )}
@@ -831,6 +836,13 @@ export default function PartnerPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 고객 상세 팝업 */}
+      <CustomerDetailDialog
+        open={!!detailCustomer}
+        onClose={() => setDetailCustomer(null)}
+        customer={detailCustomer}
+      />
     </div>
   );
 }
