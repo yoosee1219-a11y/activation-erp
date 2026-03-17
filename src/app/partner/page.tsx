@@ -842,6 +842,10 @@ export default function PartnerPage() {
         open={!!detailCustomer}
         onClose={() => setDetailCustomer(null)}
         customer={detailCustomer}
+        onUpdate={(id, field, value) => {
+          handleUpdate(id, field, value);
+          setDetailCustomer((prev) => prev ? { ...prev, [field]: value } : null);
+        }}
       />
     </div>
   );

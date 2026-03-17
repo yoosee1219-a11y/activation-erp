@@ -655,6 +655,12 @@ export default function ActivationsPage() {
         open={!!detailCustomer}
         onClose={() => setDetailCustomer(null)}
         customer={detailCustomer}
+        onUpdate={user?.role !== "GUEST" ? (id, field, value) => {
+          handleInlineUpdate(id, field, value);
+          setDetailCustomer((prev) => prev ? { ...prev, [field]: value } : null);
+        } : undefined}
+        staffList={STAFF_LIST}
+        isAdmin={isAdmin}
       />
     </div>
   );
