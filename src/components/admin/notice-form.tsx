@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { upload } from "@vercel/blob/client";
 import { Upload, Video, X, FileText, Loader2 } from "lucide-react";
 
 interface NoticeFormProps {
@@ -79,23 +80,14 @@ export function NoticeForm({
 
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
+      const blob = await upload(file.name, file, {
+        access: "public",
+        handleUploadUrl: "/api/upload",
       });
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "업로드 실패");
-      }
-
-      const data = await res.json();
-      setAttachmentName(data.filename);
-      setAttachmentUrl(data.url);
-      toast.success(`${data.filename} 파일이 업로드되었습니다.`);
+      setAttachmentName(file.name);
+      setAttachmentUrl(blob.url);
+      toast.success(`${file.name} 파일이 업로드되었습니다.`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "파일 업로드에 실패했습니다.");
     } finally {
