@@ -100,6 +100,8 @@ export function Filters({
             <SelectItem value="개통완료">개통완료</SelectItem>
             <SelectItem value="최종완료">최종완료</SelectItem>
             <SelectItem value="보완요청">보완요청</SelectItem>
+            <SelectItem value="개통취소">개통취소</SelectItem>
+            <SelectItem value="보류">보류</SelectItem>
             <SelectItem value="해지">해지</SelectItem>
           </SelectContent>
         </Select>

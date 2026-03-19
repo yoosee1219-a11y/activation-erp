@@ -76,6 +76,8 @@ const workStatusColors: Record<string, string> = {
   개통완료: "bg-green-100 text-green-700",
   최종완료: "bg-emerald-100 text-emerald-800",
   보완요청: "bg-red-100 text-red-700",
+  개통취소: "bg-orange-100 text-orange-700",
+  보류: "bg-purple-100 text-purple-700",
   해지: "bg-gray-900 text-white",
 };
 
@@ -371,6 +373,8 @@ export function getColumns(options: {
               <SelectItem value="개통완료">개통완료</SelectItem>
               <SelectItem value="최종완료">최종완료</SelectItem>
               <SelectItem value="보완요청">보완요청</SelectItem>
+              <SelectItem value="개통취소">개통취소</SelectItem>
+              <SelectItem value="보류">보류</SelectItem>
               <SelectItem value="해지">해지</SelectItem>
             </SelectContent>
           </Select>
