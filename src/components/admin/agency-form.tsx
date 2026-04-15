@@ -68,7 +68,7 @@ export function AgencyForm({
 
     try {
       const res = await fetch("/api/agencies", {
-        method: "POST",
+        method: isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...formData,

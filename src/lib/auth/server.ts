@@ -14,6 +14,9 @@ export const auth = betterAuth({
       "http://127.0.0.1:3001",
     ];
     if (process.env.NEXT_PUBLIC_APP_URL) origins.push(process.env.NEXT_PUBLIC_APP_URL);
+    if (process.env.BETTER_AUTH_URL && !process.env.BETTER_AUTH_URL.includes("localhost")) {
+      origins.push(process.env.BETTER_AUTH_URL);
+    }
 
     // Vercel 프리뷰 URL: 프로젝트 도메인 패턴만 허용 (와일드카드 방지)
     const reqOrigin = request?.headers?.get?.("origin");
@@ -40,7 +43,7 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
-    minPasswordLength: 8,
+    minPasswordLength: 4,
   },
   rateLimit: {
     window: 60,      // 60초 윈도우

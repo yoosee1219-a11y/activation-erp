@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAgencies, createAgency } from "@/lib/db/queries/agencies";
+import { getAgencies, createAgency, updateAgency } from "@/lib/db/queries/agencies";
 import { getSessionUser } from "@/lib/auth/session";
 import { resolveAllowedAgencyIds } from "@/lib/db/queries/users";
 
@@ -42,6 +42,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ agency }, { status: 201 });
   } catch (error) {
     console.error("Failed to create agency:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const user = await getSessionUser();
+    if (!user || user.role !== "ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const { id, ...data } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    }
+
+    const agency = await updateAgency(id, data);
+    return NextResponse.json({ agency });
+  } catch (error) {
+    console.error("Failed to update agency:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
