@@ -156,7 +156,13 @@ export async function PATCH(
         { status: 400 }
       );
     }
-    const body = parsed.data;
+    // 빈 문자열 → null 변환 (PostgreSQL date/text 필드 호환)
+    const body = Object.fromEntries(
+      Object.entries(parsed.data).map(([key, value]) => [
+        key,
+        value === "" ? null : value,
+      ])
+    ) as typeof parsed.data;
 
     // PARTNER 역할 제한 (workStatus 기반 통합 권한)
     if (user.role === "PARTNER") {

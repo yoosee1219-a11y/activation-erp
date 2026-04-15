@@ -55,6 +55,7 @@ interface DataTableProps<TData, TValue> {
   pageSizeOptions?: number[];
   showPagination?: boolean;
   onRowClick?: (row: TData) => void;
+  initialColumnVisibility?: VisibilityState;
 }
 
 export function DataTable<TData, TValue>({
@@ -72,10 +73,11 @@ export function DataTable<TData, TValue>({
   pageSizeOptions = [20, 50, 100],
   showPagination = true,
   onRowClick,
+  initialColumnVisibility,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(initialColumnVisibility ?? {});
   const [globalFilter, setGlobalFilter] = useState("");
   const [columnResizeMode] = useState<ColumnResizeMode>("onChange");
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);

@@ -12,8 +12,8 @@ import {
 } from "@/components/activations/columns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { Plus, List, LayoutGrid, X } from "lucide-react";
+import { Plus, List, LayoutGrid, ChevronDown, ChevronRight } from "lucide-react";
+import { VisibilityState } from "@tanstack/react-table";
 import Link from "next/link";
 import { toast } from "sonner";
 import { CustomerDetailDialog, type CustomerDetailData } from "@/components/partner/customer-detail-dialog";
@@ -54,7 +54,7 @@ export default function ActivationsPage() {
   const [month, setMonth] = useState("all");
   const [availableMonths, setAvailableMonths] = useState<MonthSummary[]>([]);
   const [viewMode, setViewMode] = useState<"list" | "grouped">(highlightId ? "list" : "grouped");
-  const [selectedAgency, setSelectedAgency] = useState<string | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [localMajors, setLocalMajors] = useState<string[]>([]);
   const [localMediums, setLocalMediums] = useState<string[]>([]);
   const [detailCustomer, setDetailCustomer] = useState<CustomerDetailData | null>(null);
@@ -310,31 +310,41 @@ export default function ActivationsPage() {
     return allAgencies;
   }, [twoLevelGrouped]);
 
-  // 대분류만 선택 + 중분류 미선택 → 하나로 합쳐서 표시
-  const shouldCombine = localMajors.length > 0 && localMediums.length === 0;
-
-  // 선택된 거래처 필터링
-  const filteredFlat = selectedAgency
-    ? flatGrouped.filter(([id]) => id === selectedAgency)
-    : flatGrouped;
-
-  const handleCardClick = (agencyId: string) => {
-    setSelectedAgency((prev) => (prev === agencyId ? null : agencyId));
+  const toggleGroup = (id: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
-  // 현재 선택 월의 요약 정보
-  const currentMonthSummary = useMemo(() => {
-    if (month && month !== "all") {
-      return availableMonths.find((m) => m.month === month);
-    }
-    return {
-      month: "all",
-      total: availableMonths.reduce((s, m) => s + Number(m.total), 0),
-      completed: availableMonths.reduce((s, m) => s + Number(m.completed), 0),
-      pending: availableMonths.reduce((s, m) => s + Number(m.pending), 0),
-      cancelled: availableMonths.reduce((s, m) => s + Number(m.cancelled), 0),
-    };
-  }, [month, availableMonths]);
+  // 기본 숨김 컬럼 (컬럼 토글로 다시 표시 가능)
+  const defaultHiddenColumns: VisibilityState = {
+    majorCategory: false,
+    mediumCategory: false,
+    usimNumber: false,
+    subscriptionNumber: false,
+    virtualAccount: false,
+    subscriptionType: false,
+    ratePlan: false,
+    deviceChangeConfirmed: false,
+    selectedCommitment: false,
+    commitmentDate: false,
+    entryDate: false,
+    applicationDocs: false,
+    applicationDocsReview: false,
+    nameChangeDocs: false,
+    nameChangeDocsReview: false,
+    arcInfo: false,
+    arcReview: false,
+    autopayInfo: false,
+    autopayReview: false,
+    supplementDeadline: false,
+    holdReason: false,
+    terminationDate: false,
+    terminationReason: false,
+  };
 
   // 상태 뱃지 렌더링 헬퍼
   const renderStatusBadges = (counts: Record<string, number>) => (
@@ -370,34 +380,7 @@ export default function ActivationsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">개통 관리</h1>
-          {currentMonthSummary && (
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-sm text-gray-500">
-                {month && month !== "all"
-                  ? `${month.split("-")[0]}년 ${parseInt(month.split("-")[1])}월`
-                  : "전체"}
-              </span>
-              <Badge variant="secondary">{Number(currentMonthSummary.total)}건</Badge>
-              {Number(currentMonthSummary.completed) > 0 && (
-                <Badge className="bg-green-100 text-green-700 text-[10px]">
-                  개통완료 {Number(currentMonthSummary.completed)}
-                </Badge>
-              )}
-              {Number(currentMonthSummary.pending) > 0 && (
-                <Badge className="bg-blue-100 text-blue-700 text-[10px]">
-                  대기 {Number(currentMonthSummary.pending)}
-                </Badge>
-              )}
-              {Number(currentMonthSummary.cancelled) > 0 && (
-                <Badge className="bg-red-100 text-red-700 text-[10px]">
-                  취소 {Number(currentMonthSummary.cancelled)}
-                </Badge>
-              )}
-            </div>
-          )}
-        </div>
+        <h1 className="text-2xl font-bold">개통 관리</h1>
         <div className="flex items-center gap-2">
           <div className="flex rounded-md border">
             <Button
@@ -437,25 +420,19 @@ export default function ActivationsPage() {
         onDateFromChange={(v) => { setDateFrom(v); setPage(1); }}
         dateTo={dateTo}
         onDateToChange={(v) => { setDateTo(v); setPage(1); }}
-        onClear={() => { setStatus("all"); setDateFrom(""); setDateTo(""); setMonth("all"); setPage(1); }}
+        onClear={() => { setStatus("all"); setDateFrom(""); setDateTo(""); setMonth("all"); setLocalMajors([]); setLocalMediums([]); setPage(1); }}
         month={month}
         onMonthChange={(v) => { setMonth(v); setPage(1); }}
         availableMonths={availableMonths}
-      />
-
-      {/* 인페이지 대분류/중분류 필터 */}
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-medium text-gray-600">분류 필터</span>
+      >
         <CascadingFilter
           categories={categories}
           selectedMajors={localMajors}
           selectedMediums={localMediums}
           onMajorsChange={setLocalMajors}
-          onMediumsChange={(ids) => {
-            setLocalMediums(ids);
-          }}
+          onMediumsChange={setLocalMediums}
         />
-      </div>
+      </Filters>
 
       {loading ? (
         <div className="flex h-64 items-center justify-center text-gray-500">
@@ -482,167 +459,102 @@ export default function ActivationsPage() {
             return hasSupp ? "bg-red-50/70" : "";
           }}
           onRowClick={(row: ActivationRow) => setDetailCustomer(row as unknown as CustomerDetailData)}
+          initialColumnVisibility={defaultHiddenColumns}
         />
       ) : (
-        <div className="space-y-4">
-          {/* 선택 해제 버튼 */}
-          {selectedAgency && (
-            <div className="flex items-center gap-2">
-              <Badge variant="default" className="text-sm px-3 py-1">
-                {categoryNameMap[selectedAgency] || agencyMap[selectedAgency] || selectedAgency}
-              </Badge>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSelectedAgency(null)}
-              >
-                <X className="mr-1 h-4 w-4" />
-                전체 보기
-              </Button>
-            </div>
-          )}
-
-          {/* 2단계 그룹 카드: 대분류 → 중분류 */}
-          {hasCategories && !shouldCombine ? (
+        <div className="space-y-1">
+          {hasCategories ? (
             twoLevelGrouped.map(([catId, catGroup]) => (
               <div key={catId}>
-                {/* 대분류 헤더 */}
-                <div className="flex items-center gap-2 mb-2">
-                  <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">
-                    {catGroup.categoryName}
-                  </h3>
-                  <Badge variant="outline" className="text-xs">
-                    {catGroup.totalRows}건
-                  </Badge>
-                </div>
-                {/* 해당 대분류의 중분류 카드들 */}
-                <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 mb-3">
-                  {catGroup.agencies.map(([agencyId, group]) => (
-                    <Card
-                      key={agencyId}
-                      className={`cursor-pointer transition-all hover:shadow-md ${
-                        selectedAgency === agencyId
-                          ? "ring-2 ring-blue-500 shadow-md"
-                          : selectedAgency
-                          ? "opacity-40"
-                          : ""
-                      }`}
-                      onClick={() => handleCardClick(agencyId)}
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mt-4 mb-1 px-3">
+                  {catGroup.categoryName} ({catGroup.totalRows}건)
+                </h3>
+                {catGroup.agencies.map(([mediumId, group]) => (
+                  <div key={mediumId}>
+                    <button
+                      className="flex items-center gap-2 w-full text-left py-2 px-3 rounded-lg hover:bg-gray-50 transition-colors"
+                      onClick={() => toggleGroup(mediumId)}
                     >
-                      <CardContent className="p-3">
-                        <p className="font-semibold text-sm truncate">
-                          {group.name}
-                        </p>
-                        <p className="text-2xl font-bold mt-1">
-                          {group.rows.length}건
-                        </p>
-                        <div className="flex gap-1 mt-2 flex-wrap">
-                          {renderStatusBadges(group.counts)}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                      {expandedGroups.has(mediumId) ? (
+                        <ChevronDown className="h-4 w-4 text-gray-500 shrink-0" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 text-gray-500 shrink-0" />
+                      )}
+                      <span className="font-semibold text-sm">{group.name}</span>
+                      <Badge variant="secondary" className="text-xs">{group.rows.length}건</Badge>
+                      <div className="flex gap-1">{renderStatusBadges(group.counts)}</div>
+                    </button>
+                    {expandedGroups.has(mediumId) && (
+                      <div className="mt-1 mb-3">
+                        <DataTable
+                          columns={columns}
+                          data={group.rows}
+                          pageSize={20}
+                          searchPlaceholder="고객명으로 검색..."
+                          highlightId={highlightId}
+                          getRowId={(row: ActivationRow) => row.id}
+                          getRowClassName={(row: ActivationRow) => {
+                            const hasSupp =
+                              row.workStatus === "보완요청" ||
+                              row.applicationDocsReview === "보완요청" ||
+                              row.nameChangeDocsReview === "보완요청" ||
+                              row.arcReview === "보완요청" ||
+                              row.autopayReview === "보완요청";
+                            return hasSupp ? "bg-red-50/70" : "";
+                          }}
+                          onRowClick={(row: ActivationRow) => setDetailCustomer(row as unknown as CustomerDetailData)}
+                          initialColumnVisibility={defaultHiddenColumns}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             ))
           ) : (
-            /* 카테고리 없을 때: 기존 flat 카드 */
-            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-              {flatGrouped.map(([agencyId, group]) => (
-                <Card
-                  key={agencyId}
-                  className={`cursor-pointer transition-all hover:shadow-md ${
-                    selectedAgency === agencyId
-                      ? "ring-2 ring-blue-500 shadow-md"
-                      : selectedAgency
-                      ? "opacity-40"
-                      : ""
-                  }`}
-                  onClick={() => handleCardClick(agencyId)}
+            flatGrouped.map(([agencyId, group]) => (
+              <div key={agencyId}>
+                <button
+                  className="flex items-center gap-2 w-full text-left py-2 px-3 rounded-lg hover:bg-gray-50 transition-colors"
+                  onClick={() => toggleGroup(agencyId)}
                 >
-                  <CardContent className="p-3">
-                    <p className="font-semibold text-sm truncate">
-                      {group.name}
-                    </p>
-                    <p className="text-2xl font-bold mt-1">
-                      {group.rows.length}건
-                    </p>
-                    <div className="flex gap-1 mt-2 flex-wrap">
-                      {renderStatusBadges(group.counts)}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-
-          {/* 대분류만 선택 시 하나의 테이블로 통합 표시 */}
-          {shouldCombine && !selectedAgency ? (
-            <div>
-              <div className="flex items-center gap-3 mb-2 mt-4">
-                <h2 className="text-lg font-semibold">
-                  {twoLevelGrouped.length > 0 ? twoLevelGrouped[0][1].categoryName : "전체"}
-                </h2>
-                <Badge variant="secondary">{filteredData.length}건</Badge>
-                {renderStatusBadges(
-                  filteredData.reduce((acc, row) => {
-                    const ws = row.workStatus || "입력중";
-                    acc[ws] = (acc[ws] || 0) + 1;
-                    return acc;
-                  }, {} as Record<string, number>)
+                  {expandedGroups.has(agencyId) ? (
+                    <ChevronDown className="h-4 w-4 text-gray-500 shrink-0" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 text-gray-500 shrink-0" />
+                  )}
+                  <span className="font-semibold text-sm">{group.name}</span>
+                  <Badge variant="secondary" className="text-xs">{group.rows.length}건</Badge>
+                  <div className="flex gap-1">{renderStatusBadges(group.counts)}</div>
+                </button>
+                {expandedGroups.has(agencyId) && (
+                  <div className="mt-1 mb-3">
+                    <DataTable
+                      columns={columns}
+                      data={group.rows}
+                      pageSize={20}
+                      searchPlaceholder="고객명으로 검색..."
+                      highlightId={highlightId}
+                      getRowId={(row: ActivationRow) => row.id}
+                      getRowClassName={(row: ActivationRow) => {
+                        const hasSupp =
+                          row.workStatus === "보완요청" ||
+                          row.applicationDocsReview === "보완요청" ||
+                          row.nameChangeDocsReview === "보완요청" ||
+                          row.arcReview === "보완요청" ||
+                          row.autopayReview === "보완요청";
+                        return hasSupp ? "bg-red-50/70" : "";
+                      }}
+                      onRowClick={(row: ActivationRow) => setDetailCustomer(row as unknown as CustomerDetailData)}
+                      initialColumnVisibility={defaultHiddenColumns}
+                    />
+                  </div>
                 )}
               </div>
-              <DataTable
-                columns={columns}
-                data={filteredData}
-                pageSize={20}
-                searchPlaceholder="고객명으로 검색..."
-                highlightId={highlightId}
-                getRowId={(row: ActivationRow) => row.id}
-                getRowClassName={(row: ActivationRow) => {
-                  const hasSupp =
-                    row.workStatus === "보완요청" ||
-                    row.applicationDocsReview === "보완요청" ||
-                    row.nameChangeDocsReview === "보완요청" ||
-                    row.arcReview === "보완요청" ||
-                    row.autopayReview === "보완요청";
-                  return hasSupp ? "bg-red-50/70" : "";
-                }}
-                onRowClick={(row: ActivationRow) => setDetailCustomer(row as unknown as CustomerDetailData)}
-              />
-            </div>
-          ) : (
-            /* 중분류별 테이블 (선택된 중분류만 or 전체) */
-            filteredFlat.map(([agencyId, group]) => (
-              <div key={agencyId}>
-                <div className="flex items-center gap-3 mb-2 mt-4">
-                  <h2 className="text-lg font-semibold">{group.name}</h2>
-                  <Badge variant="secondary">{group.rows.length}건</Badge>
-                  {renderStatusBadges(group.counts)}
-                </div>
-                <DataTable
-                  columns={columns}
-                  data={group.rows}
-                  pageSize={20}
-                  searchPlaceholder="고객명으로 검색..."
-                  highlightId={highlightId}
-                  getRowId={(row: ActivationRow) => row.id}
-                  getRowClassName={(row: ActivationRow) => {
-                    const hasSupp =
-                      row.workStatus === "보완요청" ||
-                      row.applicationDocsReview === "보완요청" ||
-                      row.nameChangeDocsReview === "보완요청" ||
-                      row.arcReview === "보완요청" ||
-                      row.autopayReview === "보완요청";
-                    return hasSupp ? "bg-red-50/70" : "";
-                  }}
-                  onRowClick={(row: ActivationRow) => setDetailCustomer(row as unknown as CustomerDetailData)}
-                />
-              </div>
             ))
           )}
 
-          {filteredFlat.length === 0 && (
+          {flatGrouped.length === 0 && (
             <div className="flex h-32 items-center justify-center text-gray-500">
               데이터가 없습니다.
             </div>
@@ -650,7 +562,6 @@ export default function ActivationsPage() {
         </div>
       )}
 
-      {/* 고객 상세 팝업 */}
       <CustomerDetailDialog
         open={!!detailCustomer}
         onClose={() => setDetailCustomer(null)}

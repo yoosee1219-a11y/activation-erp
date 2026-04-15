@@ -139,7 +139,13 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    const validated = parsed.data;
+    // 빈 문자열 → null 변환 (PostgreSQL date/text 필드 호환)
+    const validated = Object.fromEntries(
+      Object.entries(parsed.data).map(([key, value]) => [
+        key,
+        value === "" ? null : value,
+      ])
+    ) as typeof parsed.data;
 
     // 에이전시 접근 권한 확인
     if (
