@@ -31,6 +31,7 @@ export type PartnerActivationRow = {
   personInCharge: string | null;
   workStatus: string | null;
   autopayRegistered: boolean | null;
+  activationMethod: string | null;
   // 서류
   applicationDocs: string | null;
   applicationDocsReview: string | null;
@@ -345,6 +346,9 @@ export function getPartnerColumns(options: {
       accessorKey: "nameChangeDocs",
       header: "명의변경서류",
       cell: ({ row }) => {
+        if (row.original.activationMethod === "ARC개통") {
+          return <span className="text-[10px] text-gray-300">해당없음</span>;
+        }
         const ws = row.original.workStatus || "입력중";
         const review = row.original.nameChangeDocsReview;
         const locked = ws === "개통완료" || ws === "진행중" || ws === "개통요청"
@@ -365,6 +369,9 @@ export function getPartnerColumns(options: {
       accessorKey: "nameChangeDocsReview",
       header: "검수",
       cell: ({ row }) => {
+        if (row.original.activationMethod === "ARC개통") {
+          return <span className="text-[10px] text-gray-300">-</span>;
+        }
         const v = row.original.nameChangeDocsReview;
         const hasDoc = !!row.original.nameChangeDocs;
         // 파트너는 서류가 있고 검수가 비어있거나 보완요청일 때만 "진행요청" 설정 가능
@@ -396,6 +403,9 @@ export function getPartnerColumns(options: {
       accessorKey: "arcInfo",
       header: "외국인등록증",
       cell: ({ row }) => {
+        if (row.original.activationMethod === "ARC개통") {
+          return <span className="text-[10px] text-gray-300">해당없음</span>;
+        }
         const ws = row.original.workStatus || "입력중";
         const review = row.original.arcReview;
         // 보완 서류: 개통완료 후에도 검수 완료 전까지 편집 가능
@@ -417,6 +427,9 @@ export function getPartnerColumns(options: {
       accessorKey: "arcReview",
       header: "검수",
       cell: ({ row }) => {
+        if (row.original.activationMethod === "ARC개통") {
+          return <span className="text-[10px] text-gray-300">-</span>;
+        }
         const v = row.original.arcReview;
         const hasDoc = !!row.original.arcInfo;
         // 파트너는 서류가 있고 검수가 비어있거나 보완요청일 때만 "진행요청" 설정 가능
@@ -515,7 +528,11 @@ export function getPartnerColumns(options: {
             </Badge>
           );
         }
-        if (r.nameChangeDocsReview === "완료" && r.arcReview === "완료" && r.autopayReview === "완료") {
+        const isArc = r.activationMethod === "ARC개통";
+        const docsComplete = isArc
+          ? r.applicationDocsReview === "완료" && r.autopayReview === "완료"
+          : r.applicationDocsReview === "완료" && r.nameChangeDocsReview === "완료" && r.arcReview === "완료" && r.autopayReview === "완료";
+        if (docsComplete) {
           return <Badge className="bg-green-100 text-green-700 text-[10px]">완료</Badge>;
         }
         const deadline = r.arcSupplementDeadline;

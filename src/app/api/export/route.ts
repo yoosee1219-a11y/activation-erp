@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { activations, agencies, agencyCategories } from "@/lib/db/schema";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, gte, lt } from "drizzle-orm";
 import { resolveAllowedAgencyIds } from "@/lib/db/queries/users";
+import {
+  getAgencyIdsByMediumCategories,
+  getAgencyIdsByMajorCategory,
+} from "@/lib/db/queries/categories";
 
 const CSV_HEADERS = [
   "대분류",
@@ -62,9 +66,20 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const agencyId = searchParams.get("agencyId");
     const status = searchParams.get("status");
+    const month = searchParams.get("month");
+    const mediumCategories = searchParams.get("mediumCategories");
+    const majorCategories = searchParams.get("majorCategories");
 
     // 조건 빌드
     const conditions = [];
+    if (month) {
+      const monthStart = `${month}-01`;
+      const nextMonth = new Date(monthStart);
+      nextMonth.setMonth(nextMonth.getMonth() + 1);
+      const monthEnd = nextMonth.toISOString().slice(0, 10);
+      conditions.push(gte(activations.activationDate, monthStart));
+      conditions.push(lt(activations.activationDate, monthEnd));
+    }
     if (user.role === "PARTNER") {
       const allowedIds = await resolveAllowedAgencyIds(user);
       if (allowedIds !== null) {
@@ -73,6 +88,22 @@ export async function GET(request: NextRequest) {
       }
     } else if (agencyId && agencyId !== "all") {
       conditions.push(eq(activations.agencyId, agencyId));
+    } else if (mediumCategories) {
+      const catIds = mediumCategories.split(",").filter(Boolean);
+      const catAgencyIds = await getAgencyIdsByMediumCategories(catIds);
+      if (catAgencyIds.length > 0) {
+        conditions.push(inArray(activations.agencyId, catAgencyIds));
+      }
+    } else if (majorCategories) {
+      const majorIds = majorCategories.split(",").filter(Boolean);
+      const allIds: string[] = [];
+      for (const mId of majorIds) {
+        const ids = await getAgencyIdsByMajorCategory(mId);
+        allIds.push(...ids);
+      }
+      if (allIds.length > 0) {
+        conditions.push(inArray(activations.agencyId, [...new Set(allIds)]));
+      }
     }
     if (status) {
       conditions.push(eq(activations.workStatus, status));

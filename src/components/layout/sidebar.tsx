@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -14,9 +15,21 @@ import {
   CardSim,
   Calculator,
   Megaphone,
+  Lock,
 } from "lucide-react";
 import { signOut } from "@/lib/auth/client";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import type { SessionUser } from "@/types";
 
 interface SidebarProps {
@@ -83,10 +96,53 @@ export function Sidebar({ user }: SidebarProps) {
   const router = useRouter();
   const isAdmin = user?.role === "ADMIN" || user?.role === "SUB_ADMIN";
 
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [changingPw, setChangingPw] = useState(false);
+
   const handleLogout = async () => {
     await signOut();
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
+  };
+
+  const handleChangePassword = async () => {
+    if (!currentPw || !newPw || !confirmPw) {
+      toast.error("모든 필드를 입력해 주세요.");
+      return;
+    }
+    if (newPw.length < 4) {
+      toast.error("새 비밀번호는 4자 이상이어야 합니다.");
+      return;
+    }
+    if (newPw !== confirmPw) {
+      toast.error("새 비밀번호가 일치하지 않습니다.");
+      return;
+    }
+    setChangingPw(true);
+    try {
+      const res = await fetch("/api/users/change-password", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
+      });
+      if (res.ok) {
+        toast.success("비밀번호가 변경되었습니다.");
+        setPasswordDialogOpen(false);
+        setCurrentPw("");
+        setNewPw("");
+        setConfirmPw("");
+      } else {
+        const err = await res.json();
+        toast.error(err.error || "변경 실패");
+      }
+    } catch {
+      toast.error("비밀번호 변경 중 오류가 발생했습니다.");
+    } finally {
+      setChangingPw(false);
+    }
   };
 
   return (
@@ -176,6 +232,13 @@ export function Sidebar({ user }: SidebarProps) {
           <p className="text-xs text-gray-500">{user?.email}</p>
         </div>
         <button
+          onClick={() => setPasswordDialogOpen(true)}
+          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900"
+        >
+          <Lock className="h-4 w-4" />
+          비밀번호 변경
+        </button>
+        <button
           onClick={handleLogout}
           className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900"
         >
@@ -183,6 +246,51 @@ export function Sidebar({ user }: SidebarProps) {
           로그아웃
         </button>
       </div>
+
+      <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>비밀번호 변경</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>현재 비밀번호</Label>
+              <Input
+                type="password"
+                value={currentPw}
+                onChange={(e) => setCurrentPw(e.target.value)}
+                placeholder="현재 비밀번호 입력"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>새 비밀번호</Label>
+              <Input
+                type="password"
+                value={newPw}
+                onChange={(e) => setNewPw(e.target.value)}
+                placeholder="4자 이상"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>새 비밀번호 확인</Label>
+              <Input
+                type="password"
+                value={confirmPw}
+                onChange={(e) => setConfirmPw(e.target.value)}
+                placeholder="새 비밀번호 다시 입력"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPasswordDialogOpen(false)}>
+              취소
+            </Button>
+            <Button onClick={handleChangePassword} disabled={changingPw}>
+              {changingPw ? "변경 중..." : "변경"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </aside>
   );
 }

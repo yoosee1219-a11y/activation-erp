@@ -82,14 +82,15 @@ export async function GET(request: NextRequest) {
       )
       .groupBy(usimLogs.agencyId);
 
-    // 3) Activation counts per agency (normal + clawback categories)
+    // 3) Activation counts per agency (committed/non-committed + clawback categories)
     const activationRows = await db
       .select({
         agencyId: activations.agencyId,
-        normalCount: sql<number>`count(*) filter (where ${activations.activationDate} >= ${monthStart} and ${activations.activationDate} < ${monthEnd} and ${activations.workStatus} != '해지')::int`,
-        supplementClawbackCount: sql<number>`count(*) filter (where ${activations.terminationReason} = '보완기한초과' and ${activations.terminationDate} >= ${monthStart} and ${activations.terminationDate} < ${monthEnd})::int`,
-        sixMonthClawbackCount: sql<number>`count(*) filter (where ${activations.terminationReason} = '6개월해지' and ${activations.terminationDate} >= ${monthStart} and ${activations.terminationDate} < ${monthEnd})::int`,
-        manualClawbackCount: sql<number>`count(*) filter (where ${activations.terminationReason} = '수동해지' and ${activations.terminationDate} >= ${monthStart} and ${activations.terminationDate} < ${monthEnd})::int`,
+        committedCount: sql<number>`count(*) filter (where ${activations.activationDate} >= ${monthStart} and ${activations.activationDate} < ${monthEnd} and ${activations.workStatus} != '해지' and ${activations.selectedCommitment} = true)::int`,
+        nonCommittedCount: sql<number>`count(*) filter (where ${activations.activationDate} >= ${monthStart} and ${activations.activationDate} < ${monthEnd} and ${activations.workStatus} != '해지' and (${activations.selectedCommitment} = false or ${activations.selectedCommitment} is null))::int`,
+        supplementClawbackCount: sql<number>`count(*) filter (where ${activations.terminationReason} = '보완기한초과' and ${activations.terminationDate} >= ${monthStart} and ${activations.terminationDate} < ${monthEnd} and ${activations.selectedCommitment} = true)::int`,
+        sixMonthClawbackCount: sql<number>`count(*) filter (where ${activations.terminationReason} = '6개월해지' and ${activations.terminationDate} >= ${monthStart} and ${activations.terminationDate} < ${monthEnd} and ${activations.selectedCommitment} = true)::int`,
+        manualClawbackCount: sql<number>`count(*) filter (where ${activations.terminationReason} = '수동해지' and ${activations.terminationDate} >= ${monthStart} and ${activations.terminationDate} < ${monthEnd} and ${activations.selectedCommitment} = true)::int`,
       })
       .from(activations)
       .where(
@@ -110,6 +111,7 @@ export async function GET(request: NextRequest) {
         workStatus: activations.workStatus,
         terminationDate: activations.terminationDate,
         terminationReason: activations.terminationReason,
+        selectedCommitment: activations.selectedCommitment,
       })
       .from(activations)
       .where(
@@ -137,7 +139,9 @@ export async function GET(request: NextRequest) {
       const receivedCount = usimReceivedMap.get(agency.id) || 0;
 
       const actRow = activationMap.get(agency.id);
-      const normalCount = actRow?.normalCount || 0;
+      const committedCount = actRow?.committedCount || 0;
+      const nonCommittedCount = actRow?.nonCommittedCount || 0;
+      const normalCount = committedCount + nonCommittedCount;
       const supplementClawbackCount = actRow?.supplementClawbackCount || 0;
       const sixMonthClawbackCount = actRow?.sixMonthClawbackCount || 0;
       const manualClawbackCount = actRow?.manualClawbackCount || 0;
@@ -152,14 +156,15 @@ export async function GET(request: NextRequest) {
 
       if (!hasAnyData) continue;
 
-      // 유심 사용 = 정상 개통 건수 (개통 시 건당 7,700원 환급)
+      // 유심 사용 = 총 정상 개통 건수 (약정 여부 무관, 개통 시 건당 7,700원 환급)
       const effectiveUsedCount = normalCount;
 
       const usimCost = receivedCount * -USIM_UNIT_COST;
       const usimRevenue = effectiveUsedCount * USIM_UNIT_COST;
       const usimSubtotal = usimCost + usimRevenue;
 
-      const commissionRevenue = normalCount * commissionRate;
+      // 수수료: 약정선택 건만 지급
+      const commissionRevenue = committedCount * commissionRate;
       const supplementClawback = supplementClawbackCount * -commissionRate;
       const sixMonthClawback = sixMonthClawbackCount * -commissionRate;
       const manualClawback = manualClawbackCount * -commissionRate;
@@ -179,6 +184,8 @@ export async function GET(request: NextRequest) {
         },
         commission: {
           normalCount,
+          committedCount,
+          nonCommittedCount,
           normalAmount: commissionRevenue,
           supplementClawbackCount,
           supplementClawback,

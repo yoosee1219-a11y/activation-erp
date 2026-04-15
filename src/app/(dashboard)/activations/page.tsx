@@ -12,7 +12,7 @@ import {
 } from "@/components/activations/columns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, List, LayoutGrid, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, List, LayoutGrid, ChevronDown, ChevronRight, Download } from "lucide-react";
 import { VisibilityState } from "@tanstack/react-table";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -329,7 +329,7 @@ export default function ActivationsPage() {
     subscriptionType: false,
     ratePlan: false,
     deviceChangeConfirmed: false,
-    selectedCommitment: false,
+    selectedCommitment: true,
     commitmentDate: false,
     entryDate: false,
     applicationDocs: false,
@@ -344,6 +344,27 @@ export default function ActivationsPage() {
     holdReason: false,
     terminationDate: false,
     terminationReason: false,
+  };
+
+  const handleExcelDownload = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (month && month !== "all") params.set("month", month);
+      if (status && status !== "all") params.set("status", status);
+      if (localMediums.length > 0) params.set("mediumCategories", localMediums.join(","));
+      else if (localMajors.length > 0) params.set("majorCategories", localMajors.join(","));
+      const res = await fetch(`/api/export?${params.toString()}`);
+      if (!res.ok) throw new Error("다운로드 실패");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `개통관리_${month !== "all" ? month : "전체"}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("엑셀 다운로드에 실패했습니다.");
+    }
   };
 
   // 상태 뱃지 렌더링 헬퍼
@@ -402,6 +423,10 @@ export default function ActivationsPage() {
               전체목록
             </Button>
           </div>
+          <Button variant="outline" size="sm" onClick={handleExcelDownload}>
+            <Download className="h-4 w-4 mr-1" />
+            엑셀 다운로드
+          </Button>
           {user?.role !== "GUEST" && (
             <Button asChild>
               <Link href="/activations/new">
@@ -450,13 +475,21 @@ export default function ActivationsPage() {
           highlightId={highlightId}
           getRowId={(row: ActivationRow) => row.id}
           getRowClassName={(row: ActivationRow) => {
-            const hasSupp =
+            const isArc = row.activationMethod === "ARC개통";
+            const requiredDocs = isArc
+              ? [row.applicationDocs, row.autopayInfo]
+              : [row.applicationDocs, row.nameChangeDocs, row.arcInfo, row.autopayInfo];
+            const requiredReviews = isArc
+              ? [row.applicationDocsReview, row.autopayReview]
+              : [row.applicationDocsReview, row.nameChangeDocsReview, row.arcReview, row.autopayReview];
+            if (requiredReviews.every(r => r === "완료")) {
+              return "bg-green-50/80 hover:bg-green-100/80";
+            }
+            const hasIssue =
               row.workStatus === "보완요청" ||
-              row.applicationDocsReview === "보완요청" ||
-              row.nameChangeDocsReview === "보완요청" ||
-              row.arcReview === "보완요청" ||
-              row.autopayReview === "보완요청";
-            return hasSupp ? "bg-red-50/70" : "";
+              requiredReviews.some(r => r === "보완요청") ||
+              requiredDocs.some(d => !d);
+            return hasIssue ? "bg-red-50/70 hover:bg-red-100/70" : "";
           }}
           onRowClick={(row: ActivationRow) => setDetailCustomer(row as unknown as CustomerDetailData)}
           initialColumnVisibility={defaultHiddenColumns}
@@ -494,13 +527,21 @@ export default function ActivationsPage() {
                           highlightId={highlightId}
                           getRowId={(row: ActivationRow) => row.id}
                           getRowClassName={(row: ActivationRow) => {
-                            const hasSupp =
+                            const isArc = row.activationMethod === "ARC개통";
+                            const requiredDocs = isArc
+                              ? [row.applicationDocs, row.autopayInfo]
+                              : [row.applicationDocs, row.nameChangeDocs, row.arcInfo, row.autopayInfo];
+                            const requiredReviews = isArc
+                              ? [row.applicationDocsReview, row.autopayReview]
+                              : [row.applicationDocsReview, row.nameChangeDocsReview, row.arcReview, row.autopayReview];
+                            if (requiredReviews.every(r => r === "완료")) {
+                              return "bg-green-50/80 hover:bg-green-100/80";
+                            }
+                            const hasIssue =
                               row.workStatus === "보완요청" ||
-                              row.applicationDocsReview === "보완요청" ||
-                              row.nameChangeDocsReview === "보완요청" ||
-                              row.arcReview === "보완요청" ||
-                              row.autopayReview === "보완요청";
-                            return hasSupp ? "bg-red-50/70" : "";
+                              requiredReviews.some(r => r === "보완요청") ||
+                              requiredDocs.some(d => !d);
+                            return hasIssue ? "bg-red-50/70 hover:bg-red-100/70" : "";
                           }}
                           onRowClick={(row: ActivationRow) => setDetailCustomer(row as unknown as CustomerDetailData)}
                           initialColumnVisibility={defaultHiddenColumns}
@@ -537,13 +578,21 @@ export default function ActivationsPage() {
                       highlightId={highlightId}
                       getRowId={(row: ActivationRow) => row.id}
                       getRowClassName={(row: ActivationRow) => {
-                        const hasSupp =
+                        const isArc = row.activationMethod === "ARC개통";
+                        const requiredDocs = isArc
+                          ? [row.applicationDocs, row.autopayInfo]
+                          : [row.applicationDocs, row.nameChangeDocs, row.arcInfo, row.autopayInfo];
+                        const requiredReviews = isArc
+                          ? [row.applicationDocsReview, row.autopayReview]
+                          : [row.applicationDocsReview, row.nameChangeDocsReview, row.arcReview, row.autopayReview];
+                        if (requiredReviews.every(r => r === "완료")) {
+                          return "bg-green-50/80 hover:bg-green-100/80";
+                        }
+                        const hasIssue =
                           row.workStatus === "보완요청" ||
-                          row.applicationDocsReview === "보완요청" ||
-                          row.nameChangeDocsReview === "보완요청" ||
-                          row.arcReview === "보완요청" ||
-                          row.autopayReview === "보완요청";
-                        return hasSupp ? "bg-red-50/70" : "";
+                          requiredReviews.some(r => r === "보완요청") ||
+                          requiredDocs.some(d => !d);
+                        return hasIssue ? "bg-red-50/70 hover:bg-red-100/70" : "";
                       }}
                       onRowClick={(row: ActivationRow) => setDetailCustomer(row as unknown as CustomerDetailData)}
                       initialColumnVisibility={defaultHiddenColumns}

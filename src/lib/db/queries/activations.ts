@@ -175,8 +175,10 @@ export async function getDashboardStats(agencyId?: string, agencyIds?: string[])
   };
 }
 
-export async function getAvailableMonths(agencyId?: string) {
-  const agencyFilter = agencyId ? sql`WHERE agency_id = ${agencyId}` : sql``;
+export async function getAvailableMonths(agencyId?: string, agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`WHERE agency_id IN (${inList(agencyIds)})`
+    : agencyId ? sql`WHERE agency_id = ${agencyId}` : sql``;
 
   const result = await db.execute(sql`
     SELECT

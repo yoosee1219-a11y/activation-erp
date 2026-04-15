@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
+import { resolveAllowedAgencyIds } from "@/lib/db/queries/users";
 import { db } from "@/lib/db";
 import { activations, agencies } from "@/lib/db/schema";
 import { eq, and, sql } from "drizzle-orm";
@@ -160,17 +161,31 @@ function parseBool(value: string): boolean {
 export async function POST(request: NextRequest) {
   try {
     const user = await getSessionUser();
-    if (!user || (user.role !== "ADMIN" && user.role !== "SUB_ADMIN")) {
-      return NextResponse.json({ error: "관리자만 가져오기 가능합니다." }, { status: 403 });
+    if (!user || (user.role !== "ADMIN" && user.role !== "SUB_ADMIN" && user.role !== "PARTNER")) {
+      return NextResponse.json({ error: "접근 권한이 없습니다." }, { status: 403 });
     }
 
     const body = await request.json();
-    const { rows, defaultAgencyId, defaultMajorCategory, defaultMediumCategory } = body as {
+    let { rows, defaultAgencyId, defaultMajorCategory, defaultMediumCategory } = body as {
       rows: Record<string, string>[];
       defaultAgencyId?: string;
       defaultMajorCategory?: string;
       defaultMediumCategory?: string;
     };
+
+    // PARTNER: 허용된 에이전시로만 import 가능
+    if (user.role === "PARTNER") {
+      const allowedIds = await resolveAllowedAgencyIds(user);
+      if (!allowedIds || allowedIds.length === 0) {
+        return NextResponse.json({ error: "접근 가능한 거래처가 없습니다." }, { status: 403 });
+      }
+      if (!defaultAgencyId) {
+        defaultAgencyId = allowedIds[0];
+      }
+      if (!allowedIds.includes(defaultAgencyId)) {
+        return NextResponse.json({ error: "해당 거래처에 접근 권한이 없습니다." }, { status: 403 });
+      }
+    }
 
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json({ error: "데이터가 없습니다." }, { status: 400 });

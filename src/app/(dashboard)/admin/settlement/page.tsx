@@ -48,6 +48,8 @@ interface UsimData {
 
 interface CommissionData {
   normalCount: number;
+  committedCount: number;
+  nonCommittedCount: number;
   normalAmount: number;
   supplementClawbackCount: number;
   supplementClawback: number;
@@ -65,6 +67,7 @@ interface DetailItem {
   workStatus: string | null;
   terminationDate: string | null;
   terminationReason: string | null;
+  selectedCommitment: boolean | null;
 }
 
 interface AgencySettlement {
@@ -227,7 +230,7 @@ export default function SettlementPage() {
           ...data,
           agencies: data.agencies.map((a) => {
             if (a.agencyId !== agencyId) return a;
-            const commissionRevenue = a.commission.normalCount * newRate;
+            const commissionRevenue = a.commission.committedCount * newRate;
             const supplementClawback =
               a.commission.supplementClawbackCount * -newRate;
             const sixMonthClawback =
@@ -298,8 +301,9 @@ export default function SettlementPage() {
       "USIM 사용 (개통)": a.usim.used,
       "USIM 환급": a.usim.revenue,
       "USIM 소계": a.usim.subtotal,
-      "정상 개통": a.commission.normalCount,
-      "정상 수수료": a.commission.normalAmount,
+      "약정 개통": a.commission.committedCount,
+      "약정 수수료": a.commission.normalAmount,
+      "비약정 개통": a.commission.nonCommittedCount,
       "환수 (보완미완료)": a.commission.supplementClawbackCount,
       "환수 (보완) 금액": a.commission.supplementClawback,
       "환수 (6개월)": a.commission.sixMonthClawbackCount,
@@ -320,8 +324,9 @@ export default function SettlementPage() {
       "USIM 사용 (개통)": data.agencies.reduce((s, a) => s + a.usim.used, 0),
       "USIM 환급": data.agencies.reduce((s, a) => s + a.usim.revenue, 0),
       "USIM 소계": data.agencies.reduce((s, a) => s + a.usim.subtotal, 0),
-      "정상 개통": data.agencies.reduce((s, a) => s + a.commission.normalCount, 0),
-      "정상 수수료": data.agencies.reduce((s, a) => s + a.commission.normalAmount, 0),
+      "약정 개통": data.agencies.reduce((s, a) => s + a.commission.committedCount, 0),
+      "약정 수수료": data.agencies.reduce((s, a) => s + a.commission.normalAmount, 0),
+      "비약정 개통": data.agencies.reduce((s, a) => s + a.commission.nonCommittedCount, 0),
       "환수 (보완미완료)": data.agencies.reduce((s, a) => s + a.commission.supplementClawbackCount, 0),
       "환수 (보완) 금액": data.agencies.reduce((s, a) => s + a.commission.supplementClawback, 0),
       "환수 (6개월)": data.agencies.reduce((s, a) => s + a.commission.sixMonthClawbackCount, 0),
@@ -337,14 +342,20 @@ export default function SettlementPage() {
     const detailRows: any[] = [];
     data.agencies.forEach((a) => {
       a.details.forEach((d) => {
+        const isCommitted = !!d.selectedCommitment;
+        const isTerminated = !!d.terminationDate;
+        const commission = isCommitted && !isTerminated ? a.commissionRate : 0;
+        const clawback = isCommitted && isTerminated ? -a.commissionRate : 0;
         detailRows.push({
           "거래처": a.agencyName,
           "고객명": d.customerName,
           "개통일자": d.activationDate || "-",
+          "약정선택": isCommitted ? "O" : "X",
           "상태": d.workStatus || "-",
           "해지일자": d.terminationDate || "-",
           "해지사유": d.terminationReason || "-",
-          "수수료": d.workStatus === "해지" ? -a.commissionRate : a.commissionRate,
+          "수수료": commission,
+          "환수": clawback,
         });
       });
     });
@@ -713,10 +724,18 @@ function AgencySettlementCard({
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-500">
-                  정상 개통 ({agency.commission.normalCount}건)
+                  약정 개통 ({agency.commission.committedCount}건)
                 </span>
                 <AmountCell value={agency.commission.normalAmount} />
               </div>
+              {agency.commission.nonCommittedCount > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-400 text-xs">
+                    비약정 개통 ({agency.commission.nonCommittedCount}건) — 수수료 미지급
+                  </span>
+                  <span className="text-gray-400 text-sm">0</span>
+                </div>
+              )}
               {agency.commission.supplementClawbackCount > 0 && (
                 <div className="flex justify-between">
                   <span className="text-gray-500">
@@ -850,6 +869,7 @@ function AgencySettlementCard({
                       <TableHead className="w-12 text-center">No</TableHead>
                       <TableHead>고객명</TableHead>
                       <TableHead>개통일자</TableHead>
+                      <TableHead className="text-center">약정</TableHead>
                       <TableHead className="text-center">상태</TableHead>
                       <TableHead className="text-right">수수료</TableHead>
                       <TableHead className="text-right">환수</TableHead>
@@ -858,11 +878,12 @@ function AgencySettlementCard({
                   </TableHeader>
                   <TableBody>
                     {agency.details.map((detail, idx) => {
+                      const isCommitted = !!detail.selectedCommitment;
                       const isTerminated = !!detail.terminationDate;
-                      const commission = !isTerminated
+                      const commission = isCommitted && !isTerminated
                         ? agency.commissionRate
                         : 0;
-                      const clawback = isTerminated
+                      const clawback = isCommitted && isTerminated
                         ? -agency.commissionRate
                         : 0;
                       const note = detail.terminationReason || "";
@@ -877,6 +898,13 @@ function AgencySettlementCard({
                           </TableCell>
                           <TableCell className="text-sm text-gray-600">
                             {detail.activationDate || "-"}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {isCommitted ? (
+                              <Badge className="bg-blue-100 text-blue-700 text-[10px]">약정</Badge>
+                            ) : (
+                              <span className="text-gray-300 text-[10px]">비약정</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-center">
                             <StatusBadge status={detail.workStatus} />

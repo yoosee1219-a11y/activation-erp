@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Clock, CheckCircle2, Loader2, RotateCcw, X, RefreshCw, FileEdit, Package, ChevronDown, ChevronRight, ChevronUp, XCircle, Lock } from "lucide-react";
+import { Plus, Clock, CheckCircle2, Loader2, RotateCcw, X, RefreshCw, FileEdit, Package, ChevronDown, ChevronRight, ChevronUp, XCircle, Lock, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -32,6 +32,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SupplementPanel } from "@/components/dashboard/supplement-panel";
 import type { SupplementStat, SupplementItem } from "@/components/dashboard/supplement-panel";
+import * as XLSX from "xlsx";
+import Papa from "papaparse";
 import { CustomerDetailDialog } from "@/components/partner/customer-detail-dialog";
 
 type WorkStatusFilter = "입력중" | "개통요청" | "진행중" | "개통완료" | "최종완료" | "보완요청" | "해지" | null;
@@ -86,6 +88,13 @@ export default function PartnerPage() {
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [changingPw, setChangingPw] = useState(false);
+
+  // 엑셀 업로드 다이얼로그
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importPreview, setImportPreview] = useState<Record<string, string>[]>([]);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importResult, setImportResult] = useState<{ created: number; skipped: number; errors: number } | null>(null);
 
   // 고객 상세 팝업
   const [detailCustomer, setDetailCustomer] = useState<PartnerActivationRow | null>(null);
@@ -338,7 +347,7 @@ export default function PartnerPage() {
     const drafting = data.filter((r) => !r.workStatus || r.workStatus === "입력중").length;
     const requested = data.filter((r) => r.workStatus === "개통요청").length;
     const working = data.filter((r) => r.workStatus === "진행중").length;
-    const completed = data.filter((r) => r.workStatus === "개통완료").length;
+    const completed = data.filter((r) => r.workStatus === "개통완료" || r.workStatus === "최종완료").length;
     const needsFix = data.filter((r) => r.workStatus === "보완요청").length;
     const terminated = data.filter((r) => r.workStatus === "해지").length;
     return { drafting, requested, working, completed, needsFix, terminated };
@@ -362,6 +371,9 @@ export default function PartnerPage() {
     if (!statusFilter) return data;
     return data.filter((r) => {
       const ws = r.workStatus || "입력중";
+      if (statusFilter === "개통완료") {
+        return ws === "개통완료" || ws === "최종완료";
+      }
       return ws === statusFilter;
     });
   }, [data, statusFilter]);
@@ -409,6 +421,108 @@ export default function PartnerPage() {
       toast.error("비밀번호 변경 중 오류가 발생했습니다.");
     } finally {
       setChangingPw(false);
+    }
+  };
+
+  const handleExcelDownload = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (selectedMonth) params.set("month", selectedMonth);
+      const res = await fetch(`/api/export?${params.toString()}`);
+      if (!res.ok) throw new Error("다운로드 실패");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `개통관리_${selectedMonth || "전체"}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("엑셀 다운로드에 실패했습니다.");
+    }
+  };
+
+  const handleImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportFile(file);
+    setImportResult(null);
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = evt.target?.result;
+        if (file.name.endsWith(".csv")) {
+          const parsed = Papa.parse(data as string, { header: true, skipEmptyLines: true });
+          setImportPreview(parsed.data.slice(0, 10) as Record<string, string>[]);
+        } else {
+          const wb = XLSX.read(data, { type: "array" });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const json = XLSX.utils.sheet_to_json<Record<string, string>>(ws);
+          setImportPreview(json.slice(0, 10));
+        }
+      } catch {
+        toast.error("파일을 읽는 중 오류가 발생했습니다.");
+        setImportPreview([]);
+      }
+    };
+    if (file.name.endsWith(".csv")) {
+      reader.readAsText(file);
+    } else {
+      reader.readAsArrayBuffer(file);
+    }
+  };
+
+  const handleImportUpload = async () => {
+    if (!importFile) return;
+    setImportLoading(true);
+    setImportResult(null);
+    try {
+      const reader = new FileReader();
+      const rows = await new Promise<Record<string, string>[]>((resolve, reject) => {
+        reader.onload = (evt) => {
+          try {
+            const data = evt.target?.result;
+            if (importFile.name.endsWith(".csv")) {
+              const parsed = Papa.parse(data as string, { header: true, skipEmptyLines: true });
+              resolve(parsed.data as Record<string, string>[]);
+            } else {
+              const wb = XLSX.read(data, { type: "array" });
+              const ws = wb.Sheets[wb.SheetNames[0]];
+              resolve(XLSX.utils.sheet_to_json<Record<string, string>>(ws));
+            }
+          } catch (err) {
+            reject(err);
+          }
+        };
+        if (importFile.name.endsWith(".csv")) {
+          reader.readAsText(importFile);
+        } else {
+          reader.readAsArrayBuffer(importFile);
+        }
+      });
+
+      const res = await fetch("/api/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        toast.error(result.error || "업로드에 실패했습니다.");
+        return;
+      }
+      setImportResult({
+        created: result.created || 0,
+        skipped: result.skipped || 0,
+        errors: result.errors || 0,
+      });
+      toast.success(`업로드 완료: ${result.created || 0}건 생성`);
+      fetchData();
+    } catch {
+      toast.error("업로드 중 오류가 발생했습니다.");
+    } finally {
+      setImportLoading(false);
     }
   };
 
@@ -469,6 +583,14 @@ export default function PartnerPage() {
               </button>
             </div>
             <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleExcelDownload}>
+                <Download className="h-4 w-4 mr-1" />
+                엑셀 다운로드
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setImportDialogOpen(true)}>
+                <Upload className="h-4 w-4 mr-1" />
+                엑셀 업로드
+              </Button>
               <Button variant="outline" size="sm" onClick={() => setPasswordDialogOpen(true)}>
                 <Lock className="h-4 w-4 mr-1" />
                 비밀번호 변경
@@ -775,14 +897,50 @@ export default function PartnerPage() {
                 pageSize={200}
                 onPageChange={setPage}
                 searchPlaceholder="고객명으로 검색..."
+                initialColumnVisibility={{
+                  usimNumber: false,
+                  entryDate: false,
+                  subscriptionType: false,
+                  ratePlan: false,
+                  newPhoneNumber: false,
+                  subscriptionNumber: false,
+                  virtualAccount: false,
+                  activationDate: false,
+                  applicationDocs: false,
+                  applicationDocsReview: false,
+                  nameChangeDocs: false,
+                  nameChangeDocsReview: false,
+                  arcInfo: false,
+                  arcReview: false,
+                  autopayInfo: false,
+                  autopayReview: false,
+                }}
                 getRowClassName={(row: PartnerActivationRow) => {
-                  const hasSupp =
+                  const isArc = row.activationMethod === "ARC개통";
+
+                  // 개통방법에 따른 필수 서류/검수 필드
+                  const requiredDocs = isArc
+                    ? [row.applicationDocs, row.autopayInfo]
+                    : [row.applicationDocs, row.nameChangeDocs, row.arcInfo, row.autopayInfo];
+                  const requiredReviews = isArc
+                    ? [row.applicationDocsReview, row.autopayReview]
+                    : [row.applicationDocsReview, row.nameChangeDocsReview, row.arcReview, row.autopayReview];
+
+                  // 모든 필수 검수 완료 → 초록
+                  if (requiredReviews.every(r => r === "완료")) {
+                    return "bg-green-50/80 hover:bg-green-100/80";
+                  }
+
+                  // 보완요청 또는 미첨부 → 빨강
+                  const hasIssue =
                     row.workStatus === "보완요청" ||
-                    row.applicationDocsReview === "보완요청" ||
-                    row.nameChangeDocsReview === "보완요청" ||
-                    row.arcReview === "보완요청" ||
-                    row.autopayReview === "보완요청";
-                  return hasSupp ? "bg-red-50/70" : "";
+                    requiredReviews.some(r => r === "보완요청") ||
+                    requiredDocs.some(d => !d);
+                  if (hasIssue) {
+                    return "bg-red-50/70 hover:bg-red-100/70";
+                  }
+
+                  return "";
                 }}
                 onRowClick={(row: PartnerActivationRow) => setDetailCustomer(row)}
               />
@@ -832,6 +990,75 @@ export default function PartnerPage() {
             </Button>
             <Button onClick={handleChangePassword} disabled={changingPw}>
               {changingPw ? "변경 중..." : "변경"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 엑셀 업로드 다이얼로그 */}
+      <Dialog open={importDialogOpen} onOpenChange={(open) => {
+        setImportDialogOpen(open);
+        if (!open) {
+          setImportFile(null);
+          setImportPreview([]);
+          setImportResult(null);
+        }
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>엑셀 업로드</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <Input
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleImportFileChange}
+            />
+            {importPreview.length > 0 && (
+              <div className="max-h-64 overflow-auto rounded border">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-gray-100">
+                    <tr>
+                      {Object.keys(importPreview[0]).map((key) => (
+                        <th key={key} className="px-2 py-1 text-left font-medium">
+                          {key}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importPreview.map((row, i) => (
+                      <tr key={i} className="border-t">
+                        {Object.values(row).map((val, j) => (
+                          <td key={j} className="px-2 py-1 whitespace-nowrap">
+                            {String(val ?? "")}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="px-2 py-1 text-xs text-gray-500">
+                  미리보기 (최대 10행)
+                </p>
+              </div>
+            )}
+            {importResult && (
+              <div className="rounded border bg-gray-50 p-3 text-sm">
+                <p>생성: <span className="font-semibold text-green-600">{importResult.created}건</span></p>
+                <p>건너뜀: <span className="font-semibold text-yellow-600">{importResult.skipped}건</span></p>
+                {importResult.errors > 0 && (
+                  <p>오류: <span className="font-semibold text-red-600">{importResult.errors}건</span></p>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setImportDialogOpen(false)}>
+              닫기
+            </Button>
+            <Button onClick={handleImportUpload} disabled={!importFile || importLoading}>
+              {importLoading ? "업로드 중..." : "업로드"}
             </Button>
           </DialogFooter>
         </DialogContent>
