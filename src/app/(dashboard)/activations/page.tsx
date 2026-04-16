@@ -320,11 +320,12 @@ export default function ActivationsPage() {
   };
 
   // 기본 숨김 컬럼 (컬럼 토글로 다시 표시 가능)
+  // 가입번호는 고객정보 조회 핵심키이므로 기본 표시, 신규번호는 상세에서 확인
   const defaultHiddenColumns: VisibilityState = {
     majorCategory: false,
     mediumCategory: false,
     usimNumber: false,
-    subscriptionNumber: false,
+    newPhoneNumber: false,
     virtualAccount: false,
     subscriptionType: false,
     ratePlan: false,
@@ -471,7 +472,7 @@ export default function ActivationsPage() {
           page={page}
           pageSize={200}
           onPageChange={setPage}
-          searchPlaceholder="고객명으로 검색..."
+          searchPlaceholder="가입번호/고객명/신규번호 검색..."
           highlightId={highlightId}
           getRowId={(row: ActivationRow) => row.id}
           getRowClassName={(row: ActivationRow) => {
@@ -523,7 +524,7 @@ export default function ActivationsPage() {
                           columns={columns}
                           data={group.rows}
                           pageSize={20}
-                          searchPlaceholder="고객명으로 검색..."
+                          searchPlaceholder="가입번호/고객명/신규번호 검색..."
                           highlightId={highlightId}
                           getRowId={(row: ActivationRow) => row.id}
                           getRowClassName={(row: ActivationRow) => {
@@ -574,7 +575,7 @@ export default function ActivationsPage() {
                       columns={columns}
                       data={group.rows}
                       pageSize={20}
-                      searchPlaceholder="고객명으로 검색..."
+                      searchPlaceholder="가입번호/고객명/신규번호 검색..."
                       highlightId={highlightId}
                       getRowId={(row: ActivationRow) => row.id}
                       getRowClassName={(row: ActivationRow) => {

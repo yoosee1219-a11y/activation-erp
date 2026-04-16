@@ -899,14 +899,14 @@ export default function PartnerPage() {
                 page={page}
                 pageSize={200}
                 onPageChange={setPage}
-                searchPlaceholder="고객명으로 검색..."
+                searchPlaceholder="가입번호/고객명/신규번호 검색..."
                 initialColumnVisibility={{
                   usimNumber: false,
                   entryDate: false,
                   subscriptionType: false,
                   ratePlan: false,
+                  // 가입번호는 고객정보 조회 핵심키이므로 기본 표시, 신규번호는 상세에서 확인
                   newPhoneNumber: false,
-                  subscriptionNumber: false,
                   virtualAccount: false,
                   activationDate: false,
                   applicationDocs: false,
