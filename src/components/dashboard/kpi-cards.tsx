@@ -1,8 +1,12 @@
 "use client";
 
 import { useState, useMemo, Fragment, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  CustomerDetailDialog,
+  type CustomerDetailData,
+} from "@/components/partner/customer-detail-dialog";
 import {
   Table,
   TableBody,
@@ -580,6 +584,8 @@ function DetailHierarchySection({
 
 /* ─── Main component ─── */
 
+const STAFF_LIST = ["권보미", "박서연", "김유림", "이아라"];
+
 export function KpiCards({
   stats,
   kpiTotalByAgency = [],
@@ -600,10 +606,11 @@ export function KpiCards({
   agencies = [],
   agencyStats = [],
 }: KpiCardsProps) {
-  const router = useRouter();
   const [expanded, setExpanded] = useState<KpiKey | null>(null);
   const [drillMajors, setDrillMajors] = useState<Set<string>>(new Set());
   const [drillMediums, setDrillMediums] = useState<Set<string>>(new Set());
+  const [detailCustomer, setDetailCustomer] =
+    useState<CustomerDetailData | null>(null);
 
   const toggle = (key: KpiKey) => {
     setExpanded((prev) => (prev === key ? null : key));
@@ -794,9 +801,51 @@ export function KpiCards({
     [hasHierarchy, todayTermDetailByAgency, agencyCatMap, categories]
   );
 
-  // ─── 고객명 클릭 → 개통관리 페이지 이동 ───
-  const navigateToActivation = (activationId: string) => {
-    router.push(`/activations?highlight=${activationId}`);
+  // ─── 고객명 클릭 → 상세 다이얼로그 열기 ───
+  const openCustomerDetail = async (activationId: string) => {
+    try {
+      const res = await fetch(`/api/activations/${activationId}`);
+      if (!res.ok) throw new Error();
+      const { activation } = await res.json();
+      setDetailCustomer(activation as CustomerDetailData);
+    } catch {
+      toast.error("고객 정보를 불러오지 못했습니다.");
+    }
+  };
+
+  // ─── 다이얼로그 내부 인라인 편집 → PATCH + 낙관적 업데이트 ───
+  const handleInlineUpdate = async (
+    id: string,
+    field: string,
+    value: string
+  ) => {
+    const booleanFields = new Set([
+      "deviceChangeConfirmed",
+      "selectedCommitment",
+      "autopayRegistered",
+      "combinedUnitNameChange",
+      "billingAccountNameChange",
+    ]);
+    const parsedValue: unknown = booleanFields.has(field)
+      ? value === "true"
+      : value;
+
+    setDetailCustomer((prev) =>
+      prev ? { ...prev, [field]: parsedValue } : null
+    );
+
+    try {
+      const res = await fetch(`/api/activations/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: parsedValue }),
+      });
+      if (!res.ok) {
+        toast.error("수정에 실패했습니다.");
+      }
+    } catch {
+      toast.error("수정 중 오류가 발생했습니다.");
+    }
   };
 
   // ─── helpers ───
@@ -832,7 +881,7 @@ export function KpiCards({
               <TableCell>
                 <button
                   className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-left"
-                  onClick={(e) => { e.stopPropagation(); navigateToActivation(item.id); }}
+                  onClick={(e) => { e.stopPropagation(); openCustomerDetail(item.id); }}
                 >
                   {item.customerName}
                 </button>
@@ -876,7 +925,7 @@ export function KpiCards({
               <TableCell>
                 <button
                   className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-left"
-                  onClick={(e) => { e.stopPropagation(); navigateToActivation(item.id); }}
+                  onClick={(e) => { e.stopPropagation(); openCustomerDetail(item.id); }}
                 >
                   {item.customerName}
                 </button>
@@ -923,7 +972,7 @@ export function KpiCards({
                 <TableCell>
                   <button
                     className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-left"
-                    onClick={(e) => { e.stopPropagation(); navigateToActivation(item.id); }}
+                    onClick={(e) => { e.stopPropagation(); openCustomerDetail(item.id); }}
                   >
                     {item.customerName}
                   </button>
@@ -968,7 +1017,7 @@ export function KpiCards({
               <TableCell>
                 <button
                   className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-left"
-                  onClick={(e) => { e.stopPropagation(); navigateToActivation(item.id); }}
+                  onClick={(e) => { e.stopPropagation(); openCustomerDetail(item.id); }}
                 >
                   {item.customerName}
                 </button>
@@ -1013,7 +1062,7 @@ export function KpiCards({
               <TableCell>
                 <button
                   className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-left"
-                  onClick={(e) => { e.stopPropagation(); navigateToActivation(item.id); }}
+                  onClick={(e) => { e.stopPropagation(); openCustomerDetail(item.id); }}
                 >
                   {item.customerName}
                 </button>
@@ -1063,7 +1112,7 @@ export function KpiCards({
               <TableCell>
                 <button
                   className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-left"
-                  onClick={(e) => { e.stopPropagation(); navigateToActivation(item.id); }}
+                  onClick={(e) => { e.stopPropagation(); openCustomerDetail(item.id); }}
                 >
                   {item.customerName}
                 </button>
@@ -1591,6 +1640,16 @@ export function KpiCards({
             </CardContent>
           </Card>
         )}
+
+      {/* 고객 상세 다이얼로그 (드릴다운 리스트에서 고객명 클릭 시) */}
+      <CustomerDetailDialog
+        open={!!detailCustomer}
+        onClose={() => setDetailCustomer(null)}
+        customer={detailCustomer}
+        onUpdate={handleInlineUpdate}
+        staffList={STAFF_LIST}
+        isAdmin={true}
+      />
     </div>
   );
 }
