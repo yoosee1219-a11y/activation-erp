@@ -136,6 +136,7 @@ export async function GET(request: NextRequest) {
 
     for (const agency of targetAgencies) {
       const commissionRate = agency.commissionRate || 0;
+      const deductionRate = agency.deductionRate ?? commissionRate; // 차감단가 (없으면 수수료와 동일)
       const receivedCount = usimReceivedMap.get(agency.id) || 0;
 
       const actRow = activationMap.get(agency.id);
@@ -165,9 +166,10 @@ export async function GET(request: NextRequest) {
 
       // 수수료: 약정선택 건만 지급
       const commissionRevenue = committedCount * commissionRate;
-      const supplementClawback = supplementClawbackCount * -commissionRate;
-      const sixMonthClawback = sixMonthClawbackCount * -commissionRate;
-      const manualClawback = manualClawbackCount * -commissionRate;
+      // 차감: deductionRate 사용 (commissionRate와 독립)
+      const supplementClawback = supplementClawbackCount * -deductionRate;
+      const sixMonthClawback = sixMonthClawbackCount * -deductionRate;
+      const manualClawback = manualClawbackCount * -deductionRate;
       const commissionSubtotal =
         commissionRevenue + supplementClawback + sixMonthClawback + manualClawback;
 
@@ -175,6 +177,7 @@ export async function GET(request: NextRequest) {
         agencyId: agency.id,
         agencyName: agency.name,
         commissionRate,
+        deductionRate,
         usim: {
           received: receivedCount,
           used: effectiveUsedCount,

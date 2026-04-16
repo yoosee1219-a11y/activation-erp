@@ -21,6 +21,14 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Calculator,
   Search,
   Loader2,
@@ -33,6 +41,8 @@ import {
   Pencil,
   Check,
   X,
+  ShieldCheck,
+  CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
@@ -74,6 +84,7 @@ interface AgencySettlement {
   agencyId: string;
   agencyName: string;
   commissionRate: number;
+  deductionRate: number;
   usim: UsimData;
   commission: CommissionData;
   total: number;
@@ -150,6 +161,13 @@ export default function SettlementPage() {
   const [manualAdjustments, setManualAdjustments] = useState<
     Record<string, number>
   >({});
+  const [settlementStatus, setSettlementStatus] = useState<{
+    isSettled: boolean;
+    settledCount: number;
+    settledAt: string | null;
+  } | null>(null);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   const monthOptions = getMonthOptions();
 
@@ -208,6 +226,73 @@ export default function SettlementPage() {
     }
   }, [selectedMonth, selectedMajor, selectedMedium]);
 
+  // 정산 확정 상태 조회
+  const fetchSettlementStatus = useCallback(async (month: string) => {
+    try {
+      const res = await fetch(`/api/settlement/confirm?month=${month}`);
+      if (res.ok) {
+        const result = await res.json();
+        setSettlementStatus(result);
+      }
+    } catch {
+      setSettlementStatus(null);
+    }
+  }, []);
+
+  // fetchSettlement 성공 시 확정 상태도 조회
+  useEffect(() => {
+    if (data?.month) {
+      fetchSettlementStatus(data.month);
+    }
+  }, [data?.month, fetchSettlementStatus]);
+
+  // 정산 확정 처리
+  const handleSettlementConfirm = async () => {
+    if (!data) return;
+    setConfirming(true);
+    try {
+      const res = await fetch("/api/settlement/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ month: data.month }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result.error || "정산 확정 실패");
+      }
+      toast.success(
+        `${data.month} 정산 확정 완료 (${result.settledCount}건 차감확정)`
+      );
+      setConfirmDialogOpen(false);
+      // 상태 갱신
+      await fetchSettlementStatus(data.month);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "정산 확정 실패");
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  // 차감 대상 건수 계산 (확정 다이얼로그용)
+  const clawbackSummary = useMemo(() => {
+    if (!data) return null;
+    let totalCount = 0;
+    let totalAmount = 0;
+    for (const a of data.agencies) {
+      const count =
+        a.commission.supplementClawbackCount +
+        a.commission.sixMonthClawbackCount +
+        a.commission.manualClawbackCount;
+      const amount =
+        Math.abs(a.commission.supplementClawback) +
+        Math.abs(a.commission.sixMonthClawback) +
+        Math.abs(a.commission.manualClawback);
+      totalCount += count;
+      totalAmount += amount;
+    }
+    return { totalCount, totalAmount };
+  }, [data]);
+
   // 수수료 단가 수정 (DB 반영)
   const handleCommissionRateUpdate = async (
     agencyId: string,
@@ -224,19 +309,20 @@ export default function SettlementPage() {
         throw new Error(err.error || "수수료 단가 수정 실패");
       }
       toast.success("수수료 단가가 수정되었습니다. 조회를 다시 실행하세요.");
-      // 로컬 데이터에도 즉시 반영
+      // 로컬 데이터에도 즉시 반영 — 차감은 deductionRate 기준 (변경 없음)
       if (data) {
         const updated = {
           ...data,
           agencies: data.agencies.map((a) => {
             if (a.agencyId !== agencyId) return a;
+            const dr = a.deductionRate; // 차감단가는 변경 없음
             const commissionRevenue = a.commission.committedCount * newRate;
             const supplementClawback =
-              a.commission.supplementClawbackCount * -newRate;
+              a.commission.supplementClawbackCount * -dr;
             const sixMonthClawback =
-              a.commission.sixMonthClawbackCount * -newRate;
+              a.commission.sixMonthClawbackCount * -dr;
             const manualClawback =
-              a.commission.manualClawbackCount * -newRate;
+              a.commission.manualClawbackCount * -dr;
             const commissionSubtotal =
               commissionRevenue + supplementClawback + sixMonthClawback + manualClawback;
             const adj = manualAdjustments[agencyId] || 0;
@@ -263,6 +349,65 @@ export default function SettlementPage() {
       }
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "수수료 단가 수정 실패");
+    }
+  };
+
+  // 차감단가 수정
+  const handleDeductionRateUpdate = async (
+    agencyId: string,
+    newRate: number | null
+  ) => {
+    try {
+      const res = await fetch("/api/settlement/adjust", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agencyId, deductionRate: newRate }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "차감 단가 수정 실패");
+      }
+      toast.success("차감 단가가 수정되었습니다. 조회를 다시 실행하세요.");
+      // 로컬 데이터에도 즉시 반영
+      if (data) {
+        const updated = {
+          ...data,
+          agencies: data.agencies.map((a) => {
+            if (a.agencyId !== agencyId) return a;
+            const effectiveRate = newRate ?? a.commissionRate;
+            const commissionRevenue = a.commission.committedCount * a.commissionRate;
+            const supplementClawback =
+              a.commission.supplementClawbackCount * -effectiveRate;
+            const sixMonthClawback =
+              a.commission.sixMonthClawbackCount * -effectiveRate;
+            const manualClawback =
+              a.commission.manualClawbackCount * -effectiveRate;
+            const commissionSubtotal =
+              commissionRevenue + supplementClawback + sixMonthClawback + manualClawback;
+            const adj = manualAdjustments[agencyId] || 0;
+            return {
+              ...a,
+              deductionRate: effectiveRate,
+              commission: {
+                ...a.commission,
+                normalAmount: commissionRevenue,
+                supplementClawback,
+                sixMonthClawback,
+                manualClawback,
+                subtotal: commissionSubtotal,
+              },
+              total: a.usim.subtotal + commissionSubtotal + adj,
+            };
+          }),
+        };
+        updated.grandTotal = updated.agencies.reduce(
+          (sum, r) => sum + r.total,
+          0
+        );
+        setData(updated);
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "차감 단가 수정 실패");
     }
   };
 
@@ -490,10 +635,27 @@ export default function SettlementPage() {
               )}
             </Button>
             {data && (
-              <Button variant="outline" onClick={downloadExcel}>
-                <Download className="h-4 w-4 mr-2" />
-                엑셀 다운로드
-              </Button>
+              <>
+                <Button variant="outline" onClick={downloadExcel}>
+                  <Download className="h-4 w-4 mr-2" />
+                  엑셀 다운로드
+                </Button>
+                {settlementStatus?.isSettled ? (
+                  <Badge className="bg-green-100 text-green-700 px-3 py-1.5 text-sm gap-1.5">
+                    <CheckCircle2 className="h-4 w-4" />
+                    {data.month} 확정 완료 ({settlementStatus.settledCount}건)
+                  </Badge>
+                ) : (
+                  <Button
+                    variant="default"
+                    onClick={() => setConfirmDialogOpen(true)}
+                    disabled={!clawbackSummary || clawbackSummary.totalCount === 0}
+                  >
+                    <ShieldCheck className="h-4 w-4 mr-2" />
+                    정산 확정
+                  </Button>
+                )}
+              </>
             )}
           </div>
         </CardContent>
@@ -529,6 +691,7 @@ export default function SettlementPage() {
               expanded={expandedAgencies.has(agency.agencyId)}
               onToggle={() => toggleExpand(agency.agencyId)}
               onCommissionRateUpdate={handleCommissionRateUpdate}
+              onDeductionRateUpdate={handleDeductionRateUpdate}
               onManualAdjustment={handleManualAdjustment}
             />
           ))}
@@ -573,6 +736,70 @@ export default function SettlementPage() {
           )}
         </div>
       )}
+
+      {/* 정산 확정 다이얼로그 */}
+      <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>정산 확정</DialogTitle>
+            <DialogDescription>
+              {data?.month} 차감 대상 건을 확정합니다.
+              확정 후 해당 건은 보완 패널에서 제외됩니다.
+            </DialogDescription>
+          </DialogHeader>
+          {clawbackSummary && (
+            <div className="space-y-3 py-2">
+              <div className="rounded-lg border p-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">정산월</span>
+                  <span className="font-medium">{data?.month}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">차감확정 대상 건수</span>
+                  <span className="font-bold text-red-600">
+                    {clawbackSummary.totalCount}건
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">차감 총액</span>
+                  <span className="font-bold text-red-600">
+                    -{formatKRW(clawbackSummary.totalAmount)}원
+                  </span>
+                </div>
+              </div>
+              <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                확정하면 되돌릴 수 없습니다. 신중하게 진행해주세요.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmDialogOpen(false)}
+              disabled={confirming}
+            >
+              취소
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleSettlementConfirm}
+              disabled={confirming}
+            >
+              {confirming ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  처리 중...
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="h-4 w-4 mr-2" />
+                  확정
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -584,6 +811,7 @@ function AgencySettlementCard({
   expanded,
   onToggle,
   onCommissionRateUpdate,
+  onDeductionRateUpdate,
   onManualAdjustment,
 }: {
   agency: AgencySettlement;
@@ -591,10 +819,13 @@ function AgencySettlementCard({
   expanded: boolean;
   onToggle: () => void;
   onCommissionRateUpdate: (agencyId: string, newRate: number) => void;
+  onDeductionRateUpdate: (agencyId: string, newRate: number | null) => void;
   onManualAdjustment: (agencyId: string, amount: number) => void;
 }) {
   const [editingRate, setEditingRate] = useState(false);
   const [rateValue, setRateValue] = useState(String(agency.commissionRate));
+  const [editingDeduction, setEditingDeduction] = useState(false);
+  const [deductionValue, setDeductionValue] = useState(String(agency.deductionRate));
   const [editingAdjust, setEditingAdjust] = useState(false);
   const [adjustValue, setAdjustValue] = useState(
     String(agency.manualAdjustment || 0)
@@ -671,6 +902,69 @@ function AgencySettlementCard({
                 }}
               >
                 수수료 단가: {formatKRW(agency.commissionRate)}원
+                <Pencil className="h-3 w-3 text-gray-400" />
+              </Badge>
+            )}
+            {/* 차감단가 — 수수료와 다를 때만 강조 */}
+            {editingDeduction ? (
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-gray-500">차감 단가:</span>
+                <Input
+                  type="number"
+                  value={deductionValue}
+                  onChange={(e) => setDeductionValue(e.target.value)}
+                  className="w-28 h-7 text-xs"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const v = parseInt(deductionValue, 10);
+                      if (!isNaN(v) && v >= 0) {
+                        onDeductionRateUpdate(agency.agencyId, v);
+                        setEditingDeduction(false);
+                      }
+                    }
+                    if (e.key === "Escape") {
+                      setDeductionValue(String(agency.deductionRate));
+                      setEditingDeduction(false);
+                    }
+                  }}
+                />
+                <span className="text-xs text-gray-500">원</span>
+                <button
+                  onClick={() => {
+                    const v = parseInt(deductionValue, 10);
+                    if (!isNaN(v) && v >= 0) {
+                      onDeductionRateUpdate(agency.agencyId, v);
+                      setEditingDeduction(false);
+                    }
+                  }}
+                  className="p-0.5 hover:bg-green-50 rounded"
+                >
+                  <Check className="h-3.5 w-3.5 text-green-600" />
+                </button>
+                <button
+                  onClick={() => {
+                    setDeductionValue(String(agency.deductionRate));
+                    setEditingDeduction(false);
+                  }}
+                  className="p-0.5 hover:bg-red-50 rounded"
+                >
+                  <X className="h-3.5 w-3.5 text-red-500" />
+                </button>
+              </div>
+            ) : (
+              <Badge
+                variant={agency.deductionRate !== agency.commissionRate ? "secondary" : "outline"}
+                className="text-xs font-normal cursor-pointer hover:bg-gray-50 gap-1"
+                onClick={() => {
+                  setDeductionValue(String(agency.deductionRate));
+                  setEditingDeduction(true);
+                }}
+              >
+                차감 단가: {formatKRW(agency.deductionRate)}원
+                {agency.deductionRate !== agency.commissionRate && (
+                  <span className="text-amber-600 text-[10px]">별도</span>
+                )}
                 <Pencil className="h-3 w-3 text-gray-400" />
               </Badge>
             )}

@@ -14,15 +14,16 @@ export async function GET(request: Request) {
   }
 
   const today = new Date().toISOString().split("T")[0];
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const sevenDaysAgoStr = sevenDaysAgo.toISOString().split("T")[0];
+  const tenDaysAgo = new Date();
+  tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+  const tenDaysAgoStr = tenDaysAgo.toISOString().split("T")[0];
 
   let alertCount = 0;
   let terminateCount = 0;
 
   try {
     // Step 1: Set termination alert for overdue items (no alert yet)
+    // ARC개통은 이미 외국인등록증 보유 → 보완기한 해지 대상 아님. 여권개통만 해당.
     const overdueItems = await db
       .select({
         id: activations.id,
@@ -32,13 +33,15 @@ export async function GET(request: Request) {
       .from(activations)
       .where(
         and(
+          eq(activations.activationMethod, "여권개통"),
           lt(activations.arcSupplementDeadline, today),
           ne(
             sql`COALESCE(${activations.supplementStatus}, '')`,
             "완료"
           ),
           eq(activations.workStatus, "개통완료"),
-          isNull(activations.terminationAlertDate)
+          isNull(activations.terminationAlertDate),
+          isNull(activations.deductionSettledAt)
         )
       );
 
@@ -59,7 +62,7 @@ export async function GET(request: Request) {
       alertCount++;
     }
 
-    // Step 2: Auto-terminate items where alert was set 7+ days ago
+    // Step 2: Auto-terminate items where alert was set 10+ days ago
     const alertedItems = await db
       .select({
         id: activations.id,
@@ -70,13 +73,14 @@ export async function GET(request: Request) {
       .where(
         and(
           isNotNull(activations.terminationAlertDate),
-          lte(activations.terminationAlertDate, sevenDaysAgoStr),
+          lte(activations.terminationAlertDate, tenDaysAgoStr),
           ne(activations.workStatus, "해지"),
           ne(activations.workStatus, "최종완료"),
           ne(
             sql`COALESCE(${activations.supplementStatus}, '')`,
             "완료"
-          )
+          ),
+          isNull(activations.deductionSettledAt)
         )
       );
 
@@ -99,7 +103,7 @@ export async function GET(request: Request) {
         userName: "시스템",
         userRole: "SYSTEM",
         action: "termination",
-        details: "시스템: 자동 해지 처리 (보완기한초과, 7일 유예 경과)",
+        details: "시스템: 자동 해지 처리 (보완기한초과, 10일 유예 경과)",
       });
       terminateCount++;
     }

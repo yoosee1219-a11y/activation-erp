@@ -29,6 +29,7 @@ export const agencies = pgTable("agencies", {
   contactName: text("contact_name"),
   contactPhone: text("contact_phone"),
   commissionRate: integer("commission_rate"), // 건당 개통수수료 (원)
+  deductionRate: integer("deduction_rate"), // 건당 차감단가 (원, NULL이면 commissionRate 사용)
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
@@ -113,6 +114,10 @@ export const activations = pgTable("activations", {
   terminationDate: date("termination_date"),
   terminationReason: text("termination_reason"), // "보완기한초과"|"6개월해지"|"수동해지"
   terminationAlertDate: date("termination_alert_date"), // 해지예고일
+
+  // 차감확정 (정산 반영 완료)
+  deductionSettledAt: timestamp("deduction_settled_at", { withTimezone: true }), // 차감확정 처리 시각
+  deductionSettledMonth: text("deduction_settled_month"), // 정산 반영된 월 (e.g. "2026-03")
 
   // 기타
   notes: text("notes"), // 비고

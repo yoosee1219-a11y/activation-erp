@@ -13,7 +13,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { agencyId, commissionRate } = body;
+    const { agencyId, commissionRate, deductionRate } = body;
 
     if (!agencyId) {
       return NextResponse.json(
@@ -22,18 +22,50 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    if (typeof commissionRate !== "number" || commissionRate < 0) {
+    // 수수료 또는 차감단가 중 하나는 있어야 함
+    const updates: Record<string, number | null> = {};
+
+    if (commissionRate !== undefined) {
+      if (typeof commissionRate !== "number" || commissionRate < 0) {
+        return NextResponse.json(
+          { error: "수수료 단가는 0 이상의 숫자여야 합니다." },
+          { status: 400 }
+        );
+      }
+      updates.commissionRate = commissionRate;
+    }
+
+    if (deductionRate !== undefined) {
+      // null이면 commissionRate로 fallback하도록 초기화
+      if (deductionRate === null) {
+        updates.deductionRate = null;
+      } else if (typeof deductionRate !== "number" || deductionRate < 0) {
+        return NextResponse.json(
+          { error: "차감 단가는 0 이상의 숫자여야 합니다." },
+          { status: 400 }
+        );
+      } else {
+        updates.deductionRate = deductionRate;
+      }
+    }
+
+    if (Object.keys(updates).length === 0) {
       return NextResponse.json(
-        { error: "수수료 단가는 0 이상의 숫자여야 합니다." },
+        { error: "변경할 항목이 없습니다." },
         { status: 400 }
       );
     }
 
     const result = await db
       .update(agencies)
-      .set({ commissionRate })
+      .set(updates)
       .where(eq(agencies.id, agencyId))
-      .returning({ id: agencies.id, name: agencies.name, commissionRate: agencies.commissionRate });
+      .returning({
+        id: agencies.id,
+        name: agencies.name,
+        commissionRate: agencies.commissionRate,
+        deductionRate: agencies.deductionRate,
+      });
 
     if (result.length === 0) {
       return NextResponse.json(

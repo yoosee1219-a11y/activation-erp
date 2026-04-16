@@ -512,12 +512,15 @@ export default function PartnerPage() {
         toast.error(result.error || "업로드에 실패했습니다.");
         return;
       }
+      const inserted = result.inserted || 0;
+      const duplicates = result.duplicates || 0;
+      const errorCount = Array.isArray(result.errors) ? result.errors.length : (result.errors || 0);
       setImportResult({
-        created: result.created || 0,
-        skipped: result.skipped || 0,
-        errors: result.errors || 0,
+        created: inserted,
+        skipped: (result.skipped || 0) + duplicates,
+        errors: errorCount,
       });
-      toast.success(`업로드 완료: ${result.created || 0}건 생성`);
+      toast.success(`업로드 완료: ${inserted}건 생성, ${duplicates}건 중복, ${errorCount}건 오류`);
       fetchData();
     } catch {
       toast.error("업로드 중 오류가 발생했습니다.");

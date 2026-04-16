@@ -608,6 +608,7 @@ export async function getSupplementStats(agencyIds?: string[]) {
     FROM activations a
     LEFT JOIN agencies ag ON a.agency_id = ag.id
     ${agencyFilter}
+    ${agencyIds && agencyIds.length > 0 ? sql`AND` : sql`WHERE`} a.deduction_settled_at IS NULL
     GROUP BY a.agency_id, ag.name
     HAVING COUNT(*) FILTER (WHERE a.work_status = '보완요청') > 0
         OR COUNT(*) FILTER (WHERE a.work_status = '개통완료'
@@ -662,6 +663,7 @@ export async function getSupplementList(agencyIds?: string[]) {
              OR COALESCE(a.autopay_review, '') != '완료')
       )
     )
+    AND a.deduction_settled_at IS NULL
     ${agencyFilter}
     ORDER BY a.arc_supplement_deadline ASC NULLS LAST
   `);
