@@ -289,7 +289,7 @@ export function getPartnerColumns(options: {
     // ─── 관리자 기입 (거래처 읽기만) ───
     {
       accessorKey: "newPhoneNumber",
-      header: "신규번호",
+      header: "고객연락처(신규번호)",
       cell: ({ row }) => (
         <span className="text-sm text-gray-700">
           {row.original.newPhoneNumber || "-"}
@@ -298,7 +298,7 @@ export function getPartnerColumns(options: {
     },
     {
       accessorKey: "subscriptionNumber",
-      header: "가입번호",
+      header: "고객번호",
       cell: ({ row }) => (
         <span className="text-sm text-gray-700">
           {row.original.subscriptionNumber || "-"}
