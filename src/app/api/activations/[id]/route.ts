@@ -282,8 +282,8 @@ export async function PATCH(
 
           const method = (body as Record<string, unknown>).activationMethod ?? existing.activationMethod;
 
-          if (method === "ARC개통") {
-            // ARC개통: 검수/보완 불필요 → 바로 최종완료
+          if (method === "외국인등록증") {
+            // 외국인등록증: 검수/보완 불필요 → 바로 최종완료
             updateData.workStatus = "최종완료";
             updateData.supplementStatus = "완료";
             // deadline 설정 안 함
@@ -313,7 +313,7 @@ export async function PATCH(
         updateData.lockedBy = user.id;
 
         const method = (body as Record<string, unknown>).activationMethod ?? existing.activationMethod;
-        if (method === "ARC개통") {
+        if (method === "외국인등록증") {
           updateData.workStatus = "최종완료";
           updateData.supplementStatus = "완료";
         } else {
@@ -345,9 +345,9 @@ export async function PATCH(
       updateData.supplementStatus = "완료";
       updateData.arcSupplementDeadline = null; // D-day 해제
     } else if (existing.supplementStatus === "완료") {
-      // 이전에 완료였는데 검수/상태가 변경되면 완료 해제 (ARC개통은 제외)
+      // 이전에 완료였는데 검수/상태가 변경되면 완료 해제 (외국인등록증은 제외)
       const method = (updateData.activationMethod as string) ?? existing.activationMethod;
-      if (method !== "ARC개통") {
+      if (method !== "외국인등록증") {
         const stillComplete = allReviewsComplete && finalWorkStatus === "최종완료";
         if (!stillComplete) {
           updateData.supplementStatus = null;

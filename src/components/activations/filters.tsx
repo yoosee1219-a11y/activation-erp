@@ -74,6 +74,9 @@ export function Filters({
         </Select>
       )}
 
+      {/* 슬롯: CascadingFilter 등 외부 필터 (대분류/중분류) */}
+      {children}
+
       {/* 상태 */}
       <Select value={status} onValueChange={onStatusChange}>
         <SelectTrigger className="w-[130px]">
@@ -107,9 +110,6 @@ export function Filters({
         onChange={(e) => onDateToChange(e.target.value)}
         className="w-[150px]"
       />
-
-      {/* 슬롯: CascadingFilter 등 외부 필터 */}
-      {children}
 
       {hasFilters && (
         <Button variant="ghost" size="sm" onClick={onClear}>

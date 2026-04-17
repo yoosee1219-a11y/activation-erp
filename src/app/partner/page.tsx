@@ -919,7 +919,7 @@ export default function PartnerPage() {
                   autopayReview: false,
                 }}
                 getRowClassName={(row: PartnerActivationRow) => {
-                  const isArc = row.activationMethod === "ARC개통";
+                  const isArc = row.activationMethod === "외국인등록증";
 
                   // 개통방법에 따른 필수 서류/검수 필드
                   const requiredDocs = isArc

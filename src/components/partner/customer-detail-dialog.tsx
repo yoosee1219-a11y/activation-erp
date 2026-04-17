@@ -411,11 +411,36 @@ export function CustomerDetailDialog({
               ) : (
                 <EditableText label="가입유형" value={customer.subscriptionType} />
               )}
-              <EditableText
-                label="요금제"
-                value={customer.ratePlan}
-                onSave={canEdit ? (v) => update("ratePlan", v) : undefined}
-              />
+              {canEdit ? (
+                <div className="py-1.5">
+                  <p className="text-xs text-gray-500">요금제</p>
+                  <Select
+                    value={["5G심플", "유스5G심플", "LTE추격데69"].includes(customer.ratePlan || "") ? customer.ratePlan! : customer.ratePlan ? "기타" : ""}
+                    onValueChange={(v) => {
+                      if (v !== "기타") update("ratePlan", v);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-full text-sm border-dashed mt-0.5">
+                      <SelectValue placeholder="요금제 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5G심플">5G심플</SelectItem>
+                      <SelectItem value="유스5G심플">유스5G심플</SelectItem>
+                      <SelectItem value="LTE추격데69">LTE추격데69</SelectItem>
+                      <SelectItem value="기타">기타</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {!["5G심플", "유스5G심플", "LTE추격데69"].includes(customer.ratePlan || "") && (
+                    <EditableText
+                      label=""
+                      value={customer.ratePlan}
+                      onSave={(v) => update("ratePlan", v)}
+                    />
+                  )}
+                </div>
+              ) : (
+                <EditableText label="요금제" value={customer.ratePlan} />
+              )}
               {canEdit && isAdmin && staffList.length > 0 ? (
                 <div className="py-1.5">
                   <p className="text-xs text-gray-500">담당자</p>
@@ -484,7 +509,7 @@ export function CustomerDetailDialog({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="여권개통">여권개통</SelectItem>
-                          <SelectItem value="ARC개통">ARC개통</SelectItem>
+                          <SelectItem value="외국인등록증">외국인등록증</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -493,7 +518,7 @@ export function CustomerDetailDialog({
                   )}
 
                   <div className="py-1.5">
-                    <p className="text-xs text-gray-500">기기변경</p>
+                    <p className="text-xs text-gray-500">단말정보등록</p>
                     <div className="flex items-center gap-2 mt-1">
                       <Checkbox
                         checked={!!customer.deviceChangeConfirmed}
@@ -502,7 +527,7 @@ export function CustomerDetailDialog({
                           if (canEdit && isAdmin) update("deviceChangeConfirmed", checked ? "true" : "false");
                         }}
                       />
-                      <span className="text-sm">{customer.deviceChangeConfirmed ? "확인" : "미확인"}</span>
+                      <span className="text-sm">{customer.deviceChangeConfirmed ? "등록완료" : "미완료"}</span>
                     </div>
                   </div>
 

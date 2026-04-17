@@ -23,7 +23,9 @@ const HEADER_MAP: Record<string, string> = {
   "요금제": "ratePlan",
   // 개통 상태
   "확정기변": "deviceChangeConfirmed",
+  "단말정보등록": "deviceChangeConfirmed",
   "선택약정": "selectedCommitment",
+  "약정여부": "selectedCommitment",
   "개통일자": "activationDate",
   "개통날짜": "activationDate2",
   "개통여부": "activationStatus",
@@ -47,6 +49,7 @@ const HEADER_MAP: Record<string, string> = {
   "자동이체 등록여부": "autopayRegistered",
   // 기타
   "확정기변 선택약정 날짜": "commitmentDate",
+  "단말정보등록 약정여부 날짜": "commitmentDate",
   "비고": "notes",
   "개통방법": "activationMethod",
 };

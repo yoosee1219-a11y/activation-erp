@@ -24,6 +24,7 @@ import {
   getTodayTerminationCount,
   getMonthlyTerminationDetail,
   getTodayTerminationDetail,
+  getNoCommitmentStats,
 } from "@/lib/db/queries/activations";
 import {
   getAgencyIdsByMajorCategory,
@@ -71,6 +72,7 @@ export async function GET(request: NextRequest) {
             monthlyCompleted: [], todayCompleted: [],
             nameChangeIncomplete: [], todayTermination: 0,
             monthlyTerminationDetail: [], todayTerminationDetail: [],
+            noCommitmentStats: { totalCount: 0, byAgency: [] },
           });
         }
         agencyIds = allowedIds;
@@ -121,6 +123,7 @@ export async function GET(request: NextRequest) {
       todayTermination,
       monthlyTerminationDetail,
       todayTerminationDetail,
+      noCommitmentStats,
     ] = await Promise.all([
       getDashboardStats(agencyId, agencyIds),
       getMonthlyStats(agencyId, agencyIds),
@@ -146,6 +149,7 @@ export async function GET(request: NextRequest) {
       getTodayTerminationCount(agencyIds),
       getMonthlyTerminationDetail(agencyIds),
       getTodayTerminationDetail(agencyIds),
+      getNoCommitmentStats(agencyIds),
     ]);
 
     return NextResponse.json({
@@ -173,6 +177,7 @@ export async function GET(request: NextRequest) {
       todayTermination,
       monthlyTerminationDetail,
       todayTerminationDetail,
+      noCommitmentStats,
     });
   } catch (error) {
     console.error("Failed to fetch dashboard:", error);

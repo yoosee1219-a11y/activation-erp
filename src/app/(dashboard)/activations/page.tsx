@@ -476,7 +476,7 @@ export default function ActivationsPage() {
           highlightId={highlightId}
           getRowId={(row: ActivationRow) => row.id}
           getRowClassName={(row: ActivationRow) => {
-            const isArc = row.activationMethod === "ARC개통";
+            const isArc = row.activationMethod === "외국인등록증";
             const requiredDocs = isArc
               ? [row.applicationDocs, row.autopayInfo]
               : [row.applicationDocs, row.nameChangeDocs, row.arcInfo, row.autopayInfo];
@@ -528,7 +528,7 @@ export default function ActivationsPage() {
                           highlightId={highlightId}
                           getRowId={(row: ActivationRow) => row.id}
                           getRowClassName={(row: ActivationRow) => {
-                            const isArc = row.activationMethod === "ARC개통";
+                            const isArc = row.activationMethod === "외국인등록증";
                             const requiredDocs = isArc
                               ? [row.applicationDocs, row.autopayInfo]
                               : [row.applicationDocs, row.nameChangeDocs, row.arcInfo, row.autopayInfo];
@@ -579,7 +579,7 @@ export default function ActivationsPage() {
                       highlightId={highlightId}
                       getRowId={(row: ActivationRow) => row.id}
                       getRowClassName={(row: ActivationRow) => {
-                        const isArc = row.activationMethod === "ARC개통";
+                        const isArc = row.activationMethod === "외국인등록증";
                         const requiredDocs = isArc
                           ? [row.applicationDocs, row.autopayInfo]
                           : [row.applicationDocs, row.nameChangeDocs, row.arcInfo, row.autopayInfo];

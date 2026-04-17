@@ -236,15 +236,52 @@ export function getPartnerColumns(options: {
       header: "요금제",
       cell: ({ row }) => {
         const ws = row.original.workStatus || "입력중";
+        const locked = !isEditableStatus(ws);
+        const val = row.original.ratePlan || "";
+        const OPTS = ["5G심플", "유스5G심플", "LTE추격데69"];
+        const isStd = OPTS.includes(val);
+
+        if (locked) return <span className="text-sm text-gray-700">{val || "-"}</span>;
+
         return (
-          <EditableCell
-            value={row.original.ratePlan}
-            rowId={row.original.id}
-            field="ratePlan"
-            isLocked={!isEditableStatus(ws)}
-            onUpdate={onUpdate}
-            placeholder="요금제"
-          />
+          <div className="flex items-center gap-1">
+            <Select
+              value={isStd ? val : val ? "기타" : ""}
+              onValueChange={(v) => {
+                if (v === "기타") return;
+                onUpdate(row.original.id, "ratePlan", v);
+              }}
+            >
+              <SelectTrigger className="h-7 w-[100px] text-[10px] border-dashed">
+                <SelectValue placeholder="-" />
+              </SelectTrigger>
+              <SelectContent>
+                {OPTS.map((p) => (
+                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                ))}
+                <SelectItem value="기타">기타</SelectItem>
+              </SelectContent>
+            </Select>
+            {!isStd && val ? (
+              <EditableCell
+                value={val}
+                rowId={row.original.id}
+                field="ratePlan"
+                isLocked={false}
+                onUpdate={onUpdate}
+                placeholder="직접입력"
+              />
+            ) : !isStd ? (
+              <EditableCell
+                value=""
+                rowId={row.original.id}
+                field="ratePlan"
+                isLocked={false}
+                onUpdate={onUpdate}
+                placeholder="직접입력"
+              />
+            ) : null}
+          </div>
         );
       },
     },
@@ -346,7 +383,7 @@ export function getPartnerColumns(options: {
       accessorKey: "nameChangeDocs",
       header: "명의변경서류",
       cell: ({ row }) => {
-        if (row.original.activationMethod === "ARC개통") {
+        if (row.original.activationMethod === "외국인등록증") {
           return <span className="text-[10px] text-gray-300">해당없음</span>;
         }
         const ws = row.original.workStatus || "입력중";
@@ -369,7 +406,7 @@ export function getPartnerColumns(options: {
       accessorKey: "nameChangeDocsReview",
       header: "검수",
       cell: ({ row }) => {
-        if (row.original.activationMethod === "ARC개통") {
+        if (row.original.activationMethod === "외국인등록증") {
           return <span className="text-[10px] text-gray-300">-</span>;
         }
         const v = row.original.nameChangeDocsReview;
@@ -403,7 +440,7 @@ export function getPartnerColumns(options: {
       accessorKey: "arcInfo",
       header: "외국인등록증",
       cell: ({ row }) => {
-        if (row.original.activationMethod === "ARC개통") {
+        if (row.original.activationMethod === "외국인등록증") {
           return <span className="text-[10px] text-gray-300">해당없음</span>;
         }
         const ws = row.original.workStatus || "입력중";
@@ -427,7 +464,7 @@ export function getPartnerColumns(options: {
       accessorKey: "arcReview",
       header: "검수",
       cell: ({ row }) => {
-        if (row.original.activationMethod === "ARC개통") {
+        if (row.original.activationMethod === "외국인등록증") {
           return <span className="text-[10px] text-gray-300">-</span>;
         }
         const v = row.original.arcReview;
@@ -528,7 +565,7 @@ export function getPartnerColumns(options: {
             </Badge>
           );
         }
-        const isArc = r.activationMethod === "ARC개통";
+        const isArc = r.activationMethod === "외국인등록증";
         const docsComplete = isArc
           ? r.applicationDocsReview === "완료" && r.autopayReview === "완료"
           : r.applicationDocsReview === "완료" && r.nameChangeDocsReview === "완료" && r.arcReview === "완료" && r.autopayReview === "완료";

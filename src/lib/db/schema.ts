@@ -73,11 +73,11 @@ export const activations = pgTable("activations", {
   ratePlan: text("rate_plan"), // 요금제
 
   // 개통 상태
-  deviceChangeConfirmed: boolean("device_change_confirmed").default(false), // 확정기변
+  deviceChangeConfirmed: boolean("device_change_confirmed").default(false), // 단말정보등록
   selectedCommitment: boolean("selected_commitment").default(false), // 선택약정
-  commitmentDate: date("commitment_date"), // 확정기변/선택약정 날짜
+  commitmentDate: date("commitment_date"), // 단말정보등록/선택약정 날짜
   activationDate: date("activation_date"), // 개통일자
-  activationMethod: text("activation_method"), // 여권개통 | ARC개통
+  activationMethod: text("activation_method"), // 여권개통 | 외국인등록증
   activationStatus: text("activation_status").default("대기"), // 개통여부
   personInCharge: text("person_in_charge"), // 담당자
   workStatus: text("work_status").default("입력중"), // 진행상황: 입력중/개통요청/진행중/개통완료/보완요청/개통취소/보류/최종완료/해지

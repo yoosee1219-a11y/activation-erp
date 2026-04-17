@@ -12,6 +12,7 @@ import {
   Settings,
   LogOut,
   FileSpreadsheet,
+  FileWarning,
   CardSim,
   Calculator,
   Megaphone,
@@ -51,6 +52,11 @@ const mainNavItems = [
     label: "가져오기/내보내기",
     href: "/import",
     icon: FileSpreadsheet,
+  },
+  {
+    label: "거래처 업무현황",
+    href: "/supplement",
+    icon: FileWarning,
   },
 ];
 

@@ -741,9 +741,14 @@ export async function getMonthlyCompletedStats(agencyIds?: string[]) {
   const result = await db.execute(sql`
     SELECT
       COALESCE(SUM(sub.cnt), 0) as "totalCount",
-      COALESCE(json_agg(json_build_object('agencyId', sub.agency_id, 'agencyName', sub.agency_name, 'count', sub.cnt)), '[]'::json) as "byAgency"
+      COALESCE(SUM(sub.commitment_cnt), 0) as "commitmentCount",
+      COALESCE(SUM(sub.no_commitment_cnt), 0) as "noCommitmentCount",
+      COALESCE(json_agg(json_build_object('agencyId', sub.agency_id, 'agencyName', sub.agency_name, 'count', sub.cnt, 'commitmentCount', sub.commitment_cnt, 'noCommitmentCount', sub.no_commitment_cnt)), '[]'::json) as "byAgency"
     FROM (
-      SELECT a.agency_id, COALESCE(ag.name, a.agency_id) as agency_name, COUNT(*) as cnt
+      SELECT a.agency_id, COALESCE(ag.name, a.agency_id) as agency_name,
+        COUNT(*) as cnt,
+        COUNT(*) FILTER (WHERE a.selected_commitment = true) as commitment_cnt,
+        COUNT(*) FILTER (WHERE a.selected_commitment = false OR a.selected_commitment IS NULL) as no_commitment_cnt
       FROM activations a
       LEFT JOIN agencies ag ON a.agency_id = ag.id
       WHERE a.work_status IN ('개통완료', '완료')
@@ -752,9 +757,11 @@ export async function getMonthlyCompletedStats(agencyIds?: string[]) {
       GROUP BY a.agency_id, ag.name
     ) sub
   `);
-  const row = result.rows[0] || { totalCount: 0, byAgency: [] };
+  const row = result.rows[0] || { totalCount: 0, commitmentCount: 0, noCommitmentCount: 0, byAgency: [] };
   return {
     totalCount: Number(row.totalCount || 0),
+    commitmentCount: Number(row.commitmentCount || 0),
+    noCommitmentCount: Number(row.noCommitmentCount || 0),
     byAgency: Array.isArray(row.byAgency) ? row.byAgency : [],
   };
 }
@@ -888,4 +895,38 @@ export async function getTodayTerminationDetail(agencyIds?: string[]) {
     ORDER BY a.termination_date DESC
   `);
   return result.rows;
+}
+
+// ── KPI 카드: 당월 무약정 통계 (거래처별) ──
+export async function getNoCommitmentStats(agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`AND a.agency_id IN (${inList(agencyIds)})`
+    : sql``;
+
+  const now = new Date();
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const nextMonth = now.getMonth() + 2 > 12
+    ? `${now.getFullYear() + 1}-01-01`
+    : `${now.getFullYear()}-${String(now.getMonth() + 2).padStart(2, "0")}-01`;
+
+  const result = await db.execute(sql`
+    SELECT
+      a.agency_id as "agencyId",
+      COALESCE(ag.name, a.agency_id) as "agencyName",
+      COUNT(*)::int as "count"
+    FROM activations a
+    LEFT JOIN agencies ag ON a.agency_id = ag.id
+    WHERE a.selected_commitment = false
+      AND a.work_status NOT IN ('개통취소', '해지')
+      AND a.activation_date >= ${monthStart}
+      AND a.activation_date < ${nextMonth}
+      ${agencyFilter}
+    GROUP BY a.agency_id, ag.name
+    ORDER BY "count" DESC
+  `);
+
+  const byAgency = result.rows as Array<{ agencyId: string; agencyName: string; count: number }>;
+  const totalCount = byAgency.reduce((s, r) => s + Number(r.count), 0);
+
+  return { totalCount, byAgency };
 }

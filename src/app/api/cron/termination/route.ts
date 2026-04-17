@@ -23,7 +23,7 @@ export async function GET(request: Request) {
 
   try {
     // Step 1: Set termination alert for overdue items (no alert yet)
-    // ARC개통은 이미 외국인등록증 보유 → 보완기한 해지 대상 아님. 여권개통만 해당.
+    // 외국인등록증은 보완기한 해지 대상 아님. 여권개통만 해당.
     const overdueItems = await db
       .select({
         id: activations.id,

@@ -140,6 +140,77 @@ function InlineTextCell({
   );
 }
 
+// ─── Inline rate plan cell (Select + 기타) ───
+const RATE_PLAN_OPTIONS = ["5G심플", "유스5G심플", "LTE추격데69"];
+
+function InlineRatePlanCell({
+  value,
+  onSave,
+}: {
+  value: string;
+  onSave: (v: string) => void;
+}) {
+  const isStandard = RATE_PLAN_OPTIONS.includes(value);
+  const [editingCustom, setEditingCustom] = useState(false);
+  const [customDraft, setCustomDraft] = useState("");
+
+  return (
+    <div className="flex items-center gap-1">
+      <Select
+        value={editingCustom ? "기타" : isStandard ? value : value ? "기타" : ""}
+        onValueChange={(v) => {
+          if (v === "기타") {
+            setCustomDraft(isStandard ? "" : value);
+            setEditingCustom(true);
+          } else {
+            setEditingCustom(false);
+            onSave(v);
+          }
+        }}
+      >
+        <SelectTrigger className="h-7 w-[100px] text-[10px] border-dashed">
+          <SelectValue placeholder="-" />
+        </SelectTrigger>
+        <SelectContent>
+          {RATE_PLAN_OPTIONS.map((p) => (
+            <SelectItem key={p} value={p}>{p}</SelectItem>
+          ))}
+          <SelectItem value="기타">기타</SelectItem>
+        </SelectContent>
+      </Select>
+      {editingCustom ? (
+        <input
+          autoFocus
+          className="h-7 w-[80px] rounded border border-blue-400 bg-white px-2 text-xs focus:outline-none"
+          value={customDraft}
+          onChange={(e) => setCustomDraft(e.target.value)}
+          onBlur={() => {
+            setEditingCustom(false);
+            if (customDraft) onSave(customDraft);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              setEditingCustom(false);
+              if (customDraft) onSave(customDraft);
+            }
+            if (e.key === "Escape") setEditingCustom(false);
+          }}
+        />
+      ) : !isStandard && value ? (
+        <span
+          className="text-xs cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5"
+          onClick={() => {
+            setCustomDraft(value);
+            setEditingCustom(true);
+          }}
+        >
+          {value}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 // ─── Inline checkbox cell ───
 function InlineCheckboxCell({
   checked,
@@ -392,7 +463,7 @@ export function getColumns(options: {
           return (
             <Badge
               className={
-                current === "ARC개통"
+                current === "외국인등록증"
                   ? "bg-purple-100 text-purple-700"
                   : "bg-sky-100 text-sky-700"
               }
@@ -413,7 +484,7 @@ export function getColumns(options: {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="여권개통">여권개통</SelectItem>
-              <SelectItem value="ARC개통">ARC개통</SelectItem>
+              <SelectItem value="외국인등록증">외국인등록증</SelectItem>
             </SelectContent>
           </Select>
         );
@@ -461,18 +532,17 @@ export function getColumns(options: {
         const val = row.original.ratePlan || "";
         if (!onInlineUpdate) return <span className="text-xs">{val || "-"}</span>;
         return (
-          <InlineTextCell
+          <InlineRatePlanCell
             value={val}
             onSave={(v) => onInlineUpdate(row.original.id, "ratePlan", v)}
-            width="w-[100px]"
           />
         );
       },
     },
-    // ─── 확정기변 (인라인 체크박스) ───
+    // ─── 단말정보등록 (인라인 체크박스) ───
     {
       accessorKey: "deviceChangeConfirmed",
-      header: "확정기변",
+      header: "단말정보등록",
       size: 60,
       cell: ({ row }) => {
         const val = !!row.original.deviceChangeConfirmed;
@@ -487,10 +557,10 @@ export function getColumns(options: {
         );
       },
     },
-    // ─── 선택약정 (인라인 체크박스) ───
+    // ─── 약정여부 (인라인 체크박스) ───
     {
       accessorKey: "selectedCommitment",
-      header: "선택약정",
+      header: "약정여부",
       size: 60,
       cell: ({ row }) => {
         const val = !!row.original.selectedCommitment;
@@ -744,8 +814,8 @@ export function getColumns(options: {
             </Badge>
           );
         }
-        // ARC개통 + 최종완료: 검수 불필요
-        if (r.activationMethod === "ARC개통" && r.workStatus === "최종완료") {
+        // 외국인등록증 + 최종완료: 검수 불필요
+        if (r.activationMethod === "외국인등록증" && r.workStatus === "최종완료") {
           return (
             <Badge className="bg-green-100 text-green-700 text-[10px]">
               완료

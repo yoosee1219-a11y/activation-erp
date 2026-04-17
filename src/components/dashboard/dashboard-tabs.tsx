@@ -129,7 +129,9 @@ interface DashboardTabsProps {
   };
   monthlyCompleted: {
     totalCount: number;
-    byAgency: Array<{ agencyId: string; agencyName: string; count: number }>;
+    commitmentCount: number;
+    noCommitmentCount: number;
+    byAgency: Array<{ agencyId: string; agencyName: string; count: number; commitmentCount: number; noCommitmentCount: number }>;
   };
   todayCompleted: Array<{
     id: string;
@@ -170,6 +172,10 @@ interface DashboardTabsProps {
     terminationReason: string | null;
     workStatus: string | null;
   }>;
+  noCommitmentStats?: {
+    totalCount: number;
+    byAgency: Array<{ agencyId: string; agencyName: string; count: number }>;
+  };
   categories: CategoryNode[];
   agencies: Agency[];
 }
@@ -214,6 +220,7 @@ export function DashboardTabs(props: DashboardTabsProps) {
           todayTermination={props.todayTermination}
           monthlyTerminationDetail={props.monthlyTerminationDetail}
           todayTerminationDetail={props.todayTerminationDetail}
+          noCommitmentStats={props.noCommitmentStats}
           categories={props.categories}
           agencies={props.agencies}
           agencyStats={props.agencyStats}

@@ -149,7 +149,9 @@ interface DashboardData {
   };
   monthlyCompleted: {
     totalCount: number;
-    byAgency: Array<{ agencyId: string; agencyName: string; count: number }>;
+    commitmentCount: number;
+    noCommitmentCount: number;
+    byAgency: Array<{ agencyId: string; agencyName: string; count: number; commitmentCount: number; noCommitmentCount: number }>;
   };
   todayCompleted: Array<{
     id: string;
@@ -271,7 +273,7 @@ export default function DashboardPage() {
         supplementStats={data.supplementStats || []}
         supplementList={data.supplementList || []}
         terminationStats={data.terminationStats || { monthlyCount: 0, alertCount: 0, byAgency: [] }}
-        monthlyCompleted={data.monthlyCompleted || { totalCount: 0, byAgency: [] }}
+        monthlyCompleted={data.monthlyCompleted || { totalCount: 0, commitmentCount: 0, noCommitmentCount: 0, byAgency: [] }}
         todayCompleted={data.todayCompleted || []}
         nameChangeIncomplete={data.nameChangeIncomplete || []}
         todayTermination={data.todayTermination || { count: 0 }}

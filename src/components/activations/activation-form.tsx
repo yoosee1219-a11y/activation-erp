@@ -40,6 +40,10 @@ export function ActivationForm({
 }: ActivationFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const RATE_PLAN_OPTIONS = ["5G심플", "유스5G심플", "LTE추격데69"];
+  const [ratePlanCustomMode, setRatePlanCustomMode] = useState(
+    () => !!(initialData?.ratePlan) && !["5G심플", "유스5G심플", "LTE추격데69"].includes((initialData?.ratePlan as string) || "")
+  );
   const [formData, setFormData] = useState({
     agencyId: (initialData?.agencyId as string) || "",
     customerName: (initialData?.customerName as string) || "",
@@ -253,11 +257,36 @@ export function ActivationForm({
 
           <div className="space-y-2">
             <Label htmlFor="ratePlan">요금제</Label>
-            <Input
-              id="ratePlan"
-              value={formData.ratePlan}
-              onChange={(e) => updateField("ratePlan", e.target.value)}
-            />
+            <Select
+              value={RATE_PLAN_OPTIONS.includes(formData.ratePlan) ? formData.ratePlan : ratePlanCustomMode ? "기타" : ""}
+              onValueChange={(v) => {
+                if (v === "기타") {
+                  setRatePlanCustomMode(true);
+                  updateField("ratePlan", "");
+                } else {
+                  setRatePlanCustomMode(false);
+                  updateField("ratePlan", v);
+                }
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="요금제 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                {RATE_PLAN_OPTIONS.map((p) => (
+                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                ))}
+                <SelectItem value="기타">기타</SelectItem>
+              </SelectContent>
+            </Select>
+            {ratePlanCustomMode && !RATE_PLAN_OPTIONS.includes(formData.ratePlan) && (
+              <Input
+                id="ratePlan"
+                value={formData.ratePlan}
+                onChange={(e) => updateField("ratePlan", e.target.value)}
+                placeholder="요금제 직접 입력"
+              />
+            )}
           </div>
         </CardContent>
       </Card>
@@ -313,7 +342,7 @@ export function ActivationForm({
                 updateField("deviceChangeConfirmed", !!v)
               }
             />
-            <Label htmlFor="deviceChangeConfirmed">확정기변</Label>
+            <Label htmlFor="deviceChangeConfirmed">단말정보등록</Label>
           </div>
 
           <div className="flex items-center space-x-2 pt-6">
@@ -324,7 +353,7 @@ export function ActivationForm({
                 updateField("selectedCommitment", !!v)
               }
             />
-            <Label htmlFor="selectedCommitment">선택약정</Label>
+            <Label htmlFor="selectedCommitment">약정여부</Label>
           </div>
 
           <div className="space-y-2">

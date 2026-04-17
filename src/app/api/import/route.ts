@@ -25,7 +25,9 @@ const HEADER_MAP: Record<string, string> = {
   "요금제": "ratePlan",
   // 개통 상태
   "확정기변": "deviceChangeConfirmed",
+  "단말정보등록": "deviceChangeConfirmed",
   "선택약정": "selectedCommitment",
+  "약정여부": "selectedCommitment",
   "개통일자": "activationDate",
   "개통날짜": "activationDate2",
   "개통여부": "activationStatus",
@@ -49,6 +51,7 @@ const HEADER_MAP: Record<string, string> = {
   "자동이체 등록여부": "autopayRegistered",
   // 기타
   "확정기변 선택약정 날짜": "commitmentDate",
+  "단말정보등록 약정여부 날짜": "commitmentDate",
   "비고": "notes",
   "개통방법": "activationMethod",
 };
@@ -66,6 +69,7 @@ const MULTILINE_HEADER_MAP: Record<string, string> = {
   "보완기한": "arcSupplementDeadline",
   "자동이체\n등록여부": "autopayRegistered",
   "확정기변\n선택약정\n날짜": "commitmentDate",
+  "단말정보등록\n약정여부\n날짜": "commitmentDate",
   "가입신청서류\n(여권,사증발급확인서,입학허가서,가입서류)": "applicationDocs",
   "외국인등록증 검수": "arcReview",
   "자동이체 검수": "autopayReview",
@@ -366,8 +370,8 @@ export async function POST(request: NextRequest) {
           commitmentDate: parseDate(row.commitmentDate || ""),
           activationMethod: row.activationMethod || null,
           workStatus: row.activationStatus === "개통완료" ? "개통완료" : "입력중",
-          // 개통완료 + 개통날짜 있으면 보완기한 자동설정 (ARC개통 제외)
-          ...(row.activationStatus === "개통완료" && activationDate && row.activationMethod !== "ARC개통" && !parseDate(row.arcSupplementDeadline || "")
+          // 개통완료 + 개통날짜 있으면 보완기한 자동설정 (외국인등록증 제외)
+          ...(row.activationStatus === "개통완료" && activationDate && row.activationMethod !== "외국인등록증" && !parseDate(row.arcSupplementDeadline || "")
             ? (() => {
                 const dl = new Date(activationDate);
                 dl.setDate(dl.getDate() + 99);
