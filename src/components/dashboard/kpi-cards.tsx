@@ -22,10 +22,8 @@ import {
   AlertTriangle,
   CalendarDays,
   ChevronDown,
-  ChevronUp,
   ChevronRight,
   XCircle,
-  FileX,
 } from "lucide-react";
 import { format } from "date-fns";
 import type { CategoryNode, Agency } from "@/hooks/use-agency-filter";
@@ -142,6 +140,15 @@ interface KpiCardsProps {
     terminationReason: string | null;
     workStatus: string | null;
   }>;
+  monthlyCompletedDetail?: Array<{
+    id: string;
+    agencyId: string;
+    agencyName: string;
+    customerName: string;
+    newPhoneNumber: string | null;
+    activationDate: string | null;
+    selectedCommitment: boolean;
+  }>;
   noCommitmentStats?: {
     totalCount: number;
     byAgency: Array<{ agencyId: string; agencyName: string; count: number }>;
@@ -160,7 +167,7 @@ interface KpiCardsProps {
   }>;
 }
 
-type KpiKey = "monthlyCompleted" | "monthlyPending" | "nameChangeIncomplete" | "monthlyTermination" | "todayCompleted" | "todayPending" | "supplement" | "todayTermination" | "noCommitment";
+type KpiKey = "monthlyCompleted" | "monthlyPending" | "nameChangeIncomplete" | "monthlyTermination" | "todayCompleted" | "todayPending" | "supplement";
 
 /* ─── Count hierarchy types ─── */
 
@@ -609,12 +616,15 @@ export function KpiCards({
   todayTermination = { count: 0 },
   monthlyTerminationDetail = [],
   todayTerminationDetail = [],
+  monthlyCompletedDetail = [],
   noCommitmentStats = { totalCount: 0, byAgency: [] },
   categories = [],
   agencies = [],
   agencyStats = [],
 }: KpiCardsProps) {
   const [expanded, setExpanded] = useState<KpiKey | null>(null);
+  type CommitmentFilter = "all" | "commitment" | "noCommitment";
+  const [commitmentFilter, setCommitmentFilter] = useState<CommitmentFilter>("all");
   const [drillMajors, setDrillMajors] = useState<Set<string>>(new Set());
   const [drillMediums, setDrillMediums] = useState<Set<string>>(new Set());
   const [detailCustomer, setDetailCustomer] =
@@ -672,21 +682,6 @@ export function KpiCards({
 
     return map;
   }, [hasHierarchy, categories, agencies]);
-
-  // 당월 개통완료 거래처별 데이터
-  const monthlyCompletedByAgency = useMemo<CountItem[]>(() => {
-    return (monthlyCompleted.byAgency || []).map(a => ({
-      agencyId: a.agencyId,
-      agencyName: a.agencyName || a.agencyId,
-      count: Number(a.count),
-    })).sort((a, b) => b.count - a.count);
-  }, [monthlyCompleted.byAgency]);
-
-  // ─── Count hierarchies ───
-  const monthlyCompletedHierarchy = useMemo(
-    () => (hasHierarchy ? buildCountHierarchy(monthlyCompletedByAgency, categories, agencies) : null),
-    [hasHierarchy, monthlyCompletedByAgency, categories, agencies]
-  );
 
   // ─── Detail groupings (flat) ───
   const pendingByAgency = useMemo(() => {
@@ -794,34 +789,30 @@ export function KpiCards({
     [hasHierarchy, monthlyTermDetailByAgency, agencyCatMap, categories]
   );
 
-  const todayTermDetailByAgency = useMemo(() => {
-    const groups: Record<string, { name: string; items: typeof todayTerminationDetail }> = {};
-    todayTerminationDetail.forEach((item) => {
+  // ─── 당월 개통완료 상세 (필터링 + 거래처 그룹핑) ───
+  const monthlyCompletedDetailFiltered = useMemo(() => {
+    return monthlyCompletedDetail.filter((item) => {
+      if (commitmentFilter === "commitment") return item.selectedCommitment === true;
+      if (commitmentFilter === "noCommitment") return item.selectedCommitment === false;
+      return true;
+    });
+  }, [monthlyCompletedDetail, commitmentFilter]);
+
+  const monthlyCompletedDetailByAgency = useMemo(() => {
+    const groups: Record<string, { name: string; items: typeof monthlyCompletedDetailFiltered }> = {};
+    monthlyCompletedDetailFiltered.forEach((item) => {
       const key = item.agencyId;
       if (!groups[key]) groups[key] = { name: item.agencyName || item.agencyId, items: [] };
       groups[key].items.push(item);
     });
     return Object.entries(groups).sort((a, b) => b[1].items.length - a[1].items.length);
-  }, [todayTerminationDetail]);
+  }, [monthlyCompletedDetailFiltered]);
 
-  const todayTermDetailHierarchy = useMemo(
-    () => (hasHierarchy ? buildDetailHierarchy(todayTermDetailByAgency as AgencyEntry[], agencyCatMap, categories) : null),
-    [hasHierarchy, todayTermDetailByAgency, agencyCatMap, categories]
+  const monthlyCompletedDetailHierarchy = useMemo(
+    () => (hasHierarchy ? buildDetailHierarchy(monthlyCompletedDetailByAgency as AgencyEntry[], agencyCatMap, categories) : null),
+    [hasHierarchy, monthlyCompletedDetailByAgency, agencyCatMap, categories]
   );
 
-  // ─── 무약정 데이터 ───
-  const noCommitmentByAgency = useMemo<CountItem[]>(() => {
-    return (noCommitmentStats.byAgency || []).map(a => ({
-      agencyId: a.agencyId,
-      agencyName: a.agencyName || a.agencyId,
-      count: Number(a.count),
-    })).sort((a, b) => b.count - a.count);
-  }, [noCommitmentStats.byAgency]);
-
-  const noCommitmentHierarchy = useMemo(
-    () => (hasHierarchy ? buildCountHierarchy(noCommitmentByAgency, categories, agencies) : null),
-    [hasHierarchy, noCommitmentByAgency, categories, agencies]
-  );
 
   // ─── 고객명 클릭 → 상세 다이얼로그 열기 ───
   const openCustomerDetail = async (activationId: string) => {
@@ -1013,6 +1004,55 @@ export function KpiCards({
               </TableRow>
             );
           })}
+        </TableBody>
+      </Table>
+    </div>
+  );
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const renderMonthlyCompletedDetailAgency = (agencyId: string, group: { name: string; items: any[] }) => (
+    <div key={agencyId}>
+      <div className="flex items-center gap-2 mb-2">
+        <h3 className="font-semibold text-sm">{group.name}</h3>
+        <Badge variant="secondary">{group.items.length}건</Badge>
+      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>고객명</TableHead>
+            <TableHead>번호</TableHead>
+            <TableHead className="text-center">개통일</TableHead>
+            <TableHead className="text-center">약정</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {group.items.map((item: { id: string; customerName: string; newPhoneNumber: string | null; activationDate: string | null; selectedCommitment: boolean }) => (
+            <TableRow key={item.id}>
+              <TableCell>
+                <button
+                  className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-left"
+                  onClick={(e) => { e.stopPropagation(); openCustomerDetail(item.id); }}
+                >
+                  {item.customerName}
+                </button>
+              </TableCell>
+              <TableCell className="text-sm">{item.newPhoneNumber || "-"}</TableCell>
+              <TableCell className="text-center">
+                {item.activationDate ? (
+                  <Badge className="bg-emerald-100 text-emerald-800">
+                    {format(new Date(item.activationDate), "yyyy-MM-dd")}
+                  </Badge>
+                ) : (
+                  <span className="text-gray-400">-</span>
+                )}
+              </TableCell>
+              <TableCell className="text-center">
+                <Badge className={item.selectedCommitment ? "bg-blue-100 text-blue-800" : "bg-indigo-100 text-indigo-800"}>
+                  {item.selectedCommitment ? "약정" : "무약정"}
+                </Badge>
+              </TableCell>
+            </TableRow>
+          ))}
         </TableBody>
       </Table>
     </div>
@@ -1249,147 +1289,110 @@ export function KpiCards({
       ring: "ring-rose-500",
       expandable: true,
     },
-    {
-      key: "todayTermination",
-      title: "당일 해지",
-      value: todayTermination.count,
-      subtitle: "오늘 해지 처리",
-      icon: XCircle,
-      color: "text-red-600",
-      bg: "bg-red-50",
-      ring: "ring-red-500",
-      expandable: true,
-    },
-    // Row 3
-    {
-      key: "noCommitment",
-      title: "당월 무약정",
-      value: noCommitmentStats.totalCount,
-      subtitle: "약정 미선택 개통",
-      icon: FileX,
-      color: "text-indigo-600",
-      bg: "bg-indigo-50",
-      ring: "ring-indigo-500",
-      expandable: true,
-    },
   ];
 
   return (
     <div className="space-y-4">
-      {/* KPI 카드 그리드 */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      {/* KPI 탭 바 (책갈피 스타일) */}
+      <div
+        role="tablist"
+        aria-label="대시보드 KPI 탭"
+        className="flex flex-wrap items-end gap-1 border-b border-gray-200"
+      >
         {cards.map((card) => {
-          const isExpanded = expanded === card.key;
+          const isActive = expanded === card.key;
           return (
-            <Card
+            <button
               key={card.key}
-              className={`transition-all ${
-                card.expandable ? "cursor-pointer hover:shadow-md" : ""
-              } ${isExpanded ? `ring-2 ${card.ring}` : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              aria-controls={`kpi-panel-${card.key}`}
+              disabled={!card.expandable}
               onClick={() => card.expandable && toggle(card.key)}
+              className={`group relative flex min-w-0 flex-1 basis-[9rem] items-center justify-center gap-2 rounded-t-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-400 ${
+                isActive
+                  ? "-translate-y-1 border-x border-t border-gray-200 bg-white shadow-[0_-4px_12px_-2px_rgba(0,0,0,0.08)]"
+                  : "border border-transparent bg-gray-50 text-gray-600 hover:-translate-y-0.5 hover:bg-gray-100"
+              } ${card.expandable ? "cursor-pointer" : "cursor-default opacity-60"}`}
             >
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <div>
-                  <CardTitle className="text-sm font-medium text-gray-500">
-                    {card.title}
-                  </CardTitle>
-                  {card.subtitle && (
-                    <span className="text-xs text-gray-400">{card.subtitle}</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-1">
-                  {card.expandable &&
-                    (isExpanded ? (
-                      <ChevronUp className="h-4 w-4 text-gray-400" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4 text-gray-400" />
-                    ))}
-                  <div className={`rounded-lg p-2 ${card.bg}`}>
-                    <card.icon className={`h-4 w-4 ${card.color}`} />
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{card.value}</div>
-              </CardContent>
-            </Card>
+              <div
+                className={`rounded-md p-1 transition-colors ${
+                  isActive ? card.bg : "bg-transparent"
+                }`}
+              >
+                <card.icon
+                  className={`h-3.5 w-3.5 ${isActive ? card.color : "text-gray-400"}`}
+                />
+              </div>
+              <span className={`whitespace-nowrap ${isActive ? "text-gray-900" : ""}`}>{card.title}</span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${
+                  isActive
+                    ? `${card.bg} ${card.color}`
+                    : "bg-gray-200 text-gray-700"
+                }`}
+              >
+                {card.value}
+              </span>
+              {/* subtitle은 활성 탭 폭을 흔들어 줄바꿈을 유발 → 패널 헤더로 이동 */}
+            </button>
           );
         })}
       </div>
 
+      {!expanded && (
+        <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50/50 py-10 text-center text-sm text-gray-400">
+          위 항목을 클릭하면 상세 내역이 표시됩니다
+        </div>
+      )}
+
       {/* ──── 당월 개통완료 drill-down ──── */}
-      {expanded === "monthlyCompleted" && monthlyCompletedByAgency.length > 0 && (
+      {expanded === "monthlyCompleted" && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
-              당월 개통완료 거래처별 건수
+              당월 개통완료 상세
+              <Badge className="bg-green-100 text-green-800">{monthlyCompletedDetailFiltered.length}건</Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex gap-3">
-              <div className="flex-1 rounded-lg border bg-blue-50 p-3 text-center">
-                <p className="text-xs text-gray-500">선택약정</p>
-                <p className="text-2xl font-bold text-blue-600">{monthlyCompleted.commitmentCount}<span className="text-sm font-normal">건</span></p>
-              </div>
-              <div className="flex-1 rounded-lg border bg-indigo-50 p-3 text-center">
-                <p className="text-xs text-gray-500">무약정</p>
-                <p className="text-2xl font-bold text-indigo-600">{monthlyCompleted.noCommitmentCount}<span className="text-sm font-normal">건</span></p>
-              </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${commitmentFilter === "all" ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-100"}`}
+                onClick={() => setCommitmentFilter("all")}
+              >
+                전체 {monthlyCompleted.totalCount}건
+              </button>
+              <button
+                className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${commitmentFilter === "commitment" ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-700 hover:bg-blue-100"}`}
+                onClick={() => setCommitmentFilter("commitment")}
+              >
+                선택약정 {monthlyCompleted.commitmentCount}건
+              </button>
+              <button
+                className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${commitmentFilter === "noCommitment" ? "bg-indigo-600 text-white" : "bg-indigo-50 text-indigo-700 hover:bg-indigo-100"}`}
+                onClick={() => setCommitmentFilter("noCommitment")}
+              >
+                무약정 {monthlyCompleted.noCommitmentCount}건
+              </button>
             </div>
-            {monthlyCompletedHierarchy ? (
-              <CountHierarchyTable
-                hierarchy={monthlyCompletedHierarchy}
-                total={monthlyCompleted.totalCount}
-                badgeClass="bg-green-100 text-green-800"
+            {monthlyCompletedDetailFiltered.length === 0 ? (
+              <p className="py-8 text-center text-sm text-gray-400">해당 조건의 데이터가 없습니다.</p>
+            ) : monthlyCompletedDetailHierarchy ? (
+              <DetailHierarchySection
+                hierarchy={monthlyCompletedDetailHierarchy}
                 drillMajors={drillMajors}
                 drillMediums={drillMediums}
                 toggleMajor={toggleDrillMajor}
                 toggleMedium={toggleDrillMedium}
+                renderAgencyTable={renderMonthlyCompletedDetailAgency}
               />
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>거래처</TableHead>
-                    <TableHead className="text-center">개통 건수</TableHead>
-                    <TableHead className="text-center">선택약정</TableHead>
-                    <TableHead className="text-center">무약정</TableHead>
-                    <TableHead className="text-right">비율</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {monthlyCompletedByAgency.map((row) => {
-                    const original = (monthlyCompleted.byAgency || []).find(a => a.agencyId === row.agencyId);
-                    return (
-                      <TableRow key={row.agencyId}>
-                        <TableCell className="font-medium">{row.agencyName}</TableCell>
-                        <TableCell className="text-center">
-                          <Badge className="bg-green-100 text-green-800">{row.count}건</Badge>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge className="bg-blue-100 text-blue-800">{Number(original?.commitmentCount || 0)}건</Badge>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge className="bg-indigo-100 text-indigo-800">{Number(original?.noCommitmentCount || 0)}건</Badge>
-                        </TableCell>
-                        <TableCell className="text-right text-sm text-gray-500">
-                          {monthlyCompleted.totalCount > 0
-                            ? ((Number(row.count) / monthlyCompleted.totalCount) * 100).toFixed(1)
-                            : 0}%
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                  <TableRow className="bg-gray-50 font-bold">
-                    <TableCell>합계</TableCell>
-                    <TableCell className="text-center">{monthlyCompleted.totalCount}건</TableCell>
-                    <TableCell className="text-center">{monthlyCompleted.commitmentCount}건</TableCell>
-                    <TableCell className="text-center">{monthlyCompleted.noCommitmentCount}건</TableCell>
-                    <TableCell className="text-right">100%</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+              <div className="space-y-6">
+                {monthlyCompletedDetailByAgency.map(([agencyId, group]) => renderMonthlyCompletedDetailAgency(agencyId, group))}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -1613,42 +1616,6 @@ export function KpiCards({
         </Card>
       )}
 
-      {/* ──── 당일 해지 drill-down ──── */}
-      {expanded === "todayTermination" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <XCircle className="h-4 w-4 text-red-600" />
-              당일 해지 ({todayTermination.count}건)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {todayTermDetailByAgency.length > 0 ? (
-              todayTermDetailHierarchy ? (
-                <DetailHierarchySection
-                  hierarchy={todayTermDetailHierarchy}
-                  drillMajors={drillMajors}
-                  drillMediums={drillMediums}
-                  toggleMajor={toggleDrillMajor}
-                  toggleMedium={toggleDrillMedium}
-                  renderAgencyTable={renderTerminationAgency}
-                />
-              ) : (
-                <div className="space-y-6">
-                  {todayTermDetailByAgency.map(([agencyId, group]) =>
-                    renderTerminationAgency(agencyId, group)
-                  )}
-                </div>
-              )
-            ) : (
-              <div className="py-8 text-center text-gray-500">
-                오늘 해지 처리된 건이 없습니다.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {/* ──── 보완요청 대기 drill-down ──── */}
       {expanded === "supplement" && (
         <Card>
@@ -1685,68 +1652,11 @@ export function KpiCards({
         </Card>
       )}
 
-      {/* ──── 무약정 drill-down ──── */}
-      {expanded === "noCommitment" && noCommitmentByAgency.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <FileX className="h-4 w-4 text-indigo-600" />
-              당월 무약정 거래처별 건수
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {noCommitmentHierarchy ? (
-              <CountHierarchyTable
-                hierarchy={noCommitmentHierarchy}
-                total={noCommitmentStats.totalCount}
-                badgeClass="bg-indigo-100 text-indigo-800"
-                drillMajors={drillMajors}
-                drillMediums={drillMediums}
-                toggleMajor={toggleDrillMajor}
-                toggleMedium={toggleDrillMedium}
-              />
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>거래처</TableHead>
-                    <TableHead className="text-center">무약정 건수</TableHead>
-                    <TableHead className="text-right">비율</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {noCommitmentByAgency.map((row) => (
-                    <TableRow key={row.agencyId}>
-                      <TableCell className="font-medium">{row.agencyName}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge className="bg-indigo-100 text-indigo-800">{row.count}건</Badge>
-                      </TableCell>
-                      <TableCell className="text-right text-sm text-gray-500">
-                        {noCommitmentStats.totalCount > 0
-                          ? ((Number(row.count) / noCommitmentStats.totalCount) * 100).toFixed(1)
-                          : 0}%
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  <TableRow className="bg-gray-50 font-bold">
-                    <TableCell>합계</TableCell>
-                    <TableCell className="text-center">{noCommitmentStats.totalCount}건</TableCell>
-                    <TableCell className="text-right">100%</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {/* 데이터 없을 때 */}
       {expanded &&
-        ((expanded === "monthlyCompleted" && monthlyCompletedByAgency.length === 0) ||
-          (expanded === "monthlyPending" && pendingByAgency.length === 0) ||
+        ((expanded === "monthlyPending" && pendingByAgency.length === 0) ||
           (expanded === "todayCompleted" && todayCompletedByAgency.length === 0) ||
-          (expanded === "nameChangeIncomplete" && nameChangeByAgency.length === 0) ||
-          (expanded === "noCommitment" && noCommitmentByAgency.length === 0)) && (
+          (expanded === "nameChangeIncomplete" && nameChangeByAgency.length === 0)) && (
           <Card>
             <CardContent className="py-8 text-center text-gray-500">
               해당하는 건이 없습니다.

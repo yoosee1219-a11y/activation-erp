@@ -172,6 +172,15 @@ interface DashboardTabsProps {
     terminationReason: string | null;
     workStatus: string | null;
   }>;
+  monthlyCompletedDetail: Array<{
+    id: string;
+    agencyId: string;
+    agencyName: string;
+    customerName: string;
+    newPhoneNumber: string | null;
+    activationDate: string | null;
+    selectedCommitment: boolean;
+  }>;
   noCommitmentStats?: {
     totalCount: number;
     byAgency: Array<{ agencyId: string; agencyName: string; count: number }>;
@@ -220,6 +229,7 @@ export function DashboardTabs(props: DashboardTabsProps) {
           todayTermination={props.todayTermination}
           monthlyTerminationDetail={props.monthlyTerminationDetail}
           todayTerminationDetail={props.todayTerminationDetail}
+          monthlyCompletedDetail={props.monthlyCompletedDetail}
           noCommitmentStats={props.noCommitmentStats}
           categories={props.categories}
           agencies={props.agencies}

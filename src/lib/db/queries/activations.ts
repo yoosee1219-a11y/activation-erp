@@ -766,6 +766,31 @@ export async function getMonthlyCompletedStats(agencyIds?: string[]) {
   };
 }
 
+// ── KPI 카드: 당월 개통완료 상세 (개별 고객 목록) ──
+export async function getMonthlyCompletedDetail(agencyIds?: string[]) {
+  const agencyFilter = agencyIds && agencyIds.length > 0
+    ? sql`AND a.agency_id IN (${inList(agencyIds)})`
+    : sql``;
+
+  const result = await db.execute(sql`
+    SELECT
+      a.id,
+      a.agency_id as "agencyId",
+      COALESCE(ag.name, a.agency_id) as "agencyName",
+      a.customer_name as "customerName",
+      a.new_phone_number as "newPhoneNumber",
+      a.activation_date as "activationDate",
+      COALESCE(a.selected_commitment, false) as "selectedCommitment"
+    FROM activations a
+    LEFT JOIN agencies ag ON a.agency_id = ag.id
+    WHERE a.work_status IN ('개통완료', '완료')
+      AND TO_CHAR(COALESCE(a.activation_date, a.entry_date, a.created_at::date), 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
+      ${agencyFilter}
+    ORDER BY a.activation_date DESC NULLS LAST
+  `);
+  return result.rows;
+}
+
 // ── KPI 카드: 당일 개통완료 상세 ──
 // 기준: work_status가 '개통완료'이고 개통일(activation_date) 기준 오늘인 건
 export async function getTodayCompletedStats(agencyIds?: string[]) {

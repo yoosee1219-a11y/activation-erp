@@ -192,6 +192,15 @@ interface DashboardData {
     terminationReason: string | null;
     workStatus: string | null;
   }>;
+  monthlyCompletedDetail: Array<{
+    id: string;
+    agencyId: string;
+    agencyName: string;
+    customerName: string;
+    newPhoneNumber: string | null;
+    activationDate: string | null;
+    selectedCommitment: boolean;
+  }>;
 }
 
 export default function DashboardPage() {
@@ -279,6 +288,7 @@ export default function DashboardPage() {
         todayTermination={data.todayTermination || { count: 0 }}
         monthlyTerminationDetail={data.monthlyTerminationDetail || []}
         todayTerminationDetail={data.todayTerminationDetail || []}
+        monthlyCompletedDetail={data.monthlyCompletedDetail || []}
         categories={categories}
         agencies={agencies}
       />
