@@ -182,7 +182,7 @@ export function FileCell({
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 text-xs text-gray-400 hover:text-gray-600"
+          className="h-7 text-xs text-gray-500 hover:text-blue-600 hover:bg-blue-50 border border-dashed border-gray-300 hover:border-blue-400 transition-colors"
         >
           <FileUp className="mr-1 h-3 w-3" />
           첨부
@@ -207,8 +207,9 @@ export function FileCell({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-4 w-4 p-0 text-red-400 hover:text-red-600"
+                    className="h-5 w-5 p-0 text-red-400 hover:text-red-700 hover:bg-red-50 transition-colors"
                     onClick={() => handleRemoveLink(i)}
+                    title="삭제"
                   >
                     <X className="h-3 w-3" />
                   </Button>
@@ -224,12 +225,19 @@ export function FileCell({
               type="file"
               multiple
               onChange={handleFileUpload}
-              className="text-xs w-full"
+              className="hidden"
               disabled={uploading}
             />
-            {uploading && (
-              <p className="text-xs text-blue-600 mt-1">업로드 중...</p>
-            )}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="w-full flex flex-col items-center justify-center gap-1 py-3 px-2 border-2 border-dashed border-gray-300 rounded-md text-xs text-gray-600 hover:border-blue-500 hover:bg-blue-50 hover:text-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <FileUp className="h-4 w-4" />
+              <span>{uploading ? "업로드 중..." : "클릭하여 파일 선택"}</span>
+              <span className="text-[10px] text-gray-400">이미지 · PDF · 여러 개 가능</span>
+            </button>
           </div>
           <div className="border-t pt-2">
             <p className="text-xs font-medium mb-1">또는 링크 입력</p>
