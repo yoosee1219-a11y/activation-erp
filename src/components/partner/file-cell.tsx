@@ -111,6 +111,18 @@ export function FileCell({
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
+    const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+    const oversized = Array.from(files).filter((f) => f.size > MAX_SIZE);
+    if (oversized.length > 0) {
+      const names = oversized.map((f) => `${f.name} (${(f.size / 1024 / 1024).toFixed(1)}MB)`).join(", ");
+      toast.error(
+        `10MB 초과 파일은 업로드 불가: ${names}. 사진은 해상도를 낮추거나 PDF로 변환해 주세요.`,
+        { duration: 6000 }
+      );
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
     setUploading(true);
     const newLinks: string[] = [...links];
 
@@ -137,8 +149,11 @@ export function FileCell({
           const data = await res.json();
           const link = data.document?.googleDriveLink || data.link || data.url || file.name;
           newLinks.push(link);
+        } else if (res.status === 413) {
+          toast.error(`${file.name}: 파일이 너무 커서 서버에서 거부되었습니다. (4.5MB 이하 권장)`);
         } else {
-          toast.error(`${file.name} 업로드 실패`);
+          const err = await res.json().catch(() => ({}));
+          toast.error(`${file.name} 업로드 실패: ${err.error || res.statusText}`);
         }
       }
 
@@ -236,7 +251,7 @@ export function FileCell({
             >
               <FileUp className="h-4 w-4" />
               <span>{uploading ? "업로드 중..." : "클릭하여 파일 선택"}</span>
-              <span className="text-[10px] text-gray-400">이미지 · PDF · 여러 개 가능</span>
+              <span className="text-[10px] text-gray-400">이미지 · PDF · 여러 개 가능 (최대 10MB)</span>
             </button>
           </div>
           <div className="border-t pt-2">
