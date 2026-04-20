@@ -19,6 +19,7 @@ import {
 import { MoreHorizontal, Trash2, Lock, Unlock } from "lucide-react";
 import { format } from "date-fns";
 import { NoteIndicator } from "@/components/activations/note-indicator";
+import { FileCell } from "@/components/partner/file-cell";
 import { useState } from "react";
 
 export type ActivationRow = {
@@ -611,20 +612,15 @@ export function getColumns(options: {
     {
       accessorKey: "applicationDocs",
       header: "가입신청서",
-      cell: ({ row }) => {
-        const v = row.original.applicationDocs;
-        if (!v) return <span className="text-xs text-gray-400">-</span>;
-        return (
-          <a
-            href={v}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-blue-600 hover:underline"
-          >
-            보기
-          </a>
-        );
-      },
+      cell: ({ row }) => (
+        <FileCell
+          value={row.original.applicationDocs}
+          rowId={row.original.id}
+          field="applicationDocs"
+          isEditable={!!onInlineUpdate}
+          onUpdate={(id, field, value) => onInlineUpdate?.(id, field, value)}
+        />
+      ),
     },
     {
       accessorKey: "applicationDocsReview",
@@ -655,20 +651,15 @@ export function getColumns(options: {
     {
       accessorKey: "nameChangeDocs",
       header: "명의변경서류",
-      cell: ({ row }) => {
-        const v = row.original.nameChangeDocs;
-        if (!v) return <span className="text-xs text-gray-400">-</span>;
-        return (
-          <a
-            href={v}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-blue-600 hover:underline"
-          >
-            보기
-          </a>
-        );
-      },
+      cell: ({ row }) => (
+        <FileCell
+          value={row.original.nameChangeDocs}
+          rowId={row.original.id}
+          field="nameChangeDocs"
+          isEditable={!!onInlineUpdate}
+          onUpdate={(id, field, value) => onInlineUpdate?.(id, field, value)}
+        />
+      ),
     },
     {
       accessorKey: "nameChangeDocsReview",
@@ -699,20 +690,15 @@ export function getColumns(options: {
     {
       accessorKey: "arcInfo",
       header: "외국인등록증",
-      cell: ({ row }) => {
-        const v = row.original.arcInfo;
-        if (!v) return <span className="text-xs text-gray-400">-</span>;
-        return (
-          <a
-            href={v}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-blue-600 hover:underline"
-          >
-            보기
-          </a>
-        );
-      },
+      cell: ({ row }) => (
+        <FileCell
+          value={row.original.arcInfo}
+          rowId={row.original.id}
+          field="arcInfo"
+          isEditable={!!onInlineUpdate}
+          onUpdate={(id, field, value) => onInlineUpdate?.(id, field, value)}
+        />
+      ),
     },
     {
       accessorKey: "arcReview",
@@ -743,20 +729,15 @@ export function getColumns(options: {
     {
       accessorKey: "autopayInfo",
       header: "자동이체",
-      cell: ({ row }) => {
-        const v = row.original.autopayInfo;
-        if (!v) return <span className="text-xs text-gray-400">-</span>;
-        return (
-          <a
-            href={v}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-blue-600 hover:underline"
-          >
-            보기
-          </a>
-        );
-      },
+      cell: ({ row }) => (
+        <FileCell
+          value={row.original.autopayInfo}
+          rowId={row.original.id}
+          field="autopayInfo"
+          isEditable={!!onInlineUpdate}
+          onUpdate={(id, field, value) => onInlineUpdate?.(id, field, value)}
+        />
+      ),
     },
     {
       accessorKey: "autopayReview",
