@@ -21,6 +21,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { toast } from "sonner";
+import { FileCell } from "@/components/partner/file-cell";
 
 interface Agency {
   id: string;
@@ -387,13 +388,17 @@ export function ActivationForm({
         <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div className="space-y-2">
             <Label>가입신청서류</Label>
-            <Input
-              value={formData.applicationDocs}
-              onChange={(e) =>
-                updateField("applicationDocs", e.target.value)
-              }
-              placeholder="상태 또는 링크"
-            />
+            <div className="border rounded-md px-2 py-1.5">
+              <FileCell
+                value={formData.applicationDocs}
+                rowId={(initialData?.id as string) || ""}
+                field="applicationDocs"
+                agencyId={formData.agencyId}
+                onUpdate={(_id, _field, value) =>
+                  updateField("applicationDocs", value)
+                }
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -408,12 +413,17 @@ export function ActivationForm({
 
           <div className="space-y-2">
             <Label>명의변경서류</Label>
-            <Input
-              value={formData.nameChangeDocs}
-              onChange={(e) =>
-                updateField("nameChangeDocs", e.target.value)
-              }
-            />
+            <div className="border rounded-md px-2 py-1.5">
+              <FileCell
+                value={formData.nameChangeDocs}
+                rowId={(initialData?.id as string) || ""}
+                field="nameChangeDocs"
+                agencyId={formData.agencyId}
+                onUpdate={(_id, _field, value) =>
+                  updateField("nameChangeDocs", value)
+                }
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -428,12 +438,17 @@ export function ActivationForm({
 
           <div className="space-y-2">
             <Label>외국인등록증 + 자동이체 정보</Label>
-            <Input
-              value={formData.arcAutopayInfo}
-              onChange={(e) =>
-                updateField("arcAutopayInfo", e.target.value)
-              }
-            />
+            <div className="border rounded-md px-2 py-1.5">
+              <FileCell
+                value={formData.arcAutopayInfo}
+                rowId={(initialData?.id as string) || ""}
+                field="arcAutopayInfo"
+                agencyId={formData.agencyId}
+                onUpdate={(_id, _field, value) =>
+                  updateField("arcAutopayInfo", value)
+                }
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -448,12 +463,17 @@ export function ActivationForm({
 
           <div className="space-y-2">
             <Label>외국인등록증 보완</Label>
-            <Input
-              value={formData.arcSupplement}
-              onChange={(e) =>
-                updateField("arcSupplement", e.target.value)
-              }
-            />
+            <div className="border rounded-md px-2 py-1.5">
+              <FileCell
+                value={formData.arcSupplement}
+                rowId={(initialData?.id as string) || ""}
+                field="arcSupplement"
+                agencyId={formData.agencyId}
+                onUpdate={(_id, _field, value) =>
+                  updateField("arcSupplement", value)
+                }
+              />
+            </div>
           </div>
 
           <div className="space-y-2">

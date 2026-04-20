@@ -342,6 +342,7 @@ export function getPartnerColumns(options: {
             value={row.original.applicationDocs}
             rowId={row.original.id}
             field="applicationDocs"
+            agencyId={row.original.agencyId}
             isLocked={locked}
             onUpdate={onUpdate}
           />
@@ -396,6 +397,7 @@ export function getPartnerColumns(options: {
             value={row.original.nameChangeDocs}
             rowId={row.original.id}
             field="nameChangeDocs"
+            agencyId={row.original.agencyId}
             isLocked={locked}
             onUpdate={onUpdate}
           />
@@ -454,6 +456,7 @@ export function getPartnerColumns(options: {
             value={row.original.arcInfo}
             rowId={row.original.id}
             field="arcInfo"
+            agencyId={row.original.agencyId}
             isLocked={locked}
             onUpdate={onUpdate}
           />
@@ -508,6 +511,7 @@ export function getPartnerColumns(options: {
             value={row.original.autopayInfo}
             rowId={row.original.id}
             field="autopayInfo"
+            agencyId={row.original.agencyId}
             isLocked={locked}
             onUpdate={onUpdate}
           />

@@ -617,6 +617,7 @@ export function getColumns(options: {
           value={row.original.applicationDocs}
           rowId={row.original.id}
           field="applicationDocs"
+          agencyId={row.original.agencyId}
           isEditable={!!onInlineUpdate}
           onUpdate={(id, field, value) => onInlineUpdate?.(id, field, value)}
         />
@@ -656,6 +657,7 @@ export function getColumns(options: {
           value={row.original.nameChangeDocs}
           rowId={row.original.id}
           field="nameChangeDocs"
+          agencyId={row.original.agencyId}
           isEditable={!!onInlineUpdate}
           onUpdate={(id, field, value) => onInlineUpdate?.(id, field, value)}
         />
@@ -695,6 +697,7 @@ export function getColumns(options: {
           value={row.original.arcInfo}
           rowId={row.original.id}
           field="arcInfo"
+          agencyId={row.original.agencyId}
           isEditable={!!onInlineUpdate}
           onUpdate={(id, field, value) => onInlineUpdate?.(id, field, value)}
         />
@@ -734,6 +737,7 @@ export function getColumns(options: {
           value={row.original.autopayInfo}
           rowId={row.original.id}
           field="autopayInfo"
+          agencyId={row.original.agencyId}
           isEditable={!!onInlineUpdate}
           onUpdate={(id, field, value) => onInlineUpdate?.(id, field, value)}
         />

@@ -15,6 +15,7 @@ interface FileCellProps {
   value: string | null;
   rowId: string;
   field: string;
+  agencyId: string;
   isEditable?: boolean;
   isLocked?: boolean;
   onUpdate: (id: string, field: string, value: string) => void;
@@ -36,6 +37,7 @@ export function FileCell({
   value,
   rowId,
   field,
+  agencyId,
   isEditable = true,
   isLocked = false,
   onUpdate,
@@ -113,10 +115,17 @@ export function FileCell({
     const newLinks: string[] = [...links];
 
     try {
+      if (!agencyId) {
+        toast.error("거래처를 먼저 선택하세요");
+        setUploading(false);
+        return;
+      }
+
       for (const file of Array.from(files)) {
         const formData = new FormData();
         formData.append("file", file);
-        formData.append("activationId", rowId);
+        if (rowId) formData.append("activationId", rowId);
+        formData.append("agencyId", agencyId);
         formData.append("fileType", field);
 
         const res = await fetch("/api/files/upload", {
