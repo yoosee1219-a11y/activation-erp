@@ -403,12 +403,19 @@ export function ActivationForm({
 
           <div className="space-y-2">
             <Label>서류검수 1</Label>
-            <Input
-              value={formData.applicationDocsReview}
-              onChange={(e) =>
-                updateField("applicationDocsReview", e.target.value)
-              }
-            />
+            <Select
+              value={formData.applicationDocsReview || ""}
+              onValueChange={(v) => updateField("applicationDocsReview", v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="검수 상태 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="완료">완료</SelectItem>
+                <SelectItem value="보완요청">보완요청</SelectItem>
+                <SelectItem value="진행요청">진행요청</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
@@ -428,12 +435,19 @@ export function ActivationForm({
 
           <div className="space-y-2">
             <Label>서류검수 2</Label>
-            <Input
-              value={formData.nameChangeDocsReview}
-              onChange={(e) =>
-                updateField("nameChangeDocsReview", e.target.value)
-              }
-            />
+            <Select
+              value={formData.nameChangeDocsReview || ""}
+              onValueChange={(v) => updateField("nameChangeDocsReview", v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="검수 상태 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="완료">완료</SelectItem>
+                <SelectItem value="보완요청">보완요청</SelectItem>
+                <SelectItem value="진행요청">진행요청</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
@@ -453,12 +467,19 @@ export function ActivationForm({
 
           <div className="space-y-2">
             <Label>서류검수 3</Label>
-            <Input
-              value={formData.arcAutopayReview}
-              onChange={(e) =>
-                updateField("arcAutopayReview", e.target.value)
-              }
-            />
+            <Select
+              value={formData.arcAutopayReview || ""}
+              onValueChange={(v) => updateField("arcAutopayReview", v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="검수 상태 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="완료">완료</SelectItem>
+                <SelectItem value="보완요청">보완요청</SelectItem>
+                <SelectItem value="진행요청">진행요청</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
