@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { activations, agencies, usimLogs } from "@/lib/db/schema";
+import { activations, agencyCategories, usimLogs } from "@/lib/db/schema";
 import { and, eq, gte, lt, sql, inArray, or } from "drizzle-orm";
 import {
   getAgencyIdsByMediumCategories,
@@ -27,11 +27,16 @@ export async function GET(request: NextRequest) {
     nextMonth.setMonth(nextMonth.getMonth() + 1);
     const monthEnd = nextMonth.toISOString().slice(0, 10);
 
-    // Get all active agencies
+    // Get all active agencies (= 활성 중분류)
     const agencyList = await db
       .select()
-      .from(agencies)
-      .where(eq(agencies.isActive, true));
+      .from(agencyCategories)
+      .where(
+        and(
+          eq(agencyCategories.level, "medium"),
+          eq(agencyCategories.isActive, true)
+        )
+      );
 
     let targetAgencies = agencyList;
     if (agencyId) {

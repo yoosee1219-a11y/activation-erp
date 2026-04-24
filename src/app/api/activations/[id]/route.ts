@@ -10,7 +10,7 @@ import { canAccessAgency } from "@/lib/db/queries/users";
 import { addActivationLog } from "@/lib/db/queries/activation-logs";
 import { updateActivationSchema } from "@/lib/validations/activation";
 import { db } from "@/lib/db";
-import { agencies, account } from "@/lib/db/schema";
+import { agencyCategories, account } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 
 // 거래처(PARTNER)가 편집할 수 있는 필드 (전체 목록)
@@ -408,9 +408,9 @@ export async function PATCH(
       if (changes.length > 0) {
         // Find agency name
         const agencyRecord = await db
-          .select({ name: agencies.name })
-          .from(agencies)
-          .where(eq(agencies.id, existing.agencyId))
+          .select({ name: agencyCategories.name })
+          .from(agencyCategories)
+          .where(eq(agencyCategories.id, existing.agencyId))
           .limit(1);
         const agencyName = agencyRecord[0]?.name || existing.agencyId;
         const roleLabel =

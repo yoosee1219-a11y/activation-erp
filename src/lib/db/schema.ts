@@ -10,6 +10,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 // 0. agency_categories (거래처 분류 - 대분류/중분류)
+// 중분류 = 거래처 (1:1). 연락처·수수료 속성은 level='medium' 행에만 유효.
 export const agencyCategories = pgTable("agency_categories", {
   id: text("id").primaryKey(), // 'DOD', 'DOD_키르기스스탄' 등
   name: text("name").notNull(), // 표시명
@@ -17,6 +18,11 @@ export const agencyCategories = pgTable("agency_categories", {
   parentId: text("parent_id"), // medium이면 major의 id
   sortOrder: integer("sort_order").default(0),
   isActive: boolean("is_active").default(true),
+  // ── 거래처 속성 (level='medium'에서만 유효) ──
+  contactName: text("contact_name"),
+  contactPhone: text("contact_phone"),
+  commissionRate: integer("commission_rate"), // 건당 개통수수료 (원)
+  deductionRate: integer("deduction_rate"), // 건당 차감단가 (원, NULL이면 commissionRate 사용)
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { resolveAllowedAgencyIds } from "@/lib/db/queries/users";
 import { db } from "@/lib/db";
-import { activations, agencies } from "@/lib/db/schema";
+import { activations, agencyCategories } from "@/lib/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 
 // Vercel 서버리스 타임아웃 연장
@@ -195,8 +195,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "데이터가 없습니다." }, { status: 400 });
     }
 
-    // 거래처 목록 조회 (이름 → ID 매핑)
-    const allAgencies = await db.select().from(agencies);
+    // 거래처(=중분류) 목록 조회 (이름 → ID 매핑)
+    const allAgencies = await db
+      .select()
+      .from(agencyCategories)
+      .where(eq(agencyCategories.level, "medium"));
     const agencyNameMap = new Map<string, string>();
     for (const a of allAgencies) {
       agencyNameMap.set(a.name.toLowerCase(), a.id);
@@ -223,16 +226,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 알 수 없는 거래처 자동 생성
+    // 알 수 없는 거래처 자동 생성 (= 중분류 생성). parentId는 defaultMajorCategory 필수.
     for (const name of unknownAgencies) {
       const id = name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_가-힣]/g, "");
+      if (!defaultMajorCategory) {
+        results.errors.push(`거래처 "${name}" 자동 생성 실패: 대분류(defaultMajorCategory)가 필요합니다.`);
+        continue;
+      }
       try {
-        await db.insert(agencies).values({
+        await db.insert(agencyCategories).values({
           id: id || `agency_${Date.now()}`,
           name,
+          level: "medium",
+          parentId: defaultMajorCategory,
+          sortOrder: 0,
           isActive: true,
-          majorCategory: defaultMajorCategory || null,
-          mediumCategory: defaultMediumCategory || null,
         });
         agencyNameMap.set(name.toLowerCase(), id);
         results.newAgencies.push(name);

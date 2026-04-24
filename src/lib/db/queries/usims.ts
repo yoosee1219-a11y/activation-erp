@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { usimLogs, agencies, activations } from "@/lib/db/schema";
+import { usimLogs, agencyCategories, activations } from "@/lib/db/schema";
 import { eq, and, inArray, sql, gte, lt, desc } from "drizzle-orm";
 
 // ─── Types ───
@@ -107,8 +107,11 @@ export async function getUsimStockByAgency(
     .where(conditions)
     .groupBy(usimLogs.agencyId, usimLogs.action);
 
-  // 거래처 이름 조회
-  const allAgencies = await db.select({ id: agencies.id, name: agencies.name }).from(agencies);
+  // 거래처(=중분류) 이름 조회
+  const allAgencies = await db
+    .select({ id: agencyCategories.id, name: agencyCategories.name })
+    .from(agencyCategories)
+    .where(eq(agencyCategories.level, "medium"));
   const agencyMap = new Map(allAgencies.map((a) => [a.id, a.name]));
 
   // 집계

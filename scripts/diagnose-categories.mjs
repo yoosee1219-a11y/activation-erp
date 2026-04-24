@@ -4,35 +4,65 @@ config({ path: ".env.local" });
 const { neon } = await import("@neondatabase/serverless");
 const sql = neon(process.env.DATABASE_URL);
 
-console.log("=== Fix 검증: resurrect 경로 ===");
-const { createCategory, CategoryAlreadyActiveError } = await import("../src/lib/db/queries/categories.ts");
+console.log("=== agencies 테이블 (거래처) ===");
+const agencies = await sql`SELECT id, name, major_category, medium_category, is_active FROM agencies ORDER BY major_category, medium_category, name`;
+console.table(agencies);
 
-// 1. 비활성 '글로벌비즈' → 부활 시도
-console.log("\n[1] 비활성 글로벌비즈 → createCategory → 부활되어야 함");
-const result1 = await createCategory({
-  id: "글로벌비즈",
-  name: "글로벌비즈",
-  level: "major",
-});
-console.log("  결과:", result1);
-console.log("  isActive:", result1.isActive, "← true 이면 OK");
+console.log("\n=== agency_categories (활성만) ===");
+const cats = await sql`SELECT id, name, level, parent_id FROM agency_categories WHERE is_active = true ORDER BY level, parent_id, sort_order`;
+console.table(cats);
 
-// 2. 활성 상태에서 또 시도 → CategoryAlreadyActiveError
-console.log("\n[2] 활성 글로벌비즈 → createCategory → 409 에러 클래스 던져야 함");
-try {
-  await createCategory({ id: "글로벌비즈", name: "dup", level: "major" });
-  console.log("  ✗ 예외 안 던짐 (버그)");
-} catch (e) {
-  if (e instanceof CategoryAlreadyActiveError) {
-    console.log("  ✓ CategoryAlreadyActiveError 정상 발생");
-  } else {
-    console.log("  ✗ 다른 에러:", e.message);
-  }
-}
+console.log("\n=== agencies ↔ categories 정합성 체크 ===");
+const orphan1 = await sql`
+  SELECT a.id, a.name, a.major_category
+  FROM agencies a
+  WHERE a.major_category IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM agency_categories c WHERE c.id = a.major_category)
+`;
+console.log("고아 major_category (존재 안 함):", orphan1.length, "건");
+if (orphan1.length) console.table(orphan1);
 
-// 3. 사용자 테스트 위해 다시 soft-delete로 되돌리기
-console.log("\n[3] 사용자 재현 상태로 복원 (is_active=false)");
-await sql`UPDATE agency_categories SET is_active = false WHERE id = '글로벌비즈'`;
-const check = await sql`SELECT id, is_active FROM agency_categories WHERE id = '글로벌비즈'`;
-console.log("  현재 상태:", check[0]);
-console.log("\n이제 사용자가 prod에서 추가 시도하면 fix 덕분에 부활됨.");
+const orphan2 = await sql`
+  SELECT a.id, a.name, a.medium_category
+  FROM agencies a
+  WHERE a.medium_category IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM agency_categories c WHERE c.id = a.medium_category)
+`;
+console.log("고아 medium_category (존재 안 함):", orphan2.length, "건");
+if (orphan2.length) console.table(orphan2);
+
+console.log("\n=== 1:N 관계 실제 분포 (중분류당 거래처 수) ===");
+const distribution = await sql`
+  SELECT medium_category, COUNT(*) as agency_count, STRING_AGG(name, ', ') as agencies
+  FROM agencies
+  WHERE is_active = true AND medium_category IS NOT NULL
+  GROUP BY medium_category
+  ORDER BY agency_count DESC
+`;
+console.table(distribution);
+
+console.log("\n=== activations가 참조하는 agency_id 수 ===");
+const activCount = await sql`
+  SELECT a.id as agency_id, a.name, COUNT(act.id) as activation_count
+  FROM agencies a
+  LEFT JOIN activations act ON act.agency_id = a.id
+  GROUP BY a.id, a.name
+  ORDER BY activation_count DESC
+`;
+console.table(activCount);
+
+console.log("\n=== agencies 참조 테이블 ===");
+const refs = await sql`
+  SELECT
+    tc.table_name,
+    kcu.column_name,
+    ccu.table_name AS foreign_table,
+    ccu.column_name AS foreign_column
+  FROM information_schema.table_constraints tc
+  JOIN information_schema.key_column_usage kcu
+    ON tc.constraint_name = kcu.constraint_name
+  JOIN information_schema.constraint_column_usage ccu
+    ON ccu.constraint_name = tc.constraint_name
+  WHERE tc.constraint_type = 'FOREIGN KEY' AND ccu.table_name = 'agencies'
+`;
+console.table(refs);

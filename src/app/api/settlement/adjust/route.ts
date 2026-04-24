@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { agencies } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { agencyCategories } from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
 
 // PATCH: Update agency commission rate from settlement page
 export async function PATCH(request: NextRequest) {
@@ -57,14 +57,19 @@ export async function PATCH(request: NextRequest) {
     }
 
     const result = await db
-      .update(agencies)
+      .update(agencyCategories)
       .set(updates)
-      .where(eq(agencies.id, agencyId))
+      .where(
+        and(
+          eq(agencyCategories.id, agencyId),
+          eq(agencyCategories.level, "medium")
+        )
+      )
       .returning({
-        id: agencies.id,
-        name: agencies.name,
-        commissionRate: agencies.commissionRate,
-        deductionRate: agencies.deductionRate,
+        id: agencyCategories.id,
+        name: agencyCategories.name,
+        commissionRate: agencyCategories.commissionRate,
+        deductionRate: agencyCategories.deductionRate,
       });
 
     if (result.length === 0) {

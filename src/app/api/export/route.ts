@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { activations, agencies, agencyCategories } from "@/lib/db/schema";
+import { activations, agencyCategories } from "@/lib/db/schema";
 import { eq, and, desc, inArray, gte, lt } from "drizzle-orm";
 import { resolveAllowedAgencyIds } from "@/lib/db/queries/users";
 import {
@@ -111,15 +111,13 @@ export async function GET(request: NextRequest) {
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-    // 거래처 이름/카테고리 매핑
-    const allAgencies = await db.select().from(agencies);
-    const agencyNameMap = new Map(allAgencies.map((a) => [a.id, a.name]));
-    const agencyMajorMap = new Map(allAgencies.map((a) => [a.id, a.majorCategory]));
-    const agencyMediumMap = new Map(allAgencies.map((a) => [a.id, a.mediumCategory]));
-
-    // 카테고리 이름 매핑
+    // 거래처(=중분류) 이름/대분류 매핑
     const allCategories = await db.select().from(agencyCategories);
     const categoryNameMap = new Map(allCategories.map((c) => [c.id, c.name]));
+    const mediums = allCategories.filter((c) => c.level === "medium");
+    const agencyNameMap = new Map(mediums.map((m) => [m.id, m.name]));
+    const agencyMajorMap = new Map(mediums.map((m) => [m.id, m.parentId]));
+    const agencyMediumMap = new Map(mediums.map((m) => [m.id, m.id])); // self-reference
 
     // 데이터 조회
     const data = await db

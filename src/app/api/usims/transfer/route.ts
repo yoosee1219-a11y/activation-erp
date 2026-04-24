@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { transferUsims } from "@/lib/db/queries/usims";
 import { db } from "@/lib/db";
-import { agencies } from "@/lib/db/schema";
+import { agencyCategories } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {
@@ -33,10 +33,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 거래처 이름 조회
+    // 거래처(=중분류) 이름 조회
     const [fromAgency, toAgency] = await Promise.all([
-      db.select({ name: agencies.name }).from(agencies).where(eq(agencies.id, fromAgencyId)).limit(1),
-      db.select({ name: agencies.name }).from(agencies).where(eq(agencies.id, toAgencyId)).limit(1),
+      db.select({ name: agencyCategories.name }).from(agencyCategories).where(eq(agencyCategories.id, fromAgencyId)).limit(1),
+      db.select({ name: agencyCategories.name }).from(agencyCategories).where(eq(agencyCategories.id, toAgencyId)).limit(1),
     ]);
 
     if (fromAgency.length === 0 || toAgency.length === 0) {

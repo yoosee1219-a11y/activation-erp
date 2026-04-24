@@ -6,7 +6,7 @@ import {
   getUsimLogs,
 } from "@/lib/db/queries/usims";
 import { db } from "@/lib/db";
-import { agencies } from "@/lib/db/schema";
+import { agencyCategories } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
 // GET: 거래처별 재고 현황 + 이력
@@ -51,9 +51,9 @@ export async function POST(request: NextRequest) {
     }
 
     const agency = await db
-      .select({ name: agencies.name })
-      .from(agencies)
-      .where(eq(agencies.id, agencyId))
+      .select({ name: agencyCategories.name })
+      .from(agencyCategories)
+      .where(eq(agencyCategories.id, agencyId))
       .limit(1);
 
     if (agency.length === 0) {

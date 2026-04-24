@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { userProfiles, agencies } from "@/lib/db/schema";
+import { userProfiles, agencyCategories } from "@/lib/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import type { UserRole } from "@/types";
 
@@ -92,29 +92,31 @@ export async function resolveAllowedAgencyIds(user: {
     return user.allowedAgencies;
   }
 
-  // 중분류 기반 해석
+  // 중분류 기반 해석 (중분류 = 거래처)
   if (user.allowedMediumCategories.length > 0) {
     const result = await db
-      .select({ id: agencies.id })
-      .from(agencies)
+      .select({ id: agencyCategories.id })
+      .from(agencyCategories)
       .where(
         and(
-          inArray(agencies.mediumCategory, user.allowedMediumCategories),
-          eq(agencies.isActive, true)
+          eq(agencyCategories.level, "medium"),
+          inArray(agencyCategories.id, user.allowedMediumCategories),
+          eq(agencyCategories.isActive, true)
         )
       );
     return result.map((r) => r.id);
   }
 
-  // 대분류 기반 해석
+  // 대분류 기반 해석 → 하위 중분류 전체
   if (user.allowedMajorCategory) {
     const result = await db
-      .select({ id: agencies.id })
-      .from(agencies)
+      .select({ id: agencyCategories.id })
+      .from(agencyCategories)
       .where(
         and(
-          eq(agencies.majorCategory, user.allowedMajorCategory),
-          eq(agencies.isActive, true)
+          eq(agencyCategories.level, "medium"),
+          eq(agencyCategories.parentId, user.allowedMajorCategory),
+          eq(agencyCategories.isActive, true)
         )
       );
     return result.map((r) => r.id);

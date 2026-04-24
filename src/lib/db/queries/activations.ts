@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { activations, activationNotes, agencies } from "@/lib/db/schema";
+import { activations, activationNotes } from "@/lib/db/schema";
 import { eq, and, desc, sql, count, ilike, gte, lte, lt, ne, inArray, isNotNull } from "drizzle-orm";
 
 // neon-http 드라이버에서 ANY(${array})가 배열 직렬화 실패하므로

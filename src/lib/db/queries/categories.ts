@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { agencyCategories, agencies } from "@/lib/db/schema";
-import { eq, and, or, inArray, count } from "drizzle-orm";
+import { agencyCategories } from "@/lib/db/schema";
+import { eq, and, inArray, count } from "drizzle-orm";
 
 export async function getMajorCategories() {
   return db
@@ -45,17 +45,19 @@ export async function getCategoryTree() {
   }));
 }
 
+// 중분류 = 거래처 (1:1). 아래 함수들은 agency_categories(level='medium')만 본다.
 export async function getAgencyIdsByMediumCategories(
   mediumCategoryIds: string[]
 ) {
   if (mediumCategoryIds.length === 0) return [];
   const result = await db
-    .select({ id: agencies.id })
-    .from(agencies)
+    .select({ id: agencyCategories.id })
+    .from(agencyCategories)
     .where(
       and(
-        inArray(agencies.mediumCategory, mediumCategoryIds),
-        eq(agencies.isActive, true)
+        eq(agencyCategories.level, "medium"),
+        inArray(agencyCategories.id, mediumCategoryIds),
+        eq(agencyCategories.isActive, true)
       )
     );
   return result.map((r) => r.id);
@@ -63,10 +65,14 @@ export async function getAgencyIdsByMediumCategories(
 
 export async function getAgencyIdsByMajorCategory(majorId: string) {
   const result = await db
-    .select({ id: agencies.id })
-    .from(agencies)
+    .select({ id: agencyCategories.id })
+    .from(agencyCategories)
     .where(
-      and(eq(agencies.majorCategory, majorId), eq(agencies.isActive, true))
+      and(
+        eq(agencyCategories.level, "medium"),
+        eq(agencyCategories.parentId, majorId),
+        eq(agencyCategories.isActive, true)
+      )
     );
   return result.map((r) => r.id);
 }
@@ -91,18 +97,18 @@ export async function softDeleteCategory(id: string) {
   return result[0];
 }
 
-// ── 연결된 거래처 수 확인 ──
+// ── 연결된 거래처(=중분류) 수 확인 ──
+// 중분류 = 거래처이므로, 대분류 id에 속한 활성 중분류 수를 셈.
+// 자기 자신(medium id)에 대한 호출은 0 반환 (자기 자신을 삭제하면 연결된 거래처 없음).
 export async function getLinkedAgencyCount(categoryId: string) {
   const result = await db
     .select({ cnt: count() })
-    .from(agencies)
+    .from(agencyCategories)
     .where(
       and(
-        or(
-          eq(agencies.majorCategory, categoryId),
-          eq(agencies.mediumCategory, categoryId)
-        ),
-        eq(agencies.isActive, true)
+        eq(agencyCategories.level, "medium"),
+        eq(agencyCategories.parentId, categoryId),
+        eq(agencyCategories.isActive, true)
       )
     );
   return result[0]?.cnt ?? 0;
