@@ -6,6 +6,7 @@ import {
   softDeleteCategory,
   getLinkedAgencyCount,
   getChildCategoryCount,
+  CategoryAlreadyActiveError,
 } from "@/lib/db/queries/categories";
 import { getSessionUser } from "@/lib/auth/session";
 
@@ -19,18 +20,9 @@ export async function GET() {
     const tree = await getCategoryTree();
     return NextResponse.json({ categories: tree });
   } catch (error) {
-    // TEMP DIAGNOSTIC — remove after root cause found
-    const err = error as Error;
     console.error("Failed to fetch categories:", error);
     return NextResponse.json(
-      {
-        error: "Internal server error",
-        _debug: {
-          message: err?.message,
-          name: err?.name,
-          stack: err?.stack?.split("\n").slice(0, 5),
-        },
-      },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
@@ -63,17 +55,15 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ category }, { status: 201 });
   } catch (error) {
+    if (error instanceof CategoryAlreadyActiveError) {
+      return NextResponse.json(
+        { error: `"${error.id}" ID의 분류가 이미 존재합니다. 다른 ID를 사용해주세요.` },
+        { status: 409 }
+      );
+    }
     console.error("Failed to create category:", error);
-    const err = error as Error;
     return NextResponse.json(
-      {
-        error: "Internal server error",
-        _debug: {
-          message: err?.message,
-          name: err?.name,
-          stack: err?.stack?.split("\n").slice(0, 5),
-        },
-      },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
@@ -107,16 +97,8 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ category });
   } catch (error) {
     console.error("Failed to update category:", error);
-    const err = error as Error;
     return NextResponse.json(
-      {
-        error: "Internal server error",
-        _debug: {
-          message: err?.message,
-          name: err?.name,
-          stack: err?.stack?.split("\n").slice(0, 5),
-        },
-      },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
@@ -168,16 +150,8 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ category, deleted: true });
   } catch (error) {
     console.error("Failed to delete category:", error);
-    const err = error as Error;
     return NextResponse.json(
-      {
-        error: "Internal server error",
-        _debug: {
-          message: err?.message,
-          name: err?.name,
-          stack: err?.stack?.split("\n").slice(0, 5),
-        },
-      },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }

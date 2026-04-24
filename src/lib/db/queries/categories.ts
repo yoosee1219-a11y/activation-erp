@@ -123,6 +123,13 @@ export async function getChildCategoryCount(majorId: string) {
   return result[0]?.cnt ?? 0;
 }
 
+export class CategoryAlreadyActiveError extends Error {
+  constructor(public id: string) {
+    super(`Category "${id}" already exists and is active`);
+    this.name = "CategoryAlreadyActiveError";
+  }
+}
+
 export async function createCategory(data: {
   id: string;
   name: string;
@@ -130,6 +137,32 @@ export async function createCategory(data: {
   parentId?: string;
   sortOrder?: number;
 }) {
+  // 동일 id가 이미 존재하면 활성/비활성 분기
+  const existing = await db
+    .select()
+    .from(agencyCategories)
+    .where(eq(agencyCategories.id, data.id))
+    .limit(1);
+
+  if (existing.length > 0) {
+    if (existing[0].isActive) {
+      throw new CategoryAlreadyActiveError(data.id);
+    }
+    // soft-deleted 상태면 부활
+    const resurrected = await db
+      .update(agencyCategories)
+      .set({
+        name: data.name,
+        level: data.level,
+        parentId: data.parentId ?? null,
+        sortOrder: data.sortOrder ?? 0,
+        isActive: true,
+      })
+      .where(eq(agencyCategories.id, data.id))
+      .returning();
+    return resurrected[0];
+  }
+
   const result = await db
     .insert(agencyCategories)
     .values({
