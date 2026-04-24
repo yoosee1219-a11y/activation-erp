@@ -19,9 +19,18 @@ export async function GET() {
     const tree = await getCategoryTree();
     return NextResponse.json({ categories: tree });
   } catch (error) {
+    // TEMP DIAGNOSTIC — remove after root cause found
+    const err = error as Error;
     console.error("Failed to fetch categories:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      {
+        error: "Internal server error",
+        _debug: {
+          message: err?.message,
+          name: err?.name,
+          stack: err?.stack?.split("\n").slice(0, 5),
+        },
+      },
       { status: 500 }
     );
   }
