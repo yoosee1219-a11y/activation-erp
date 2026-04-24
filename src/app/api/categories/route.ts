@@ -64,8 +64,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ category }, { status: 201 });
   } catch (error) {
     console.error("Failed to create category:", error);
+    const err = error as Error;
     return NextResponse.json(
-      { error: "Internal server error" },
+      {
+        error: "Internal server error",
+        _debug: {
+          message: err?.message,
+          name: err?.name,
+          stack: err?.stack?.split("\n").slice(0, 5),
+        },
+      },
       { status: 500 }
     );
   }
@@ -99,8 +107,16 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ category });
   } catch (error) {
     console.error("Failed to update category:", error);
+    const err = error as Error;
     return NextResponse.json(
-      { error: "Internal server error" },
+      {
+        error: "Internal server error",
+        _debug: {
+          message: err?.message,
+          name: err?.name,
+          stack: err?.stack?.split("\n").slice(0, 5),
+        },
+      },
       { status: 500 }
     );
   }
@@ -152,8 +168,16 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ category, deleted: true });
   } catch (error) {
     console.error("Failed to delete category:", error);
+    const err = error as Error;
     return NextResponse.json(
-      { error: "Internal server error" },
+      {
+        error: "Internal server error",
+        _debug: {
+          message: err?.message,
+          name: err?.name,
+          stack: err?.stack?.split("\n").slice(0, 5),
+        },
+      },
       { status: 500 }
     );
   }
