@@ -19,6 +19,8 @@ import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
+import { CheckCheck, Undo2 } from "lucide-react";
 import {
   User,
   Phone,
@@ -38,6 +40,7 @@ export interface CustomerDetailData {
   agencyId: string;
   agencyName?: string;
   customerName: string;
+  customerBirthDate?: string | null;
   usimNumber: string | null;
   entryDate: string | null;
   subscriptionNumber: string | null;
@@ -77,6 +80,7 @@ export interface CustomerDetailData {
   holdReason?: string | null;
   notes?: string | null;
   noteCount?: number;
+  excludedFromSupplement?: boolean | null;
   [key: string]: unknown;
 }
 
@@ -373,6 +377,78 @@ export function CustomerDetailDialog({
         </div>
 
         <div className="px-6 py-4 space-y-5">
+          {/* ── 어드민 액션: 명변완료 / 환수처리 ── */}
+          {canEdit && isAdmin && (
+            <section className="rounded-lg border bg-blue-50/40 p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                {(() => {
+                  const allReviewed =
+                    customer.applicationDocsReview === "완료" &&
+                    customer.nameChangeDocsReview === "완료" &&
+                    customer.arcReview === "완료" &&
+                    customer.autopayReview === "완료";
+                  return !allReviewed ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                      onClick={() => {
+                        if (!confirm("4개 서류 검수를 모두 '완료' 처리합니다. 진행할까요?")) return;
+                        update("applicationDocsReview", "완료");
+                        update("nameChangeDocsReview", "완료");
+                        update("arcReview", "완료");
+                        update("autopayReview", "완료");
+                      }}
+                    >
+                      <CheckCheck className="h-4 w-4 mr-1" />
+                      명의변경 완료처리
+                    </Button>
+                  ) : (
+                    <Badge className="bg-emerald-100 text-emerald-700">
+                      <CheckCheck className="h-3 w-3 mr-1 inline" />
+                      서류 4건 모두 완료
+                    </Badge>
+                  );
+                })()}
+
+                {customer.excludedFromSupplement ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="border-orange-300 text-orange-700 hover:bg-orange-50"
+                    onClick={() => {
+                      if (!confirm("환수 처리를 해제합니다. 미보완 알림에 다시 노출됩니다.")) return;
+                      update("excludedFromSupplement", "false");
+                    }}
+                  >
+                    <Undo2 className="h-4 w-4 mr-1" />
+                    환수 해제
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="border-rose-300 text-rose-700 hover:bg-rose-50"
+                    onClick={() => {
+                      if (!confirm("환수 처리하면 미보완 알림에서 제외됩니다. 진행할까요?")) return;
+                      update("excludedFromSupplement", "true");
+                    }}
+                  >
+                    환수 처리
+                  </Button>
+                )}
+
+                {customer.excludedFromSupplement && (
+                  <span className="ml-auto text-xs font-medium text-orange-700">
+                    환수 처리됨 — 미보완 알림 제외
+                  </span>
+                )}
+              </div>
+            </section>
+          )}
+
           {/* ── 기본 정보 ── */}
           <section>
             <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
@@ -380,6 +456,12 @@ export function CustomerDetailDialog({
               기본 정보
             </h3>
             <div className="grid grid-cols-2 gap-x-4">
+              <EditableText
+                label="생년월일"
+                value={customer.customerBirthDate}
+                type="date"
+                onSave={canEdit ? (v) => update("customerBirthDate", v) : undefined}
+              />
               <EditableText
                 label="USIM번호"
                 value={customer.usimNumber}

@@ -90,6 +90,8 @@ export function ActivationForm({
     // 보류 사유
     holdReason: (initialData?.holdReason as string) || "",
     notes: (initialData?.notes as string) || "",
+    // 고객 본인확인 정보
+    customerBirthDate: (initialData?.customerBirthDate as string) || "",
   });
 
   const updateField = (field: string, value: unknown) => {
@@ -171,6 +173,18 @@ export function ActivationForm({
               value={formData.customerName}
               onChange={(e) => updateField("customerName", e.target.value)}
               required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="customerBirthDate">생년월일</Label>
+            <Input
+              id="customerBirthDate"
+              type="date"
+              value={formData.customerBirthDate}
+              onChange={(e) =>
+                updateField("customerBirthDate", e.target.value)
+              }
             />
           </div>
 

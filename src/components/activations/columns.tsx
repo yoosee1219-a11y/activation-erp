@@ -261,6 +261,8 @@ export function getColumns(options: {
   onToggleLock?: (id: string, lock: boolean) => void;
   canLock?: boolean;
   staffList?: string[];
+  /** 거래처 인라인 수정용: 활성 중분류 목록 [{id, name, parentName}] */
+  agencyOptions?: Array<{ id: string; name: string; parentName: string }>;
 }): ColumnDef<ActivationRow>[] {
   const {
     onDelete,
@@ -269,6 +271,7 @@ export function getColumns(options: {
     onToggleLock,
     canLock,
     staffList = [],
+    agencyOptions = [],
   } = options;
 
   return [
@@ -324,21 +327,59 @@ export function getColumns(options: {
       : []),
     {
       id: "majorCategory",
-      header: "거래처",
+      header: "대분류",
       cell: ({ row }) => (
         <span className="font-medium text-sm">
-          {row.original.majorCategoryName || "-"}
+          {row.original.majorCategoryName || (
+            <span className="text-rose-500">미분류</span>
+          )}
         </span>
       ),
     },
     {
       id: "mediumCategory",
-      header: "상세",
-      cell: ({ row }) => (
-        <span className="text-sm text-gray-600">
-          {row.original.mediumCategoryName || "-"}
-        </span>
-      ),
+      header: "거래처",
+      cell: ({ row }) => {
+        const currentName = row.original.mediumCategoryName;
+        const currentId = row.original.agencyId;
+        // 인라인 수정 가능 + 옵션 로드된 경우만 select
+        if (!onInlineUpdate || agencyOptions.length === 0) {
+          return (
+            <span className="text-sm text-gray-600">
+              {currentName && currentName !== "미분류" ? currentName : (
+                <span className="text-rose-500">미분류</span>
+              )}
+            </span>
+          );
+        }
+        const isUnclassified = !currentName || currentName === "미분류";
+        return (
+          <Select
+            value={currentId || ""}
+            onValueChange={(v) => onInlineUpdate(row.original.id, "agencyId", v)}
+          >
+            <SelectTrigger
+              className={`h-7 w-[150px] text-xs ${
+                isUnclassified
+                  ? "border-rose-300 bg-rose-50 text-rose-700"
+                  : "border-dashed"
+              }`}
+            >
+              <SelectValue placeholder="미분류" />
+            </SelectTrigger>
+            <SelectContent>
+              {agencyOptions.map((opt) => (
+                <SelectItem key={opt.id} value={opt.id}>
+                  <span className="text-xs text-gray-400 mr-1">
+                    [{opt.parentName}]
+                  </span>
+                  {opt.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        );
+      },
     },
     {
       accessorKey: "customerName",

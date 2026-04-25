@@ -835,7 +835,8 @@ export async function getNameChangeIncomplete(agencyIds?: string[]) {
       a.new_phone_number as "newPhoneNumber",
       a.name_change_docs_review as "nameChangeDocsReview",
       a.arc_review as "arcReview",
-      a.autopay_review as "autopayReview"
+      a.autopay_review as "autopayReview",
+      a.arc_supplement_deadline as "arcSupplementDeadline"
     FROM activations a
     LEFT JOIN agency_categories ag ON a.agency_id = ag.id
     WHERE a.work_status IN ('개통완료', '완료')
@@ -844,7 +845,7 @@ export async function getNameChangeIncomplete(agencyIds?: string[]) {
            OR COALESCE(a.autopay_review, '') != '완료')
       AND COALESCE(a.excluded_from_supplement, false) = false
       ${agencyFilter}
-    ORDER BY a.created_at DESC
+    ORDER BY a.arc_supplement_deadline ASC NULLS LAST, a.created_at DESC
   `);
   return result.rows;
 }

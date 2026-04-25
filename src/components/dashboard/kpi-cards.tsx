@@ -871,6 +871,7 @@ export function KpiCards({
       "autopayRegistered",
       "combinedUnitNameChange",
       "billingAccountNameChange",
+      "excludedFromSupplement",
     ]);
     const parsedValue: unknown = booleanFields.has(field)
       ? value === "true"
@@ -1149,37 +1150,70 @@ export function KpiCards({
             <TableHead className="text-center">명의변경</TableHead>
             <TableHead className="text-center">외국인등록증</TableHead>
             <TableHead className="text-center">자동이체</TableHead>
+            <TableHead className="text-center">보완 잔여</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {group.items.map((item: { id: string; customerName: string; newPhoneNumber: string | null; nameChangeDocsReview: string | null; arcReview: string | null; autopayReview: string | null }) => (
-            <TableRow key={item.id}>
-              <TableCell>
-                <button
-                  className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-left"
-                  onClick={(e) => { e.stopPropagation(); openCustomerDetail(item.id); }}
-                >
-                  {item.customerName}
-                </button>
-              </TableCell>
-              <TableCell className="text-sm">{item.newPhoneNumber || "-"}</TableCell>
-              <TableCell className="text-center">
-                <Badge className={item.nameChangeDocsReview === '완료' ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
-                  {item.nameChangeDocsReview || '미검수'}
-                </Badge>
-              </TableCell>
-              <TableCell className="text-center">
-                <Badge className={item.arcReview === '완료' ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
-                  {item.arcReview || '미검수'}
-                </Badge>
-              </TableCell>
-              <TableCell className="text-center">
-                <Badge className={item.autopayReview === '완료' ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
-                  {item.autopayReview || '미검수'}
-                </Badge>
-              </TableCell>
-            </TableRow>
-          ))}
+          {group.items.map((item: { id: string; customerName: string; newPhoneNumber: string | null; nameChangeDocsReview: string | null; arcReview: string | null; autopayReview: string | null; arcSupplementDeadline?: string | null }) => {
+            const deadline = item.arcSupplementDeadline;
+            let daysLeft: number | null = null;
+            if (deadline) {
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const d = new Date(deadline);
+              d.setHours(0, 0, 0, 0);
+              daysLeft = Math.round((d.getTime() - today.getTime()) / 86400000);
+            }
+            const dlBadgeClass =
+              daysLeft === null
+                ? "bg-gray-100 text-gray-500"
+                : daysLeft < 0
+                ? "bg-red-100 text-red-700"
+                : daysLeft <= 7
+                ? "bg-orange-100 text-orange-700"
+                : daysLeft <= 30
+                ? "bg-yellow-100 text-yellow-700"
+                : "bg-blue-100 text-blue-700";
+            const dlText =
+              daysLeft === null
+                ? "-"
+                : daysLeft < 0
+                ? `초과 ${Math.abs(daysLeft)}일`
+                : daysLeft === 0
+                ? "오늘"
+                : `D-${daysLeft}`;
+            return (
+              <TableRow key={item.id}>
+                <TableCell>
+                  <button
+                    className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-left"
+                    onClick={(e) => { e.stopPropagation(); openCustomerDetail(item.id); }}
+                  >
+                    {item.customerName}
+                  </button>
+                </TableCell>
+                <TableCell className="text-sm">{item.newPhoneNumber || "-"}</TableCell>
+                <TableCell className="text-center">
+                  <Badge className={item.nameChangeDocsReview === '완료' ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
+                    {item.nameChangeDocsReview || '미검수'}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-center">
+                  <Badge className={item.arcReview === '완료' ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
+                    {item.arcReview || '미검수'}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-center">
+                  <Badge className={item.autopayReview === '완료' ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
+                    {item.autopayReview || '미검수'}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-center">
+                  <Badge className={dlBadgeClass}>{dlText}</Badge>
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>

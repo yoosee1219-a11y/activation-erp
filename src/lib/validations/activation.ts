@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 export const createActivationSchema = z.object({
   agencyId: z.string().min(1, "거래처 ID는 필수입니다"),
   customerName: z.string().min(1, "고객명은 필수입니다").max(100),
+  customerBirthDate: z.string().optional().nullable(),
   usimNumber: z.string().max(50).optional().nullable(),
   entryDate: z.string().optional().nullable(),
 
@@ -52,6 +53,8 @@ export const createActivationSchema = z.object({
   terminationReason: z.string().max(50).optional().nullable(),
   terminationAlertDate: z.string().optional().nullable(),
   notes: z.string().max(500).optional().nullable(),
+  // 보완 알림 제외 (환수 처리)
+  excludedFromSupplement: z.boolean().optional(),
 });
 
 /** 개통 데이터 수정 시 입력값 검증 스키마 (모든 필드 optional) */

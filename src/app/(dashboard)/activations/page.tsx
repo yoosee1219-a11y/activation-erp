@@ -278,10 +278,31 @@ export default function ActivationsPage() {
       "autopayRegistered",
       "combinedUnitNameChange",
       "billingAccountNameChange",
+      "excludedFromSupplement",
     ]);
     const parsedValue: unknown = booleanFields.has(field)
       ? value === "true"
       : value;
+
+    // 거래처 변경은 카테고리 이름까지 재매핑해야 하므로 PATCH 후 전체 재조회
+    if (field === "agencyId") {
+      try {
+        const res = await fetch(`/api/activations/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ [field]: parsedValue }),
+        });
+        if (!res.ok) {
+          toast.error("거래처 변경 실패");
+        } else {
+          toast.success("거래처가 변경되었습니다.");
+        }
+      } catch {
+        toast.error("거래처 변경 중 오류");
+      }
+      fetchData();
+      return;
+    }
 
     setData((prev) =>
       prev.map((row) =>
@@ -328,6 +349,23 @@ export default function ActivationsPage() {
 
   const isAdmin = user?.role === "ADMIN" || user?.role === "SUB_ADMIN";
 
+  // 거래처 인라인 수정용 옵션 (활성 중분류 + 부모 대분류 이름)
+  const agencyOptions = useMemo(() => {
+    const opts: { id: string; name: string; parentName: string }[] = [];
+    categories.forEach((major) => {
+      (major.children || []).forEach((medium) => {
+        opts.push({
+          id: medium.id,
+          name: medium.name,
+          parentName: major.name,
+        });
+      });
+    });
+    return opts.sort((a, b) =>
+      `${a.parentName}>${a.name}`.localeCompare(`${b.parentName}>${b.name}`)
+    );
+  }, [categories]);
+
   const columns = getColumns({
     onDelete: handleDelete,
     canDelete: user?.role === "ADMIN" || user?.role === "SUB_ADMIN",
@@ -335,6 +373,7 @@ export default function ActivationsPage() {
     onToggleLock: isAdmin ? handleToggleLock : undefined,
     canLock: isAdmin,
     staffList: STAFF_LIST,
+    agencyOptions: isAdmin ? agencyOptions : [],
   });
 
   const defaultHiddenColumns: VisibilityState = {
