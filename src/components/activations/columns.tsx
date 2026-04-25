@@ -29,6 +29,7 @@ export type ActivationRow = {
   majorCategoryName?: string;
   mediumCategoryName?: string;
   customerName: string;
+  customerBirthDate?: string | null;
   usimNumber: string | null;
   entryDate: string | null;
   subscriptionNumber: string | null;
@@ -94,11 +95,14 @@ function InlineTextCell({
   onSave,
   placeholder = "-",
   width = "w-[100px]",
+  format,
 }: {
   value: string;
   onSave: (v: string) => void;
   placeholder?: string;
   width?: string;
+  /** 입력 변환기 (예: 7자리 자동 - 삽입) */
+  format?: (raw: string) => string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -120,9 +124,13 @@ function InlineTextCell({
   return (
     <input
       autoFocus
+      placeholder={placeholder}
       className={`h-7 ${width} rounded border border-blue-400 bg-white px-2 text-xs focus:outline-none`}
       value={draft}
-      onChange={(e) => setDraft(e.target.value)}
+      onChange={(e) => {
+        const next = format ? format(e.target.value) : e.target.value;
+        setDraft(next);
+      }}
       onBlur={() => {
         setEditing(false);
         if (draft !== value) onSave(draft);
@@ -387,6 +395,30 @@ export function getColumns(options: {
       cell: ({ row }) => (
         <span className="font-medium">{row.getValue("customerName")}</span>
       ),
+    },
+    // ─── 생년월일 (인라인, 7자리 자동 - 포맷) ───
+    {
+      accessorKey: "customerBirthDate",
+      header: "생년월일",
+      cell: ({ row }) => {
+        const val = row.original.customerBirthDate || "";
+        if (!onInlineUpdate)
+          return <span className="text-xs">{val || "-"}</span>;
+        return (
+          <InlineTextCell
+            value={val}
+            placeholder="871219-1"
+            width="w-[100px]"
+            format={(v) => {
+              const d = v.replace(/\D/g, "").slice(0, 7);
+              return d.length > 6 ? `${d.slice(0, 6)}-${d.slice(6)}` : d;
+            }}
+            onSave={(v) =>
+              onInlineUpdate(row.original.id, "customerBirthDate", v)
+            }
+          />
+        );
+      },
     },
     // ─── 유심번호 (인라인 텍스트) ───
     {

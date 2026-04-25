@@ -127,6 +127,49 @@ function AmountCell({ value }: { value: number }) {
   return <span className="text-gray-400">0</span>;
 }
 
+// 책갈피 탭 (대시보드와 동일 스타일)
+function SettlementTab({
+  active,
+  onClick,
+  label,
+  count,
+  size = "lg",
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+  size?: "lg" | "sm";
+}) {
+  const isLg = size === "lg";
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={`group relative flex min-w-0 items-center justify-center gap-2 rounded-t-lg ${
+        isLg ? "px-4 py-2 text-sm" : "px-3 py-1.5 text-xs"
+      } font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-400 ${
+        active
+          ? "-translate-y-1 border-x border-t border-gray-200 bg-white shadow-[0_-4px_12px_-2px_rgba(0,0,0,0.08)]"
+          : "border border-transparent bg-gray-50 text-gray-600 hover:-translate-y-0.5 hover:bg-gray-100"
+      }`}
+    >
+      <span className={`whitespace-nowrap ${active ? "text-gray-900" : ""}`}>
+        {label}
+      </span>
+      <span
+        className={`rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${
+          active ? "bg-gray-900 text-white" : "bg-gray-200 text-gray-700"
+        }`}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
 function StatusBadge({ status }: { status: string | null }) {
   if (!status) return <span className="text-gray-400">-</span>;
   const map: Record<string, string> = {
@@ -525,6 +568,69 @@ export default function SettlementPage() {
     });
   };
 
+  // ─── 책갈피 탭 (대분류 → 거래처) 상태 ───
+  const [settlementMajor, setSettlementMajor] = useState<string>("all");
+  const [settlementMedium, setSettlementMedium] = useState<string>("all");
+
+  // 대분류 변경 시 중분류 초기화
+  useEffect(() => {
+    setSettlementMedium("all");
+  }, [settlementMajor]);
+
+  // 거래처(중분류) → 대분류 매핑
+  const agencyMajorInfo = useMemo(() => {
+    const m = new Map<string, { majorId: string; majorName: string }>();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    categories.forEach((major: any) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (major.children || []).forEach((medium: any) => {
+        m.set(medium.id, { majorId: major.id, majorName: major.name });
+      });
+    });
+    return m;
+  }, [categories]);
+
+  // 대분류 탭 + 카운트
+  const settlementMajorTabs = useMemo(() => {
+    if (!data) return [];
+    const counts = new Map<string, { name: string; count: number }>();
+    data.agencies.forEach((a) => {
+      const info = agencyMajorInfo.get(a.agencyId);
+      if (info) {
+        const cur = counts.get(info.majorId) || { name: info.majorName, count: 0 };
+        cur.count += 1;
+        counts.set(info.majorId, cur);
+      }
+    });
+    return Array.from(counts.entries()).map(([id, v]) => ({
+      id,
+      name: v.name,
+      count: v.count,
+    }));
+  }, [data, agencyMajorInfo]);
+
+  // 선택된 대분류의 중분류(거래처) 탭
+  const settlementMediumTabs = useMemo(() => {
+    if (!data || settlementMajor === "all") return [];
+    return data.agencies
+      .filter((a) => agencyMajorInfo.get(a.agencyId)?.majorId === settlementMajor)
+      .map((a) => ({ id: a.agencyId, name: a.agencyName, count: a.commission.normalCount }));
+  }, [data, settlementMajor, agencyMajorInfo]);
+
+  // 활성 탭 기준 표시할 거래처
+  const visibleAgencies = useMemo(() => {
+    if (!data) return [];
+    if (settlementMedium !== "all") {
+      return data.agencies.filter((a) => a.agencyId === settlementMedium);
+    }
+    if (settlementMajor !== "all") {
+      return data.agencies.filter(
+        (a) => agencyMajorInfo.get(a.agencyId)?.majorId === settlementMajor
+      );
+    }
+    return data.agencies;
+  }, [data, settlementMajor, settlementMedium, agencyMajorInfo]);
+
   // Role guard: ADMIN, SUB_ADMIN 접근 가능
   if (userRole !== null && userRole !== "ADMIN" && userRole !== "SUB_ADMIN") {
     return (
@@ -682,8 +788,64 @@ export default function SettlementPage() {
       {/* Settlement Results */}
       {!loading && data && (
         <div className="space-y-4">
-          {/* Per-agency cards */}
-          {data.agencies.map((agency) => (
+          {/* 책갈피 탭 — 대분류 */}
+          {settlementMajorTabs.length > 0 && (
+            <div className="space-y-1">
+              <div
+                role="tablist"
+                aria-label="대분류 탭"
+                className="flex flex-wrap items-end gap-1 border-b border-gray-200"
+              >
+                <SettlementTab
+                  active={settlementMajor === "all"}
+                  onClick={() => setSettlementMajor("all")}
+                  label="전체"
+                  count={data.agencies.length}
+                />
+                {settlementMajorTabs.map((t) => (
+                  <SettlementTab
+                    key={t.id}
+                    active={settlementMajor === t.id}
+                    onClick={() => setSettlementMajor(t.id)}
+                    label={t.name}
+                    count={t.count}
+                  />
+                ))}
+              </div>
+
+              {settlementMediumTabs.length > 0 && (
+                <div
+                  role="tablist"
+                  aria-label="거래처 탭"
+                  className="flex flex-wrap items-end gap-1 border-b border-gray-200 pl-4"
+                >
+                  <span className="flex items-center gap-1 pr-2 text-[11px] font-medium text-gray-400">
+                    거래처
+                  </span>
+                  <SettlementTab
+                    size="sm"
+                    active={settlementMedium === "all"}
+                    onClick={() => setSettlementMedium("all")}
+                    label="전체"
+                    count={settlementMediumTabs.reduce((s, t) => s + t.count, 0)}
+                  />
+                  {settlementMediumTabs.map((t) => (
+                    <SettlementTab
+                      key={t.id}
+                      size="sm"
+                      active={settlementMedium === t.id}
+                      onClick={() => setSettlementMedium(t.id)}
+                      label={t.name}
+                      count={t.count}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Per-agency cards (활성 탭 기준 필터) */}
+          {visibleAgencies.map((agency) => (
             <AgencySettlementCard
               key={agency.agencyId}
               agency={agency}
@@ -701,6 +863,13 @@ export default function SettlementPage() {
             <Card>
               <CardContent className="p-8 text-center text-gray-500">
                 해당 월에 정산 데이터가 없습니다.
+              </CardContent>
+            </Card>
+          )}
+          {visibleAgencies.length === 0 && data.agencies.length > 0 && (
+            <Card>
+              <CardContent className="p-8 text-center text-gray-500">
+                해당 탭에 정산 데이터가 없습니다.
               </CardContent>
             </Card>
           )}

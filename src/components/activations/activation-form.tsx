@@ -177,14 +177,23 @@ export function ActivationForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="customerBirthDate">생년월일</Label>
+            <Label htmlFor="customerBirthDate">생년월일 (주민앞7자리)</Label>
             <Input
               id="customerBirthDate"
-              type="date"
+              type="text"
+              inputMode="numeric"
+              maxLength={8}
+              placeholder="871219-1"
               value={formData.customerBirthDate}
-              onChange={(e) =>
-                updateField("customerBirthDate", e.target.value)
-              }
+              onChange={(e) => {
+                // 숫자만 추출 후 6자리 + - + 1자리로 자동 포맷
+                const digits = e.target.value.replace(/\D/g, "").slice(0, 7);
+                const formatted =
+                  digits.length > 6
+                    ? `${digits.slice(0, 6)}-${digits.slice(6)}`
+                    : digits;
+                updateField("customerBirthDate", formatted);
+              }}
             />
           </div>
 

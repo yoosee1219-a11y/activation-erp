@@ -4,7 +4,15 @@ import { z } from "zod/v4";
 export const createActivationSchema = z.object({
   agencyId: z.string().min(1, "거래처 ID는 필수입니다"),
   customerName: z.string().min(1, "고객명은 필수입니다").max(100),
-  customerBirthDate: z.string().optional().nullable(),
+  customerBirthDate: z
+    .string()
+    .max(20)
+    .optional()
+    .nullable()
+    .refine(
+      (v) => !v || /^\d{6}-?\d{1}$/.test(v.trim()),
+      "주민번호 앞 7자리 형식이어야 합니다 (예: 871219-1)"
+    ),
   usimNumber: z.string().max(50).optional().nullable(),
   entryDate: z.string().optional().nullable(),
 
