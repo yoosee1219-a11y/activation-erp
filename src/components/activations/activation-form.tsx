@@ -183,7 +183,7 @@ export function ActivationForm({
               type="text"
               inputMode="numeric"
               maxLength={8}
-              placeholder="871219-1"
+              placeholder="예) 990101-1"
               value={formData.customerBirthDate}
               onChange={(e) => {
                 // 숫자만 추출 후 6자리 + - + 1자리로 자동 포맷

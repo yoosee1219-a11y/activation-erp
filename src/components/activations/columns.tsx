@@ -407,7 +407,7 @@ export function getColumns(options: {
         return (
           <InlineTextCell
             value={val}
-            placeholder="871219-1"
+            placeholder="예) 990101-1"
             width="w-[100px]"
             format={(v) => {
               const d = v.replace(/\D/g, "").slice(0, 7);

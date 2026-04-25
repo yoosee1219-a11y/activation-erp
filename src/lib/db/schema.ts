@@ -68,7 +68,7 @@ export const activations = pgTable("activations", {
     .notNull()
     .references(() => agencies.id),
   customerName: text("customer_name").notNull(),
-  customerBirthDate: text("customer_birth_date"), // 고객 생년월일 (본인확인용, "871219-1" 형식)
+  customerBirthDate: text("customer_birth_date"), // 고객 생년월일 (본인확인용, 7자리 "990101-1" 형식)
   usimNumber: text("usim_number"),
   entryDate: date("entry_date"), // 입국예정일
 

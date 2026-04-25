@@ -457,9 +457,9 @@ export function CustomerDetailDialog({
             </h3>
             <div className="grid grid-cols-2 gap-x-4">
               <EditableText
-                label="생년월일 (871219-1)"
+                label="생년월일"
                 value={customer.customerBirthDate}
-                placeholder="871219-1"
+                placeholder="예) 990101-1"
                 onSave={canEdit ? (v) => update("customerBirthDate", v) : undefined}
               />
               <EditableText

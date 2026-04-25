@@ -610,7 +610,7 @@ export default function ActivationsPage() {
           data={tabFilteredData}
           total={tabFilteredData.length}
           page={page}
-          pageSize={200}
+          pageSize={50}
           onPageChange={setPage}
           searchPlaceholder="가입번호/고객명/신규번호 검색..."
           highlightId={highlightId}
