@@ -72,8 +72,11 @@ export default function PartnerPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [availableMonths, setAvailableMonths] = useState<MonthSummary[]>([]);
 
-  // 대시보드 접기/펼치기
+  // 대시보드 접기/펼치기 (deprecated — mainView로 대체됨)
   const [dashboardCollapsed, setDashboardCollapsed] = useState(false);
+
+  // 메인 책갈피: 어느 영역을 볼지
+  const [mainView, setMainView] = useState<"dashboard" | "activations">("dashboard");
 
   // 유심 재고 현황
   const [usimStats, setUsimStats] = useState<UsimAgencyStats[]>([]);
@@ -564,10 +567,27 @@ export default function PartnerPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
+      {/* 메인 책갈피 — 한 화면에 한 영역만 표시 (스크롤 최소) */}
+      <BookmarkTabsBar>
+        <BookmarkTab
+          active={mainView === "dashboard"}
+          onClick={() => setMainView("dashboard")}
+          label="개통 현황"
+          count={data.length}
+        />
+        <BookmarkTab
+          active={mainView === "activations"}
+          onClick={() => setMainView("activations")}
+          label="고객 개통 관리"
+          count={filteredData.length}
+        />
+      </BookmarkTabsBar>
+
       {/* ═══════════════════════════════════════════════════════════
-          섹션 A: 대시보드 (접기 가능)
+          섹션 A: 대시보드 (mainView === "dashboard")
           ═══════════════════════════════════════════════════════════ */}
+      {mainView === "dashboard" && (
       <Card className="shadow-sm">
         <CardContent className="p-4 space-y-4">
           {/* 헤더 */}
@@ -746,10 +766,12 @@ export default function PartnerPage() {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* ═══════════════════════════════════════════════════════════
-          섹션 B: 고객 개통 관리
+          섹션 B: 고객 개통 관리 (mainView === "activations")
           ═══════════════════════════════════════════════════════════ */}
+      {mainView === "activations" && (
       <Card className="shadow-sm">
         <CardContent className="p-4 space-y-4">
           {/* 헤더 + 필터 */}
@@ -899,6 +921,7 @@ export default function PartnerPage() {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* 비밀번호 변경 다이얼로그 */}
       <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
