@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, Fragment, type ReactNode } from "react";
+import { useState, useMemo, useEffect, Fragment, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -316,177 +316,187 @@ function buildDetailHierarchy(
 
 /* ─── Count hierarchy table ─── */
 
+/* ─── 책갈피 탭 버튼 (drill-down 공통) ─── */
+function KpiTab({
+  active,
+  onClick,
+  label,
+  count,
+  size = "lg",
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+  size?: "lg" | "sm";
+}) {
+  const isLg = size === "lg";
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={`group relative flex min-w-0 items-center justify-center gap-2 rounded-t-lg ${
+        isLg ? "px-4 py-2 text-sm" : "px-3 py-1.5 text-xs"
+      } font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-400 ${
+        active
+          ? "-translate-y-1 border-x border-t border-gray-200 bg-white shadow-[0_-4px_12px_-2px_rgba(0,0,0,0.08)]"
+          : "border border-transparent bg-gray-50 text-gray-600 hover:-translate-y-0.5 hover:bg-gray-100"
+      }`}
+    >
+      <span className={`whitespace-nowrap ${active ? "text-gray-900" : ""}`}>
+        {label}
+      </span>
+      <span
+        className={`rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${
+          active ? "bg-gray-900 text-white" : "bg-gray-200 text-gray-700"
+        }`}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
 function CountHierarchyTable({
   hierarchy,
   total,
   badgeClass,
-  drillMajors,
-  drillMediums,
-  toggleMajor,
-  toggleMedium,
 }: {
   hierarchy: { majorGroups: CountMajor[]; uncategorized: CountItem[] };
   total: number;
   badgeClass: string;
-  drillMajors: Set<string>;
-  drillMediums: Set<string>;
-  toggleMajor: (id: string) => void;
-  toggleMedium: (id: string) => void;
 }) {
-  const pct = (n: number) => (total > 0 ? ((n / total) * 100).toFixed(1) : "0") + "%";
+  const [activeMajor, setActiveMajor] = useState<string | null>(null);
+  const pct = (n: number) =>
+    (total > 0 ? ((n / total) * 100).toFixed(1) : "0") + "%";
+
+  const uncTotal = hierarchy.uncategorized.reduce(
+    (s, i) => s + Number(i.count),
+    0
+  );
+
+  // 활성 탭 기준 거래처 행 (대분류 정보 포함해 평탄화)
+  const visibleRows = useMemo(() => {
+    type Row = { id: string; name: string; count: number; sub: string };
+    if (activeMajor === "__unc__") {
+      return hierarchy.uncategorized.map<Row>((item) => ({
+        id: item.agencyId,
+        name: item.agencyName,
+        count: Number(item.count),
+        sub: "미분류",
+      }));
+    }
+    if (activeMajor) {
+      const major = hierarchy.majorGroups.find(
+        (m) => m.majorId === activeMajor
+      );
+      const out: Row[] = [];
+      major?.mediums.forEach((med) =>
+        med.agencies.forEach((a) =>
+          out.push({
+            id: a.agencyId,
+            name: a.agencyName,
+            count: Number(a.count),
+            sub: med.mediumName,
+          })
+        )
+      );
+      return out;
+    }
+    // 전체
+    const out: Row[] = [];
+    hierarchy.majorGroups.forEach((m) =>
+      m.mediums.forEach((med) =>
+        med.agencies.forEach((a) =>
+          out.push({
+            id: a.agencyId,
+            name: a.agencyName,
+            count: Number(a.count),
+            sub: `${m.majorName} > ${med.mediumName}`,
+          })
+        )
+      )
+    );
+    hierarchy.uncategorized.forEach((item) =>
+      out.push({
+        id: item.agencyId,
+        name: item.agencyName,
+        count: Number(item.count),
+        sub: "미분류",
+      })
+    );
+    return out;
+  }, [hierarchy, activeMajor]);
+
+  const visibleTotal = visibleRows.reduce((s, r) => s + r.count, 0);
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead className="min-w-[180px]">거래처</TableHead>
-          <TableHead className="text-center">건수</TableHead>
-          <TableHead className="text-right">비율</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {hierarchy.majorGroups.map((major) => {
-          const isMajorOpen = drillMajors.has(major.majorId);
-          return (
-            <Fragment key={`m-${major.majorId}`}>
-              <TableRow
-                className="bg-gray-50/80 cursor-pointer hover:bg-gray-100/80"
-                onClick={() => toggleMajor(major.majorId)}
-              >
-                <TableCell className="font-bold">
-                  <div className="flex items-center gap-1">
-                    {isMajorOpen ? (
-                      <ChevronDown className="size-4 text-gray-500" />
-                    ) : (
-                      <ChevronRight className="size-4 text-gray-500" />
-                    )}
-                    {major.majorName}
-                  </div>
-                </TableCell>
-                <TableCell className="text-center">
-                  <Badge className={badgeClass}>{major.totalCount}건</Badge>
-                </TableCell>
-                <TableCell className="text-right text-sm text-gray-500">
-                  {pct(major.totalCount)}
-                </TableCell>
-              </TableRow>
+    <div className="space-y-2">
+      <div
+        role="tablist"
+        className="flex flex-wrap items-end gap-1 border-b border-gray-200"
+      >
+        <KpiTab
+          active={!activeMajor}
+          onClick={() => setActiveMajor(null)}
+          label="전체"
+          count={total}
+        />
+        {hierarchy.majorGroups.map((major) => (
+          <KpiTab
+            key={major.majorId}
+            active={activeMajor === major.majorId}
+            onClick={() => setActiveMajor(major.majorId)}
+            label={major.majorName}
+            count={major.totalCount}
+          />
+        ))}
+        {uncTotal > 0 && hierarchy.uncategorized.length > 0 && (
+          <KpiTab
+            active={activeMajor === "__unc__"}
+            onClick={() => setActiveMajor("__unc__")}
+            label="미분류"
+            count={uncTotal}
+          />
+        )}
+      </div>
 
-              {isMajorOpen &&
-                major.mediums.map((medium) => {
-                  const isMedOpen = drillMediums.has(medium.mediumId);
-                  return (
-                    <Fragment key={`md-${medium.mediumId}`}>
-                      <TableRow
-                        className="cursor-pointer hover:bg-gray-50"
-                        onClick={() => toggleMedium(medium.mediumId)}
-                      >
-                        <TableCell>
-                          <div className="flex items-center gap-1 pl-6">
-                            {isMedOpen ? (
-                              <ChevronDown className="size-3.5 text-gray-400" />
-                            ) : (
-                              <ChevronRight className="size-3.5 text-gray-400" />
-                            )}
-                            <span className="font-medium text-gray-700">{medium.mediumName}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant="secondary">{medium.totalCount}건</Badge>
-                        </TableCell>
-                        <TableCell className="text-right text-sm text-gray-500">
-                          {pct(medium.totalCount)}
-                        </TableCell>
-                      </TableRow>
-
-                      {isMedOpen &&
-                        medium.agencies.map((agency) => (
-                          <TableRow key={`a-${agency.agencyId}`}>
-                            <TableCell>
-                              <div className="pl-12 font-medium">{agency.agencyName}</div>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Badge className={badgeClass}>{agency.count}건</Badge>
-                            </TableCell>
-                            <TableCell className="text-right text-sm text-gray-500">
-                              {pct(Number(agency.count))}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                    </Fragment>
-                  );
-                })}
-            </Fragment>
-          );
-        })}
-
-        {/* 미분류 */}
-        {hierarchy.uncategorized.length > 0 &&
-          (() => {
-            if (hierarchy.uncategorized.length === 1) {
-              const item = hierarchy.uncategorized[0];
-              return (
-                <TableRow key={`unc-${item.agencyId}`}>
-                  <TableCell className="font-medium">{item.agencyName}</TableCell>
-                  <TableCell className="text-center">
-                    <Badge className={badgeClass}>{item.count}건</Badge>
-                  </TableCell>
-                  <TableCell className="text-right text-sm text-gray-500">
-                    {pct(Number(item.count))}
-                  </TableCell>
-                </TableRow>
-              );
-            }
-            const isUncOpen = drillMajors.has("__unc__");
-            const uncTotal = hierarchy.uncategorized.reduce((s, i) => s + Number(i.count), 0);
-            return (
-              <Fragment key="unc-group">
-                <TableRow
-                  className="bg-gray-50/80 cursor-pointer hover:bg-gray-100/80"
-                  onClick={() => toggleMajor("__unc__")}
-                >
-                  <TableCell className="font-bold">
-                    <div className="flex items-center gap-1">
-                      {isUncOpen ? (
-                        <ChevronDown className="size-4 text-gray-400" />
-                      ) : (
-                        <ChevronRight className="size-4 text-gray-400" />
-                      )}
-                      <span className="text-gray-500">미분류</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Badge className={badgeClass}>{uncTotal}건</Badge>
-                  </TableCell>
-                  <TableCell className="text-right text-sm text-gray-500">
-                    {pct(uncTotal)}
-                  </TableCell>
-                </TableRow>
-                {isUncOpen &&
-                  hierarchy.uncategorized.map((item) => (
-                    <TableRow key={`unc-${item.agencyId}`}>
-                      <TableCell>
-                        <div className="pl-8 font-medium">{item.agencyName}</div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge className={badgeClass}>{item.count}건</Badge>
-                      </TableCell>
-                      <TableCell className="text-right text-sm text-gray-500">
-                        {pct(Number(item.count))}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-              </Fragment>
-            );
-          })()}
-
-        {/* 합계 */}
-        <TableRow className="bg-gray-50 font-bold">
-          <TableCell>합계</TableCell>
-          <TableCell className="text-center">{total}건</TableCell>
-          <TableCell className="text-right">100%</TableCell>
-        </TableRow>
-      </TableBody>
-    </Table>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="min-w-[160px]">거래처</TableHead>
+            <TableHead className="text-xs text-gray-500">분류</TableHead>
+            <TableHead className="text-center">건수</TableHead>
+            <TableHead className="text-right">비율</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {visibleRows.map((row) => (
+            <TableRow key={row.id}>
+              <TableCell className="font-medium">{row.name}</TableCell>
+              <TableCell className="text-xs text-gray-500">{row.sub}</TableCell>
+              <TableCell className="text-center">
+                <Badge className={badgeClass}>{row.count}건</Badge>
+              </TableCell>
+              <TableCell className="text-right text-sm text-gray-500">
+                {pct(row.count)}
+              </TableCell>
+            </TableRow>
+          ))}
+          <TableRow className="bg-gray-50 font-bold">
+            <TableCell colSpan={2}>합계</TableCell>
+            <TableCell className="text-center">{visibleTotal}건</TableCell>
+            <TableCell className="text-right">
+              {total > 0
+                ? ((visibleTotal / total) * 100).toFixed(0) + "%"
+                : "0%"}
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    </div>
   );
 }
 
@@ -494,104 +504,147 @@ function CountHierarchyTable({
 
 function DetailHierarchySection({
   hierarchy,
-  drillMajors,
-  drillMediums,
-  toggleMajor,
-  toggleMedium,
   renderAgencyTable,
 }: {
   hierarchy: { majorGroups: DetailMajor[]; uncategorized: AgencyEntry[] };
-  drillMajors: Set<string>;
-  drillMediums: Set<string>;
-  toggleMajor: (id: string) => void;
-  toggleMedium: (id: string) => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   renderAgencyTable: (agencyId: string, group: { name: string; items: any[] }) => ReactNode;
 }) {
+  const [activeMajor, setActiveMajor] = useState<string | null>(null);
+  const [activeMedium, setActiveMedium] = useState<string | null>(null);
+
+  // 대분류 변경 시 중분류 초기화
+  useEffect(() => {
+    setActiveMedium(null);
+  }, [activeMajor]);
+
+  const totalItems = useMemo(() => {
+    const fromMajors = hierarchy.majorGroups.reduce(
+      (s, m) => s + m.totalItems,
+      0
+    );
+    const fromUnc = hierarchy.uncategorized.reduce(
+      (s, [, g]) => s + g.items.length,
+      0
+    );
+    return fromMajors + fromUnc;
+  }, [hierarchy]);
+
+  const uncCount = useMemo(
+    () =>
+      hierarchy.uncategorized.reduce((s, [, g]) => s + g.items.length, 0),
+    [hierarchy]
+  );
+
+  // 활성 탭 기준 거래처 목록
+  const visibleAgencies = useMemo(() => {
+    if (activeMajor === "__unc__") return hierarchy.uncategorized;
+    if (activeMedium) {
+      const major = hierarchy.majorGroups.find((m) =>
+        m.mediums.some((med) => med.mediumId === activeMedium)
+      );
+      return (
+        major?.mediums.find((med) => med.mediumId === activeMedium)?.agencies ||
+        []
+      );
+    }
+    if (activeMajor) {
+      const major = hierarchy.majorGroups.find(
+        (m) => m.majorId === activeMajor
+      );
+      return major?.mediums.flatMap((m) => m.agencies) || [];
+    }
+    // 전체
+    const all: AgencyEntry[] = [];
+    hierarchy.majorGroups.forEach((m) =>
+      m.mediums.forEach((med) => all.push(...med.agencies))
+    );
+    all.push(...hierarchy.uncategorized);
+    return all;
+  }, [hierarchy, activeMajor, activeMedium]);
+
+  // 선택된 대분류의 중분류 목록
+  const mediumTabs = useMemo(() => {
+    if (!activeMajor || activeMajor === "__unc__") return [];
+    const major = hierarchy.majorGroups.find((m) => m.majorId === activeMajor);
+    return major?.mediums || [];
+  }, [hierarchy, activeMajor]);
+
   return (
     <div className="space-y-3">
-      {hierarchy.majorGroups.map((major) => {
-        const isMajorOpen = drillMajors.has(major.majorId);
-        return (
-          <div key={major.majorId}>
-            <div
-              className="flex items-center gap-2 py-2 px-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100"
-              onClick={() => toggleMajor(major.majorId)}
-            >
-              {isMajorOpen ? (
-                <ChevronDown className="size-4 text-gray-500" />
-              ) : (
-                <ChevronRight className="size-4 text-gray-500" />
-              )}
-              <span className="font-bold text-sm">{major.majorName}</span>
-              <Badge variant="outline">{major.totalItems}건</Badge>
-            </div>
+      {/* 대분류 책갈피 */}
+      <div
+        role="tablist"
+        aria-label="대분류 탭"
+        className="flex flex-wrap items-end gap-1 border-b border-gray-200"
+      >
+        <KpiTab
+          active={!activeMajor}
+          onClick={() => setActiveMajor(null)}
+          label="전체"
+          count={totalItems}
+        />
+        {hierarchy.majorGroups.map((major) => (
+          <KpiTab
+            key={major.majorId}
+            active={activeMajor === major.majorId}
+            onClick={() => setActiveMajor(major.majorId)}
+            label={major.majorName}
+            count={major.totalItems}
+          />
+        ))}
+        {uncCount > 0 && (
+          <KpiTab
+            active={activeMajor === "__unc__"}
+            onClick={() => setActiveMajor("__unc__")}
+            label="미분류"
+            count={uncCount}
+          />
+        )}
+      </div>
 
-            {isMajorOpen && (
-              <div className="space-y-2 mt-2 ml-2">
-                {major.mediums.map((medium) => {
-                  const isMedOpen = drillMediums.has(medium.mediumId);
-                  return (
-                    <div key={medium.mediumId}>
-                      <div
-                        className="flex items-center gap-2 py-1.5 px-3 cursor-pointer hover:bg-gray-50 rounded"
-                        onClick={() => toggleMedium(medium.mediumId)}
-                      >
-                        {isMedOpen ? (
-                          <ChevronDown className="size-3.5 text-gray-400" />
-                        ) : (
-                          <ChevronRight className="size-3.5 text-gray-400" />
-                        )}
-                        <span className="font-medium text-sm text-gray-700">{medium.mediumName}</span>
-                        <Badge variant="secondary" className="text-xs">
-                          {medium.totalItems}건
-                        </Badge>
-                      </div>
-
-                      {isMedOpen && (
-                        <div className="space-y-4 mt-2 ml-4">
-                          {medium.agencies.map(([agencyId, group]) =>
-                            renderAgencyTable(agencyId, group)
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })}
-
-      {/* 미분류 */}
-      {hierarchy.uncategorized.length > 0 && (
-        <div>
-          {hierarchy.uncategorized.length > 1 && (
-            <div
-              className="flex items-center gap-2 py-2 px-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 mb-2"
-              onClick={() => toggleMajor("__unc__")}
-            >
-              {drillMajors.has("__unc__") ? (
-                <ChevronDown className="size-4 text-gray-400" />
-              ) : (
-                <ChevronRight className="size-4 text-gray-400" />
-              )}
-              <span className="font-bold text-sm text-gray-500">미분류</span>
-              <Badge variant="outline">
-                {hierarchy.uncategorized.reduce((s, [, g]) => s + g.items.length, 0)}건
-              </Badge>
-            </div>
-          )}
-          {(hierarchy.uncategorized.length === 1 || drillMajors.has("__unc__")) && (
-            <div className={`space-y-4 ${hierarchy.uncategorized.length > 1 ? "ml-2" : ""}`}>
-              {hierarchy.uncategorized.map(([agencyId, group]) =>
-                renderAgencyTable(agencyId, group)
-              )}
-            </div>
-          )}
+      {/* 중분류 책갈피 (대분류 선택 시) */}
+      {mediumTabs.length > 0 && (
+        <div
+          role="tablist"
+          aria-label="중분류 탭"
+          className="flex flex-wrap items-end gap-1 border-b border-gray-200 pl-4"
+        >
+          <span className="flex items-center gap-1 pr-2 text-[11px] font-medium text-gray-400">
+            중분류
+          </span>
+          <KpiTab
+            size="sm"
+            active={!activeMedium}
+            onClick={() => setActiveMedium(null)}
+            label="전체"
+            count={mediumTabs.reduce((s, m) => s + m.totalItems, 0)}
+          />
+          {mediumTabs.map((med) => (
+            <KpiTab
+              key={med.mediumId}
+              size="sm"
+              active={activeMedium === med.mediumId}
+              onClick={() => setActiveMedium(med.mediumId)}
+              label={med.mediumName}
+              count={med.totalItems}
+            />
+          ))}
         </div>
       )}
+
+      {/* 거래처 테이블들 */}
+      <div className="space-y-4">
+        {visibleAgencies.length === 0 ? (
+          <div className="py-8 text-center text-sm text-gray-400">
+            데이터가 없습니다.
+          </div>
+        ) : (
+          visibleAgencies.map(([agencyId, group]) =>
+            renderAgencyTable(agencyId, group)
+          )
+        )}
+      </div>
     </div>
   );
 }
@@ -625,31 +678,11 @@ export function KpiCards({
   const [expanded, setExpanded] = useState<KpiKey | null>(null);
   type CommitmentFilter = "all" | "commitment" | "noCommitment";
   const [commitmentFilter, setCommitmentFilter] = useState<CommitmentFilter>("all");
-  const [drillMajors, setDrillMajors] = useState<Set<string>>(new Set());
-  const [drillMediums, setDrillMediums] = useState<Set<string>>(new Set());
   const [detailCustomer, setDetailCustomer] =
     useState<CustomerDetailData | null>(null);
 
   const toggle = (key: KpiKey) => {
     setExpanded((prev) => (prev === key ? null : key));
-  };
-
-  const toggleDrillMajor = (id: string) => {
-    setDrillMajors((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const toggleDrillMedium = (id: string) => {
-    setDrillMediums((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
   };
 
   const hasHierarchy = categories.length > 0 && agencies.length > 0;
@@ -1383,10 +1416,6 @@ export function KpiCards({
             ) : monthlyCompletedDetailHierarchy ? (
               <DetailHierarchySection
                 hierarchy={monthlyCompletedDetailHierarchy}
-                drillMajors={drillMajors}
-                drillMediums={drillMediums}
-                toggleMajor={toggleDrillMajor}
-                toggleMedium={toggleDrillMedium}
                 renderAgencyTable={renderMonthlyCompletedDetailAgency}
               />
             ) : (
@@ -1411,10 +1440,6 @@ export function KpiCards({
             {pendingHierarchy ? (
               <DetailHierarchySection
                 hierarchy={pendingHierarchy}
-                drillMajors={drillMajors}
-                drillMediums={drillMediums}
-                toggleMajor={toggleDrillMajor}
-                toggleMedium={toggleDrillMedium}
                 renderAgencyTable={renderPendingAgency}
               />
             ) : (
@@ -1439,10 +1464,6 @@ export function KpiCards({
             {nameChangeHierarchy ? (
               <DetailHierarchySection
                 hierarchy={nameChangeHierarchy}
-                drillMajors={drillMajors}
-                drillMediums={drillMediums}
-                toggleMajor={toggleDrillMajor}
-                toggleMedium={toggleDrillMedium}
                 renderAgencyTable={renderNameChangeAgency}
               />
             ) : (
@@ -1470,10 +1491,6 @@ export function KpiCards({
               todayCompletedHierarchy ? (
                 <DetailHierarchySection
                   hierarchy={todayCompletedHierarchy}
-                  drillMajors={drillMajors}
-                  drillMediums={drillMediums}
-                  toggleMajor={toggleDrillMajor}
-                  toggleMedium={toggleDrillMedium}
                   renderAgencyTable={renderTodayCompletedAgency}
                 />
               ) : (
@@ -1507,10 +1524,6 @@ export function KpiCards({
               todayHierarchy ? (
                 <DetailHierarchySection
                   hierarchy={todayHierarchy}
-                  drillMajors={drillMajors}
-                  drillMediums={drillMediums}
-                  toggleMajor={toggleDrillMajor}
-                  toggleMedium={toggleDrillMedium}
                   renderAgencyTable={renderTodayAgency}
                 />
               ) : (
@@ -1551,10 +1564,6 @@ export function KpiCards({
                         hierarchy={monthlyTermHierarchy}
                         total={terminationStats.monthlyCount}
                         badgeClass="bg-red-100 text-red-800"
-                        drillMajors={drillMajors}
-                        drillMediums={drillMediums}
-                        toggleMajor={toggleDrillMajor}
-                        toggleMedium={toggleDrillMedium}
                       />
                     ) : (
                       <Table>
@@ -1591,10 +1600,6 @@ export function KpiCards({
                     {monthlyTermDetailHierarchy ? (
                       <DetailHierarchySection
                         hierarchy={monthlyTermDetailHierarchy}
-                        drillMajors={drillMajors}
-                        drillMediums={drillMediums}
-                        toggleMajor={toggleDrillMajor}
-                        toggleMedium={toggleDrillMedium}
                         renderAgencyTable={renderTerminationAgency}
                       />
                     ) : (
@@ -1630,10 +1635,6 @@ export function KpiCards({
               supplementHierarchy ? (
                 <DetailHierarchySection
                   hierarchy={supplementHierarchy}
-                  drillMajors={drillMajors}
-                  drillMediums={drillMediums}
-                  toggleMajor={toggleDrillMajor}
-                  toggleMedium={toggleDrillMedium}
                   renderAgencyTable={renderSupplementAgency}
                 />
               ) : (
