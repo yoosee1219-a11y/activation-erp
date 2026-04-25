@@ -11,12 +11,14 @@ import {
   type ActivationRow,
 } from "@/components/activations/columns";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Plus, List, LayoutGrid, ChevronDown, ChevronRight, Download } from "lucide-react";
+import { Plus, Download, FolderOpen } from "lucide-react";
 import { VisibilityState } from "@tanstack/react-table";
 import Link from "next/link";
 import { toast } from "sonner";
-import { CustomerDetailDialog, type CustomerDetailData } from "@/components/partner/customer-detail-dialog";
+import {
+  CustomerDetailDialog,
+  type CustomerDetailData,
+} from "@/components/partner/customer-detail-dialog";
 
 const STAFF_LIST = ["권보미", "박서연", "김유림", "이아라"];
 
@@ -28,24 +30,19 @@ interface MonthSummary {
   cancelled: number;
 }
 
-type AgencyGroup = {
-  name: string;
-  rows: ActivationRow[];
-  counts: Record<string, number>;
-};
-
-type CategoryGroup = {
-  categoryName: string;
-  agencies: [string, AgencyGroup][];
-  totalRows: number;
-};
-
 export default function ActivationsPage() {
-  const { getFilterParams, selectedMajors, selectedMediums, agencies, categories, user } = useDashboard();
+  const {
+    getFilterParams,
+    selectedMajors,
+    selectedMediums,
+    agencies,
+    categories,
+    user,
+  } = useDashboard();
   const searchParams = useSearchParams();
   const highlightId = searchParams.get("highlight");
   const [data, setData] = useState<ActivationRow[]>([]);
-  const [total, setTotal] = useState(0);
+  const [, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("all");
@@ -53,11 +50,21 @@ export default function ActivationsPage() {
   const [dateTo, setDateTo] = useState("");
   const [month, setMonth] = useState("all");
   const [availableMonths, setAvailableMonths] = useState<MonthSummary[]>([]);
-  const [viewMode, setViewMode] = useState<"list" | "grouped">(highlightId ? "list" : "grouped");
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [localMajors, setLocalMajors] = useState<string[]>([]);
   const [localMediums, setLocalMediums] = useState<string[]>([]);
-  const [detailCustomer, setDetailCustomer] = useState<CustomerDetailData | null>(null);
+  const [detailCustomer, setDetailCustomer] =
+    useState<CustomerDetailData | null>(null);
+
+  // 책갈피 탭 상태
+  const [selectedMajorTab, setSelectedMajorTab] = useState<string | null>(null);
+  const [selectedMediumTab, setSelectedMediumTab] = useState<string | null>(
+    null
+  );
+
+  // 대분류 탭 변경 시 중분류 탭 초기화
+  useEffect(() => {
+    setSelectedMediumTab(null);
+  }, [selectedMajorTab]);
 
   const agencyMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -65,7 +72,7 @@ export default function ActivationsPage() {
     return map;
   }, [agencies]);
 
-  // 카테고리 이름 맵 (중분류 id → 표시명)
+  // 카테고리 이름 맵
   const categoryNameMap = useMemo(() => {
     const map: Record<string, string> = {};
     categories.forEach((major) => {
@@ -95,8 +102,8 @@ export default function ActivationsPage() {
     return map;
   }, [agencies]);
 
-  // 인페이지 카테고리 필터 적용
-  const filteredData = useMemo(() => {
+  // CascadingFilter (사이드 필터) 기준 1차 필터링
+  const sideFilteredData = useMemo(() => {
     let result = data;
     if (localMediums.length > 0) {
       result = result.filter((row) => {
@@ -111,6 +118,70 @@ export default function ActivationsPage() {
     }
     return result;
   }, [data, localMajors, localMediums, agencyMajorMap, agencyMediumMap]);
+
+  // 책갈피 탭 기준 2차 필터링
+  const tabFilteredData = useMemo(() => {
+    let result = sideFilteredData;
+    if (selectedMediumTab) {
+      result = result.filter(
+        (row) => agencyMediumMap[row.agencyId] === selectedMediumTab
+      );
+    } else if (selectedMajorTab) {
+      result = result.filter(
+        (row) => agencyMajorMap[row.agencyId] === selectedMajorTab
+      );
+    }
+    // 날짜순 (entryDate desc, null은 끝으로)
+    return [...result].sort((a, b) => {
+      const ad = a.entryDate || "";
+      const bd = b.entryDate || "";
+      if (!ad && !bd) return 0;
+      if (!ad) return 1;
+      if (!bd) return -1;
+      return bd.localeCompare(ad);
+    });
+  }, [
+    sideFilteredData,
+    selectedMajorTab,
+    selectedMediumTab,
+    agencyMajorMap,
+    agencyMediumMap,
+  ]);
+
+  // 대분류별 카운트 (sideFilteredData 기준)
+  const majorCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    sideFilteredData.forEach((row) => {
+      const major = agencyMajorMap[row.agencyId];
+      if (major) counts[major] = (counts[major] || 0) + 1;
+    });
+    return counts;
+  }, [sideFilteredData, agencyMajorMap]);
+
+  // 선택된 대분류의 중분류 목록 + 카운트
+  const mediumTabs = useMemo(() => {
+    if (!selectedMajorTab) return [];
+    const major = categories.find((c) => c.id === selectedMajorTab);
+    const mediums = major?.children || [];
+    const counts: Record<string, number> = {};
+    sideFilteredData
+      .filter((row) => agencyMajorMap[row.agencyId] === selectedMajorTab)
+      .forEach((row) => {
+        const m = agencyMediumMap[row.agencyId];
+        if (m) counts[m] = (counts[m] || 0) + 1;
+      });
+    return mediums.map((m) => ({
+      id: m.id,
+      name: m.name,
+      count: counts[m.id] || 0,
+    }));
+  }, [
+    selectedMajorTab,
+    categories,
+    sideFilteredData,
+    agencyMajorMap,
+    agencyMediumMap,
+  ]);
 
   // 월 요약 데이터 로드
   useEffect(() => {
@@ -129,7 +200,6 @@ export default function ActivationsPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams();
-    // getFilterParams()로 카테고리/거래처 필터 적용
     const filterParams = getFilterParams();
     Object.entries(filterParams).forEach(([k, v]) => params.set(k, v));
     if (status !== "all") params.set("status", status);
@@ -137,7 +207,7 @@ export default function ActivationsPage() {
     if (dateTo) params.set("dateTo", dateTo);
     if (month && month !== "all") params.set("month", month);
     params.set("page", page.toString());
-    params.set("pageSize", viewMode === "grouped" ? "9999" : "200");
+    params.set("pageSize", "9999"); // 클라이언트에서 탭 필터링하므로 전체 가져옴
 
     try {
       const res = await fetch(`/api/activations?${params}`);
@@ -145,8 +215,10 @@ export default function ActivationsPage() {
       const rows = (result.data || []).map((row: ActivationRow) => ({
         ...row,
         agencyName: agencyMap[row.agencyId] || row.agencyId,
-        majorCategoryName: categoryNameMap[agencyMajorMap[row.agencyId] || ""] || "미분류",
-        mediumCategoryName: categoryNameMap[agencyMediumMap[row.agencyId] || ""] || "미분류",
+        majorCategoryName:
+          categoryNameMap[agencyMajorMap[row.agencyId] || ""] || "미분류",
+        mediumCategoryName:
+          categoryNameMap[agencyMediumMap[row.agencyId] || ""] || "미분류",
       }));
       setData(rows);
       setTotal(result.total || 0);
@@ -155,7 +227,20 @@ export default function ActivationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [getFilterParams, selectedMajors, selectedMediums, agencyMap, agencyMajorMap, agencyMediumMap, categoryNameMap, status, dateFrom, dateTo, month, page, viewMode]);
+  }, [
+    getFilterParams,
+    selectedMajors,
+    selectedMediums,
+    agencyMap,
+    agencyMajorMap,
+    agencyMediumMap,
+    categoryNameMap,
+    status,
+    dateFrom,
+    dateTo,
+    month,
+    page,
+  ]);
 
   useEffect(() => {
     fetchData();
@@ -187,14 +272,21 @@ export default function ActivationsPage() {
     field: string,
     value: string
   ) => {
-    // Boolean 필드 변환
-    const booleanFields = new Set(["deviceChangeConfirmed", "selectedCommitment", "autopayRegistered", "combinedUnitNameChange", "billingAccountNameChange"]);
+    const booleanFields = new Set([
+      "deviceChangeConfirmed",
+      "selectedCommitment",
+      "autopayRegistered",
+      "combinedUnitNameChange",
+      "billingAccountNameChange",
+    ]);
     const parsedValue: unknown = booleanFields.has(field)
       ? value === "true"
       : value;
 
     setData((prev) =>
-      prev.map((row) => (row.id === id ? { ...row, [field]: parsedValue } : row))
+      prev.map((row) =>
+        row.id === id ? { ...row, [field]: parsedValue } : row
+      )
     );
     try {
       const res = await fetch(`/api/activations/${id}`, {
@@ -245,82 +337,6 @@ export default function ActivationsPage() {
     staffList: STAFF_LIST,
   });
 
-  // 2단계 그룹핑: 대분류 → 중분류
-  const twoLevelGrouped = useMemo(() => {
-    // 1단계: 중분류별 그룹
-    const mediumGroups: Record<string, AgencyGroup> = {};
-    filteredData.forEach((row) => {
-      const mediumCat = agencyMediumMap[row.agencyId] || "__uncategorized__";
-      if (!mediumGroups[mediumCat]) {
-        mediumGroups[mediumCat] = {
-          name: categoryNameMap[mediumCat] || "미분류",
-          rows: [],
-          counts: { "입력중": 0, "개통요청": 0, "진행중": 0, "개통완료": 0, "보완요청": 0 },
-        };
-      }
-      mediumGroups[mediumCat].rows.push(row);
-      const ws = row.workStatus || "입력중";
-      if (ws in mediumGroups[mediumCat].counts) {
-        mediumGroups[mediumCat].counts[ws]++;
-      }
-    });
-
-    // 2단계: 대분류별 중분류 그룹
-    const catGroups: Record<string, CategoryGroup> = {};
-    Object.entries(mediumGroups).forEach(([mediumId, group]) => {
-      // 중분류에서 대분류 찾기: agencies 중 해당 mediumCategory를 가진 agency의 majorCategory
-      const sampleAgency = agencies.find((a) => a.mediumCategory === mediumId);
-      const majorCat = sampleAgency?.majorCategory || "__uncategorized__";
-      if (!catGroups[majorCat]) {
-        catGroups[majorCat] = {
-          categoryName:
-            majorCat === "__uncategorized__"
-              ? "미분류"
-              : categoryNameMap[majorCat] || majorCat,
-          agencies: [],
-          totalRows: 0,
-        };
-      }
-      catGroups[majorCat].agencies.push([mediumId, group]);
-      catGroups[majorCat].totalRows += group.rows.length;
-    });
-
-    // 중분류 이름순 정렬
-    Object.values(catGroups).forEach((g) =>
-      g.agencies.sort((a, b) => a[1].name.localeCompare(b[1].name))
-    );
-
-    // 분류 있는 것 먼저, 미분류 나중
-    return Object.entries(catGroups).sort((a, b) => {
-      if (a[0] === "__uncategorized__") return 1;
-      if (b[0] === "__uncategorized__") return -1;
-      return a[1].categoryName.localeCompare(b[1].categoryName);
-    });
-  }, [filteredData, agencyMediumMap, categoryNameMap, agencies]);
-
-  // 카테고리 존재 여부 (카테고리가 없으면 기존 flat 그룹 뷰)
-  const hasCategories = categories.length > 0;
-
-  // flat 그룹 (카테고리 없을 때 or 전체 agency 목록)
-  const flatGrouped = useMemo(() => {
-    const allAgencies: [string, AgencyGroup][] = [];
-    twoLevelGrouped.forEach(([, catGroup]) => {
-      allAgencies.push(...catGroup.agencies);
-    });
-    return allAgencies;
-  }, [twoLevelGrouped]);
-
-  const toggleGroup = (id: string) => {
-    setExpandedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  // 기본 숨김 컬럼 (컬럼 토글로 다시 표시 가능)
-  // 가입번호는 고객정보 조회 핵심키이므로 기본 표시, 신규번호는 상세에서 확인
   const defaultHiddenColumns: VisibilityState = {
     majorCategory: false,
     mediumCategory: false,
@@ -352,8 +368,16 @@ export default function ActivationsPage() {
       const params = new URLSearchParams();
       if (month && month !== "all") params.set("month", month);
       if (status && status !== "all") params.set("status", status);
-      if (localMediums.length > 0) params.set("mediumCategories", localMediums.join(","));
-      else if (localMajors.length > 0) params.set("majorCategories", localMajors.join(","));
+      // 탭 선택을 export 필터로 전달
+      if (selectedMediumTab) {
+        params.set("mediumCategories", selectedMediumTab);
+      } else if (selectedMajorTab) {
+        params.set("majorCategories", selectedMajorTab);
+      } else if (localMediums.length > 0) {
+        params.set("mediumCategories", localMediums.join(","));
+      } else if (localMajors.length > 0) {
+        params.set("majorCategories", localMajors.join(","));
+      }
       const res = await fetch(`/api/export?${params.toString()}`);
       if (!res.ok) throw new Error("다운로드 실패");
       const blob = await res.blob();
@@ -368,62 +392,52 @@ export default function ActivationsPage() {
     }
   };
 
-  // 상태 뱃지 렌더링 헬퍼
-  const renderStatusBadges = (counts: Record<string, number>) => (
-    <>
-      {counts["입력중"] > 0 && (
-        <Badge className="bg-gray-100 text-gray-700 text-[10px]">
-          입력중 {counts["입력중"]}
-        </Badge>
-      )}
-      {counts["개통요청"] > 0 && (
-        <Badge className="bg-blue-100 text-blue-700 text-[10px]">
-          개통요청 {counts["개통요청"]}
-        </Badge>
-      )}
-      {counts["진행중"] > 0 && (
-        <Badge className="bg-yellow-100 text-yellow-700 text-[10px]">
-          진행중 {counts["진행중"]}
-        </Badge>
-      )}
-      {counts["개통완료"] > 0 && (
-        <Badge className="bg-green-100 text-green-700 text-[10px]">
-          개통완료 {counts["개통완료"]}
-        </Badge>
-      )}
-      {counts["보완요청"] > 0 && (
-        <Badge className="bg-red-100 text-red-700 text-[10px]">
-          보완요청 {counts["보완요청"]}
-        </Badge>
-      )}
-    </>
-  );
+  // 탭 버튼 공통 (책갈피 스타일 — kpi-cards와 동일)
+  const renderTab = (
+    key: string,
+    label: string,
+    count: number,
+    active: boolean,
+    onClick: () => void,
+    size: "lg" | "sm" = "lg"
+  ) => {
+    const isLg = size === "lg";
+    return (
+      <button
+        key={key}
+        type="button"
+        role="tab"
+        aria-selected={active}
+        onClick={onClick}
+        className={`group relative flex min-w-0 items-center justify-center gap-2 rounded-t-lg ${
+          isLg ? "px-4 py-2.5 text-sm" : "px-3 py-1.5 text-xs"
+        } font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-400 ${
+          active
+            ? "-translate-y-1 border-x border-t border-gray-200 bg-white shadow-[0_-4px_12px_-2px_rgba(0,0,0,0.08)]"
+            : "border border-transparent bg-gray-50 text-gray-600 hover:-translate-y-0.5 hover:bg-gray-100"
+        }`}
+      >
+        <span className={`whitespace-nowrap ${active ? "text-gray-900" : ""}`}>
+          {label}
+        </span>
+        <span
+          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${
+            active
+              ? "bg-gray-900 text-white"
+              : "bg-gray-200 text-gray-700"
+          }`}
+        >
+          {count}
+        </span>
+      </button>
+    );
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">개통 관리</h1>
         <div className="flex items-center gap-2">
-          <div className="flex rounded-md border">
-            <Button
-              variant={viewMode === "grouped" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setViewMode("grouped")}
-              className="rounded-r-none"
-            >
-              <LayoutGrid className="mr-1 h-4 w-4" />
-              거래처별
-            </Button>
-            <Button
-              variant={viewMode === "list" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setViewMode("list")}
-              className="rounded-l-none"
-            >
-              <List className="mr-1 h-4 w-4" />
-              전체목록
-            </Button>
-          </div>
           <Button variant="outline" size="sm" onClick={handleExcelDownload}>
             <Download className="h-4 w-4 mr-1" />
             엑셀 다운로드
@@ -441,14 +455,36 @@ export default function ActivationsPage() {
 
       <Filters
         status={status}
-        onStatusChange={(v) => { setStatus(v); setPage(1); }}
+        onStatusChange={(v) => {
+          setStatus(v);
+          setPage(1);
+        }}
         dateFrom={dateFrom}
-        onDateFromChange={(v) => { setDateFrom(v); setPage(1); }}
+        onDateFromChange={(v) => {
+          setDateFrom(v);
+          setPage(1);
+        }}
         dateTo={dateTo}
-        onDateToChange={(v) => { setDateTo(v); setPage(1); }}
-        onClear={() => { setStatus("all"); setDateFrom(""); setDateTo(""); setMonth("all"); setLocalMajors([]); setLocalMediums([]); setPage(1); }}
+        onDateToChange={(v) => {
+          setDateTo(v);
+          setPage(1);
+        }}
+        onClear={() => {
+          setStatus("all");
+          setDateFrom("");
+          setDateTo("");
+          setMonth("all");
+          setLocalMajors([]);
+          setLocalMediums([]);
+          setSelectedMajorTab(null);
+          setSelectedMediumTab(null);
+          setPage(1);
+        }}
         month={month}
-        onMonthChange={(v) => { setMonth(v); setPage(1); }}
+        onMonthChange={(v) => {
+          setMonth(v);
+          setPage(1);
+        }}
         availableMonths={availableMonths}
       >
         <CascadingFilter
@@ -460,15 +496,80 @@ export default function ActivationsPage() {
         />
       </Filters>
 
+      {/* 책갈피 탭 — 대분류 */}
+      <div className="space-y-1">
+        <div
+          role="tablist"
+          aria-label="대분류 탭"
+          className="flex flex-wrap items-end gap-1 border-b border-gray-200"
+        >
+          {renderTab(
+            "__all__",
+            "전체",
+            sideFilteredData.length,
+            !selectedMajorTab,
+            () => setSelectedMajorTab(null),
+            "lg"
+          )}
+          {categories.map((major) =>
+            renderTab(
+              major.id,
+              major.name,
+              majorCounts[major.id] || 0,
+              selectedMajorTab === major.id,
+              () => setSelectedMajorTab(major.id),
+              "lg"
+            )
+          )}
+        </div>
+
+        {/* 책갈피 탭 — 중분류 (대분류 선택 시) */}
+        {selectedMajorTab && mediumTabs.length > 0 && (
+          <div
+            role="tablist"
+            aria-label="중분류 탭"
+            className="flex flex-wrap items-end gap-1 border-b border-gray-200 pl-4"
+          >
+            <span className="flex items-center gap-1 pr-2 text-[11px] font-medium text-gray-400">
+              <FolderOpen className="h-3 w-3" />
+              중분류
+            </span>
+            {renderTab(
+              "__major_all__",
+              "전체",
+              majorCounts[selectedMajorTab] || 0,
+              !selectedMediumTab,
+              () => setSelectedMediumTab(null),
+              "sm"
+            )}
+            {mediumTabs.map((m) =>
+              renderTab(
+                m.id,
+                m.name,
+                m.count,
+                selectedMediumTab === m.id,
+                () => setSelectedMediumTab(m.id),
+                "sm"
+              )
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 데이터 테이블 (날짜순 정렬됨) */}
       {loading ? (
         <div className="flex h-64 items-center justify-center text-gray-500">
           로딩 중...
         </div>
-      ) : viewMode === "list" ? (
+      ) : tabFilteredData.length === 0 ? (
+        <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50/50 text-sm text-gray-400">
+          해당 조건의 데이터가 없습니다.
+        </div>
+      ) : (
         <DataTable
           columns={columns}
-          data={filteredData}
-          total={filteredData.length}
+          data={tabFilteredData}
+          total={tabFilteredData.length}
           page={page}
           pageSize={200}
           onPageChange={setPage}
@@ -479,147 +580,50 @@ export default function ActivationsPage() {
             const isArc = row.activationMethod === "외국인등록증";
             const requiredDocs = isArc
               ? [row.applicationDocs, row.autopayInfo]
-              : [row.applicationDocs, row.nameChangeDocs, row.arcInfo, row.autopayInfo];
+              : [
+                  row.applicationDocs,
+                  row.nameChangeDocs,
+                  row.arcInfo,
+                  row.autopayInfo,
+                ];
             const requiredReviews = isArc
               ? [row.applicationDocsReview, row.autopayReview]
-              : [row.applicationDocsReview, row.nameChangeDocsReview, row.arcReview, row.autopayReview];
-            if (requiredReviews.every(r => r === "완료")) {
+              : [
+                  row.applicationDocsReview,
+                  row.nameChangeDocsReview,
+                  row.arcReview,
+                  row.autopayReview,
+                ];
+            if (requiredReviews.every((r) => r === "완료")) {
               return "bg-green-50/80 hover:bg-green-100/80";
             }
             const hasIssue =
               row.workStatus === "보완요청" ||
-              requiredReviews.some(r => r === "보완요청") ||
-              requiredDocs.some(d => !d);
+              requiredReviews.some((r) => r === "보완요청") ||
+              requiredDocs.some((d) => !d);
             return hasIssue ? "bg-red-50/70 hover:bg-red-100/70" : "";
           }}
-          onRowClick={(row: ActivationRow) => setDetailCustomer(row as unknown as CustomerDetailData)}
+          onRowClick={(row: ActivationRow) =>
+            setDetailCustomer(row as unknown as CustomerDetailData)
+          }
           initialColumnVisibility={defaultHiddenColumns}
         />
-      ) : (
-        <div className="space-y-1">
-          {hasCategories ? (
-            twoLevelGrouped.map(([catId, catGroup]) => (
-              <div key={catId}>
-                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mt-4 mb-1 px-3">
-                  {catGroup.categoryName} ({catGroup.totalRows}건)
-                </h3>
-                {catGroup.agencies.map(([mediumId, group]) => (
-                  <div key={mediumId}>
-                    <button
-                      className="flex items-center gap-2 w-full text-left py-2 px-3 rounded-lg hover:bg-gray-50 transition-colors"
-                      onClick={() => toggleGroup(mediumId)}
-                    >
-                      {expandedGroups.has(mediumId) ? (
-                        <ChevronDown className="h-4 w-4 text-gray-500 shrink-0" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4 text-gray-500 shrink-0" />
-                      )}
-                      <span className="font-semibold text-sm">{group.name}</span>
-                      <Badge variant="secondary" className="text-xs">{group.rows.length}건</Badge>
-                      <div className="flex gap-1">{renderStatusBadges(group.counts)}</div>
-                    </button>
-                    {expandedGroups.has(mediumId) && (
-                      <div className="mt-1 mb-3">
-                        <DataTable
-                          columns={columns}
-                          data={group.rows}
-                          pageSize={20}
-                          searchPlaceholder="가입번호/고객명/신규번호 검색..."
-                          highlightId={highlightId}
-                          getRowId={(row: ActivationRow) => row.id}
-                          getRowClassName={(row: ActivationRow) => {
-                            const isArc = row.activationMethod === "외국인등록증";
-                            const requiredDocs = isArc
-                              ? [row.applicationDocs, row.autopayInfo]
-                              : [row.applicationDocs, row.nameChangeDocs, row.arcInfo, row.autopayInfo];
-                            const requiredReviews = isArc
-                              ? [row.applicationDocsReview, row.autopayReview]
-                              : [row.applicationDocsReview, row.nameChangeDocsReview, row.arcReview, row.autopayReview];
-                            if (requiredReviews.every(r => r === "완료")) {
-                              return "bg-green-50/80 hover:bg-green-100/80";
-                            }
-                            const hasIssue =
-                              row.workStatus === "보완요청" ||
-                              requiredReviews.some(r => r === "보완요청") ||
-                              requiredDocs.some(d => !d);
-                            return hasIssue ? "bg-red-50/70 hover:bg-red-100/70" : "";
-                          }}
-                          onRowClick={(row: ActivationRow) => setDetailCustomer(row as unknown as CustomerDetailData)}
-                          initialColumnVisibility={defaultHiddenColumns}
-                        />
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ))
-          ) : (
-            flatGrouped.map(([agencyId, group]) => (
-              <div key={agencyId}>
-                <button
-                  className="flex items-center gap-2 w-full text-left py-2 px-3 rounded-lg hover:bg-gray-50 transition-colors"
-                  onClick={() => toggleGroup(agencyId)}
-                >
-                  {expandedGroups.has(agencyId) ? (
-                    <ChevronDown className="h-4 w-4 text-gray-500 shrink-0" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4 text-gray-500 shrink-0" />
-                  )}
-                  <span className="font-semibold text-sm">{group.name}</span>
-                  <Badge variant="secondary" className="text-xs">{group.rows.length}건</Badge>
-                  <div className="flex gap-1">{renderStatusBadges(group.counts)}</div>
-                </button>
-                {expandedGroups.has(agencyId) && (
-                  <div className="mt-1 mb-3">
-                    <DataTable
-                      columns={columns}
-                      data={group.rows}
-                      pageSize={20}
-                      searchPlaceholder="가입번호/고객명/신규번호 검색..."
-                      highlightId={highlightId}
-                      getRowId={(row: ActivationRow) => row.id}
-                      getRowClassName={(row: ActivationRow) => {
-                        const isArc = row.activationMethod === "외국인등록증";
-                        const requiredDocs = isArc
-                          ? [row.applicationDocs, row.autopayInfo]
-                          : [row.applicationDocs, row.nameChangeDocs, row.arcInfo, row.autopayInfo];
-                        const requiredReviews = isArc
-                          ? [row.applicationDocsReview, row.autopayReview]
-                          : [row.applicationDocsReview, row.nameChangeDocsReview, row.arcReview, row.autopayReview];
-                        if (requiredReviews.every(r => r === "완료")) {
-                          return "bg-green-50/80 hover:bg-green-100/80";
-                        }
-                        const hasIssue =
-                          row.workStatus === "보완요청" ||
-                          requiredReviews.some(r => r === "보완요청") ||
-                          requiredDocs.some(d => !d);
-                        return hasIssue ? "bg-red-50/70 hover:bg-red-100/70" : "";
-                      }}
-                      onRowClick={(row: ActivationRow) => setDetailCustomer(row as unknown as CustomerDetailData)}
-                      initialColumnVisibility={defaultHiddenColumns}
-                    />
-                  </div>
-                )}
-              </div>
-            ))
-          )}
-
-          {flatGrouped.length === 0 && (
-            <div className="flex h-32 items-center justify-center text-gray-500">
-              데이터가 없습니다.
-            </div>
-          )}
-        </div>
       )}
 
       <CustomerDetailDialog
         open={!!detailCustomer}
         onClose={() => setDetailCustomer(null)}
         customer={detailCustomer}
-        onUpdate={user?.role !== "GUEST" ? (id, field, value) => {
-          handleInlineUpdate(id, field, value);
-          setDetailCustomer((prev) => prev ? { ...prev, [field]: value } : null);
-        } : undefined}
+        onUpdate={
+          user?.role !== "GUEST"
+            ? (id, field, value) => {
+                handleInlineUpdate(id, field, value);
+                setDetailCustomer((prev) =>
+                  prev ? { ...prev, [field]: value } : null
+                );
+              }
+            : undefined
+        }
         staffList={STAFF_LIST}
         isAdmin={isAdmin}
       />
