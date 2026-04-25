@@ -99,6 +99,17 @@ export async function GET(request: NextRequest) {
       if (agencyIds.length === 0) agencyIds = ["__no_match__"];
     }
 
+    // 진단용: 각 쿼리 실행 시간 측정 (Vercel Logs에서 확인 가능)
+    const t = (label: string, fn: () => Promise<unknown>) => {
+      const start = Date.now();
+      return fn().then((r) => {
+        const ms = Date.now() - start;
+        if (ms > 200) console.log(`[dashboard-perf] ${label}: ${ms}ms`);
+        return r;
+      });
+    };
+    const totalStart = Date.now();
+
     const [
       stats,
       monthlyStats,
@@ -127,33 +138,62 @@ export async function GET(request: NextRequest) {
       noCommitmentStats,
       monthlyCompletedDetail,
     ] = await Promise.all([
-      getDashboardStats(agencyId, agencyIds),
-      getMonthlyStats(agencyId, agencyIds),
-      getWeeklyStats(agencyId, agencyIds),
-      getDailyStats(agencyId, agencyIds),
-      getAgencyStats(agencyIds),
-      getArcSupplementStats(agencyIds),
-      getArcUrgentList(agencyId, agencyIds),
-      getStaffStats(agencyIds),
-      getKpiTotalByAgency(agencyIds),
-      getKpiPendingDetail(agencyIds),
-      getKpiAutopayDetail(agencyIds),
-      getSupplementRequestStats(agencyIds),
-      getSupplementRequestDetail(agencyIds),
-      getPendingByPeriod(agencyIds),
-      getTodayPendingDetail(agencyIds),
-      getSupplementStats(agencyIds),
-      getSupplementList(agencyIds),
-      getTerminationStats({ agencyId, agencyIds }),
-      getMonthlyCompletedStats(agencyIds),
-      getTodayCompletedStats(agencyIds),
-      getNameChangeIncomplete(agencyIds),
-      getTodayTerminationCount(agencyIds),
-      getMonthlyTerminationDetail(agencyIds),
-      getTodayTerminationDetail(agencyIds),
-      getNoCommitmentStats(agencyIds),
-      getMonthlyCompletedDetail(agencyIds),
-    ]);
+      t("stats", () => getDashboardStats(agencyId, agencyIds)),
+      t("monthlyStats", () => getMonthlyStats(agencyId, agencyIds)),
+      t("weeklyStats", () => getWeeklyStats(agencyId, agencyIds)),
+      t("dailyStats", () => getDailyStats(agencyId, agencyIds)),
+      t("agencyStats", () => getAgencyStats(agencyIds)),
+      t("arcStats", () => getArcSupplementStats(agencyIds)),
+      t("arcUrgentList", () => getArcUrgentList(agencyId, agencyIds)),
+      t("staffStats", () => getStaffStats(agencyIds)),
+      t("kpiTotalByAgency", () => getKpiTotalByAgency(agencyIds)),
+      t("kpiPendingDetail", () => getKpiPendingDetail(agencyIds)),
+      t("kpiAutopayDetail", () => getKpiAutopayDetail(agencyIds)),
+      t("supplementRequestStats", () => getSupplementRequestStats(agencyIds)),
+      t("supplementRequestDetail", () => getSupplementRequestDetail(agencyIds)),
+      t("pendingByPeriod", () => getPendingByPeriod(agencyIds)),
+      t("todayPendingDetail", () => getTodayPendingDetail(agencyIds)),
+      t("supplementStats", () => getSupplementStats(agencyIds)),
+      t("supplementList", () => getSupplementList(agencyIds)),
+      t("terminationStats", () => getTerminationStats({ agencyId, agencyIds })),
+      t("monthlyCompleted", () => getMonthlyCompletedStats(agencyIds)),
+      t("todayCompleted", () => getTodayCompletedStats(agencyIds)),
+      t("nameChangeIncomplete", () => getNameChangeIncomplete(agencyIds)),
+      t("todayTermination", () => getTodayTerminationCount(agencyIds)),
+      t("monthlyTerminationDetail", () => getMonthlyTerminationDetail(agencyIds)),
+      t("todayTerminationDetail", () => getTodayTerminationDetail(agencyIds)),
+      t("noCommitmentStats", () => getNoCommitmentStats(agencyIds)),
+      t("monthlyCompletedDetail", () => getMonthlyCompletedDetail(agencyIds)),
+    ]) as [
+      Awaited<ReturnType<typeof getDashboardStats>>,
+      Awaited<ReturnType<typeof getMonthlyStats>>,
+      Awaited<ReturnType<typeof getWeeklyStats>>,
+      Awaited<ReturnType<typeof getDailyStats>>,
+      Awaited<ReturnType<typeof getAgencyStats>>,
+      Awaited<ReturnType<typeof getArcSupplementStats>>,
+      Awaited<ReturnType<typeof getArcUrgentList>>,
+      Awaited<ReturnType<typeof getStaffStats>>,
+      Awaited<ReturnType<typeof getKpiTotalByAgency>>,
+      Awaited<ReturnType<typeof getKpiPendingDetail>>,
+      Awaited<ReturnType<typeof getKpiAutopayDetail>>,
+      Awaited<ReturnType<typeof getSupplementRequestStats>>,
+      Awaited<ReturnType<typeof getSupplementRequestDetail>>,
+      Awaited<ReturnType<typeof getPendingByPeriod>>,
+      Awaited<ReturnType<typeof getTodayPendingDetail>>,
+      Awaited<ReturnType<typeof getSupplementStats>>,
+      Awaited<ReturnType<typeof getSupplementList>>,
+      Awaited<ReturnType<typeof getTerminationStats>>,
+      Awaited<ReturnType<typeof getMonthlyCompletedStats>>,
+      Awaited<ReturnType<typeof getTodayCompletedStats>>,
+      Awaited<ReturnType<typeof getNameChangeIncomplete>>,
+      Awaited<ReturnType<typeof getTodayTerminationCount>>,
+      Awaited<ReturnType<typeof getMonthlyTerminationDetail>>,
+      Awaited<ReturnType<typeof getTodayTerminationDetail>>,
+      Awaited<ReturnType<typeof getNoCommitmentStats>>,
+      Awaited<ReturnType<typeof getMonthlyCompletedDetail>>,
+    ];
+
+    console.log(`[dashboard-perf] TOTAL: ${Date.now() - totalStart}ms`);
 
     return NextResponse.json({
       stats,

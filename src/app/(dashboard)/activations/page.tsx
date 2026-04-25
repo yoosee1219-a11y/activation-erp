@@ -48,7 +48,11 @@ export default function ActivationsPage() {
   const [status, setStatus] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [month, setMonth] = useState("all");
+  // 기본값: 당월 (전체 9999건 fetch 방지 — 4.3초 → ~0.5초)
+  const [month, setMonth] = useState<string>(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
   const [availableMonths, setAvailableMonths] = useState<MonthSummary[]>([]);
   const [localMajors, setLocalMajors] = useState<string[]>([]);
   const [localMediums, setLocalMediums] = useState<string[]>([]);
