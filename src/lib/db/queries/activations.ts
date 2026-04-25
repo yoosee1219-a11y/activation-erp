@@ -606,9 +606,10 @@ export async function getSupplementStats(agencyIds?: string[]) {
         AND a.arc_supplement_deadline > CURRENT_DATE + INTERVAL '30 days'
         AND a.arc_supplement_deadline <= CURRENT_DATE + INTERVAL '60 days') as "nameChangeWithin60"
     FROM activations a
-    LEFT JOIN agencies ag ON a.agency_id = ag.id
+    LEFT JOIN agency_categories ag ON a.agency_id = ag.id
     ${agencyFilter}
     ${agencyIds && agencyIds.length > 0 ? sql`AND` : sql`WHERE`} a.deduction_settled_at IS NULL
+      AND COALESCE(a.excluded_from_supplement, false) = false
     GROUP BY a.agency_id, ag.name
     HAVING COUNT(*) FILTER (WHERE a.work_status = '보완요청') > 0
         OR COUNT(*) FILTER (WHERE a.work_status = '개통완료'
@@ -653,7 +654,7 @@ export async function getSupplementList(agencyIds?: string[]) {
         THEN 'nameChange'
       END as "supplementType"
     FROM activations a
-    LEFT JOIN agencies ag ON a.agency_id = ag.id
+    LEFT JOIN agency_categories ag ON a.agency_id = ag.id
     WHERE (
       a.work_status = '보완요청'
       OR (
@@ -664,6 +665,7 @@ export async function getSupplementList(agencyIds?: string[]) {
       )
     )
     AND a.deduction_settled_at IS NULL
+    AND COALESCE(a.excluded_from_supplement, false) = false
     ${agencyFilter}
     ORDER BY a.arc_supplement_deadline ASC NULLS LAST
   `);
@@ -818,6 +820,7 @@ export async function getTodayCompletedStats(agencyIds?: string[]) {
 
 // ── KPI 카드: 명의변경 미보완 상세 ──
 // 기준: work_status가 '개통완료'이고 3개 검수 중 하나라도 '완료'가 아닌 건 (전체, 월 필터 없음)
+// 환수 처리(excluded_from_supplement=true)된 건은 제외
 export async function getNameChangeIncomplete(agencyIds?: string[]) {
   const agencyFilter = agencyIds && agencyIds.length > 0
     ? sql`AND a.agency_id IN (${inList(agencyIds)})`
@@ -834,11 +837,12 @@ export async function getNameChangeIncomplete(agencyIds?: string[]) {
       a.arc_review as "arcReview",
       a.autopay_review as "autopayReview"
     FROM activations a
-    LEFT JOIN agencies ag ON a.agency_id = ag.id
+    LEFT JOIN agency_categories ag ON a.agency_id = ag.id
     WHERE a.work_status IN ('개통완료', '완료')
       AND (COALESCE(a.name_change_docs_review, '') != '완료'
            OR COALESCE(a.arc_review, '') != '완료'
            OR COALESCE(a.autopay_review, '') != '완료')
+      AND COALESCE(a.excluded_from_supplement, false) = false
       ${agencyFilter}
     ORDER BY a.created_at DESC
   `);

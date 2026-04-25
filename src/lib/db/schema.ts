@@ -125,6 +125,9 @@ export const activations = pgTable("activations", {
   deductionSettledAt: timestamp("deduction_settled_at", { withTimezone: true }), // 차감확정 처리 시각
   deductionSettledMonth: text("deduction_settled_month"), // 정산 반영된 월 (e.g. "2026-03")
 
+  // 보완 알림 제외 (환수 처리 등으로 더 이상 미보완 리스트에 노출하지 않을 건)
+  excludedFromSupplement: boolean("excluded_from_supplement").default(false),
+
   // 기타
   notes: text("notes"), // 비고
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),

@@ -38,7 +38,11 @@ const viewLabels: Record<ViewMode, string> = {
 
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
-  const total = payload.reduce((s: number, p: any) => s + (p.value || 0), 0);
+  // p.value가 string으로 올 수 있어 Number 강제 변환 (없으면 0+"37"+"0" → "0370" string concat 버그)
+  const total = payload.reduce(
+    (s: number, p: any) => s + (Number(p.value) || 0),
+    0
+  );
   return (
     <div className="rounded-lg border bg-white px-4 py-3 shadow-lg">
       <p className="mb-2 text-sm font-semibold text-gray-700">{label}</p>
@@ -49,7 +53,7 @@ function CustomTooltip({ active, payload, label }: any) {
             style={{ backgroundColor: p.fill }}
           />
           <span className="text-gray-600">{p.name}</span>
-          <span className="ml-auto font-medium">{p.value}건</span>
+          <span className="ml-auto font-medium">{Number(p.value) || 0}건</span>
         </div>
       ))}
       <div className="mt-1.5 border-t pt-1.5 text-sm font-semibold text-gray-800">
