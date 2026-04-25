@@ -32,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SupplementPanel } from "@/components/dashboard/supplement-panel";
 import type { SupplementStat, SupplementItem } from "@/components/dashboard/supplement-panel";
+import { BookmarkTab, BookmarkTabsBar } from "@/components/ui/bookmark-tabs";
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
 import { CustomerDetailDialog } from "@/components/partner/customer-detail-dialog";
@@ -613,117 +614,64 @@ export default function PartnerPage() {
 
           {!dashboardCollapsed && (
             <>
-              {/* 요약 카드 6개 */}
-              <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
-                <Card
-                  className={`cursor-pointer transition-all hover:shadow-md ${
-                    statusFilter === "입력중"
-                      ? "ring-2 ring-gray-500 shadow-md"
-                      : "hover:ring-1 hover:ring-gray-200"
-                  }`}
+              {/* 진행상황 책갈피 탭 (전체 + 6개 상태) */}
+              <BookmarkTabsBar>
+                <BookmarkTab
+                  active={!statusFilter}
+                  onClick={() => setStatusFilter(null)}
+                  label="전체"
+                  count={
+                    stats.drafting +
+                    stats.requested +
+                    stats.working +
+                    stats.completed +
+                    stats.needsFix +
+                    stats.terminated
+                  }
+                />
+                <BookmarkTab
+                  active={statusFilter === "입력중"}
                   onClick={() => handleCardClick("입력중")}
-                >
-                  <CardContent className="flex items-center gap-2.5 p-3">
-                    <div className="rounded-md bg-gray-100 p-1.5">
-                      <FileEdit className="h-4 w-4 text-gray-700" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">입력중</p>
-                      <p className="text-xl font-bold">{stats.drafting}건</p>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card
-                  className={`cursor-pointer transition-all hover:shadow-md ${
-                    statusFilter === "개통요청"
-                      ? "ring-2 ring-blue-500 shadow-md"
-                      : "hover:ring-1 hover:ring-blue-200"
-                  }`}
+                  label="입력중"
+                  count={stats.drafting}
+                  icon={<FileEdit className="h-3.5 w-3.5" />}
+                />
+                <BookmarkTab
+                  active={statusFilter === "개통요청"}
                   onClick={() => handleCardClick("개통요청")}
-                >
-                  <CardContent className="flex items-center gap-2.5 p-3">
-                    <div className="rounded-md bg-blue-100 p-1.5">
-                      <Clock className="h-4 w-4 text-blue-700" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">개통요청</p>
-                      <p className="text-xl font-bold">{stats.requested}건</p>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card
-                  className={`cursor-pointer transition-all hover:shadow-md ${
-                    statusFilter === "진행중"
-                      ? "ring-2 ring-yellow-500 shadow-md"
-                      : "hover:ring-1 hover:ring-yellow-200"
-                  }`}
+                  label="개통요청"
+                  count={stats.requested}
+                  icon={<Clock className="h-3.5 w-3.5" />}
+                />
+                <BookmarkTab
+                  active={statusFilter === "진행중"}
                   onClick={() => handleCardClick("진행중")}
-                >
-                  <CardContent className="flex items-center gap-2.5 p-3">
-                    <div className="rounded-md bg-yellow-100 p-1.5">
-                      <Loader2 className="h-4 w-4 text-yellow-700" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">진행중</p>
-                      <p className="text-xl font-bold">{stats.working}건</p>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card
-                  className={`cursor-pointer transition-all hover:shadow-md ${
-                    statusFilter === "개통완료"
-                      ? "ring-2 ring-green-500 shadow-md"
-                      : "hover:ring-1 hover:ring-green-200"
-                  }`}
+                  label="진행중"
+                  count={stats.working}
+                  icon={<Loader2 className="h-3.5 w-3.5" />}
+                />
+                <BookmarkTab
+                  active={statusFilter === "개통완료"}
                   onClick={() => handleCardClick("개통완료")}
-                >
-                  <CardContent className="flex items-center gap-2.5 p-3">
-                    <div className="rounded-md bg-green-100 p-1.5">
-                      <CheckCircle2 className="h-4 w-4 text-green-700" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">개통완료</p>
-                      <p className="text-xl font-bold">{stats.completed}건</p>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card
-                  className={`cursor-pointer transition-all hover:shadow-md ${
-                    statusFilter === "보완요청"
-                      ? "ring-2 ring-red-500 shadow-md"
-                      : "hover:ring-1 hover:ring-red-200"
-                  }`}
+                  label="개통완료"
+                  count={stats.completed}
+                  icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+                />
+                <BookmarkTab
+                  active={statusFilter === "보완요청"}
                   onClick={() => handleCardClick("보완요청")}
-                >
-                  <CardContent className="flex items-center gap-2.5 p-3">
-                    <div className="rounded-md bg-red-100 p-1.5">
-                      <RotateCcw className="h-4 w-4 text-red-700" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">보완요청</p>
-                      <p className="text-xl font-bold">{stats.needsFix}건</p>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card
-                  className={`cursor-pointer transition-all hover:shadow-md ${
-                    statusFilter === "해지"
-                      ? "ring-2 ring-gray-900 shadow-md"
-                      : "hover:ring-1 hover:ring-gray-300"
-                  }`}
+                  label="보완요청"
+                  count={stats.needsFix}
+                  icon={<RotateCcw className="h-3.5 w-3.5" />}
+                />
+                <BookmarkTab
+                  active={statusFilter === "해지"}
                   onClick={() => handleCardClick("해지")}
-                >
-                  <CardContent className="flex items-center gap-2.5 p-3">
-                    <div className="rounded-md bg-red-100 p-1.5">
-                      <XCircle className="h-4 w-4 text-gray-900" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">해지</p>
-                      <p className="text-xl font-bold">{stats.terminated}건</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
+                  label="해지"
+                  count={stats.terminated}
+                  icon={<XCircle className="h-3.5 w-3.5" />}
+                />
+              </BookmarkTabsBar>
 
               {/* 유심 재고 현황 */}
               <Card className="border-blue-100 bg-blue-50/30">
