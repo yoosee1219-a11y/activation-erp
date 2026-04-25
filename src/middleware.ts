@@ -52,7 +52,13 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // ADMIN/SUB_ADMIN → 모든 경로 접근 가능 (/partner 포함)
+  // ADMIN/SUB_ADMIN이 /partner로 접근 시 → / (어드민 대시보드)로 리다이렉트
+  // (URL 북마크/리다이렉트로 admin이 거래처 화면을 보게 되는 문제 방지)
+  if (safeRole === "ADMIN" || safeRole === "SUB_ADMIN") {
+    if (pathname === "/partner" || pathname.startsWith("/partner/")) {
+      return NextResponse.redirect(new URL("/", request.url));
+    }
+  }
 
   return addSecurityHeaders(NextResponse.next());
 }

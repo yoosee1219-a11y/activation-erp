@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { signOut } from "@/lib/auth/client";
 import { useRouter } from "next/navigation";
@@ -18,13 +19,20 @@ export default function PartnerLayout({
   const router = useRouter();
   const pathname = usePathname();
 
+  // ADMIN/SUB_ADMIN이 /partner에 진입하면 어드민 대시보드로 보냄
+  useEffect(() => {
+    if (!loading && user && (user.role === "ADMIN" || user.role === "SUB_ADMIN")) {
+      router.replace("/");
+    }
+  }, [user, loading, router]);
+
   const handleLogout = async () => {
     await signOut();
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
   };
 
-  if (loading) {
+  if (loading || (user && (user.role === "ADMIN" || user.role === "SUB_ADMIN"))) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="text-gray-500">로딩 중...</div>
