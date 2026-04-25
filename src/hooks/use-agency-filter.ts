@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState } from "react";
+import { useInitial } from "@/hooks/use-initial";
 
 export interface Agency {
   id: string;
@@ -18,37 +19,12 @@ export interface CategoryNode {
 }
 
 export function useAgencyFilter() {
-  const [agencies, setAgencies] = useState<Agency[]>([]);
-  const [categories, setCategories] = useState<CategoryNode[]>([]);
-  const [loading, setLoading] = useState(true);
+  // /api/initial 묶음 endpoint + SWR 캐싱 사용
+  const { agencies, categories, loading, refresh } = useInitial();
 
-  // 멀티셀렉트 상태
+  // 멀티셀렉트 상태 (필터)
   const [selectedMajors, setSelectedMajors] = useState<string[]>([]);
   const [selectedMediums, setSelectedMediums] = useState<string[]>([]);
-
-  const fetchData = useCallback(() => {
-    Promise.all([
-      fetch("/api/agencies").then((res) => res.json()),
-      fetch("/api/categories").then((res) => res.json()),
-    ])
-      .then(([agencyData, categoryData]) => {
-        setAgencies(agencyData.agencies || []);
-        setCategories(categoryData.categories || []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const refreshCategories = useCallback(() => {
-    fetch("/api/categories")
-      .then((res) => res.json())
-      .then((data) => setCategories(data.categories || []))
-      .catch(() => {});
-  }, []);
 
   return {
     agencies,
@@ -58,6 +34,6 @@ export function useAgencyFilter() {
     selectedMediums,
     setSelectedMediums,
     loading,
-    refreshCategories,
+    refreshCategories: refresh,
   };
 }

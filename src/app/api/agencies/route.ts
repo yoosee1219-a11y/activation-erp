@@ -20,7 +20,14 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({ agencies: agencyList });
+    return NextResponse.json(
+      { agencies: agencyList },
+      {
+        headers: {
+          "Cache-Control": "private, max-age=30, s-maxage=60, stale-while-revalidate=300",
+        },
+      }
+    );
   } catch (error) {
     console.error("Failed to fetch agencies:", error);
     return NextResponse.json(

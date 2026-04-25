@@ -23,7 +23,14 @@ export async function GET() {
     }
 
     const months = await getAvailableMonths(undefined, agencyIds);
-    return NextResponse.json({ months });
+    return NextResponse.json(
+      { months },
+      {
+        headers: {
+          "Cache-Control": "private, max-age=60, s-maxage=120, stale-while-revalidate=600",
+        },
+      }
+    );
   } catch (error) {
     console.error("Failed to fetch months:", error);
     return NextResponse.json(

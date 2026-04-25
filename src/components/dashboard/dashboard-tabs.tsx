@@ -1,12 +1,20 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { BarChart3, Building2, Users, FileWarning } from "lucide-react";
 
 import { KpiCards } from "@/components/dashboard/kpi-cards";
-import { ActivationChart } from "@/components/dashboard/monthly-chart";
+// 차트 컴포넌트는 무거우므로(recharts ~80KB) lazy load
+const ActivationChart = dynamic(
+  () => import("@/components/dashboard/monthly-chart").then((m) => m.ActivationChart),
+  { ssr: false, loading: () => <div className="h-[300px] animate-pulse rounded-lg bg-gray-100" /> }
+);
+const AgencyChart = dynamic(
+  () => import("@/components/dashboard/agency-chart").then((m) => m.AgencyChart),
+  { ssr: false, loading: () => <div className="h-[300px] animate-pulse rounded-lg bg-gray-100" /> }
+);
 import { AgencyStatusTable } from "@/components/dashboard/agency-status-table";
-import { AgencyChart } from "@/components/dashboard/agency-chart";
 import { StaffStatsTable } from "@/components/dashboard/staff-stats-table";
 import { ArcUrgentPanel } from "@/components/dashboard/arc-urgent-panel";
 import { SupplementPanel } from "@/components/dashboard/supplement-panel";

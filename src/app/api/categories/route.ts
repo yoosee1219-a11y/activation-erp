@@ -18,7 +18,15 @@ export async function GET() {
     }
 
     const tree = await getCategoryTree();
-    return NextResponse.json({ categories: tree });
+    return NextResponse.json(
+      { categories: tree },
+      {
+        headers: {
+          // 60초 CDN 캐시 + 5분 stale-while-revalidate
+          "Cache-Control": "private, max-age=30, s-maxage=60, stale-while-revalidate=300",
+        },
+      }
+    );
   } catch (error) {
     console.error("Failed to fetch categories:", error);
     return NextResponse.json(

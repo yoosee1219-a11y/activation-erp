@@ -1,34 +1,17 @@
 "use client";
 
 import { useSession } from "@/lib/auth/client";
-import { useEffect, useState } from "react";
-import type { SessionUser } from "@/types";
+import { useInitial } from "@/hooks/use-initial";
 
 export function useAuth() {
   const { data: session, isPending } = useSession();
-  const [user, setUser] = useState<SessionUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  // /api/initial 묶음 endpoint + SWR 캐싱 사용
+  // useAgencyFilter와 같은 SWR key("/api/initial")이라 자동 dedup → 한 번만 fetch
+  const { user, loading: initialLoading } = useInitial();
 
-  useEffect(() => {
-    if (isPending) return;
+  // 세션 자체가 없으면 user는 null
+  const finalUser = session?.user ? user : null;
+  const loading = isPending || (session?.user && initialLoading);
 
-    if (!session?.user) {
-      setUser(null);
-      setLoading(false);
-      return;
-    }
-
-    fetch("/api/users/me")
-      .then((res) => res.json())
-      .then((data) => {
-        setUser(data.user);
-        setLoading(false);
-      })
-      .catch(() => {
-        setUser(null);
-        setLoading(false);
-      });
-  }, [session, isPending]);
-
-  return { user, loading, session };
+  return { user: finalUser, loading: !!loading, session };
 }
