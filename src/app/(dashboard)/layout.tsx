@@ -47,13 +47,9 @@ export default function DashboardLayout({
     }
   }, [authLoading, user, router]);
 
-  if (authLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-gray-500">로딩 중...</div>
-      </div>
-    );
-  }
+  // 인증 로딩 중에도 children은 마운트 → /api/dashboard 등 페이지 fetch가
+  // /api/auth/get-session, /api/initial과 병렬로 실행되어 ~500ms 단축
+  // PARTNER/GUEST는 useEffect에서 redirect되므로 렌더 자체는 무해
 
   if (user?.role === "PARTNER" || user?.role === "GUEST") {
     return (
