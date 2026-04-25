@@ -18,6 +18,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, ChevronDown, ChevronUp, Smartphone, FileText } from "lucide-react";
+import { BookmarkTab, BookmarkTabsBar } from "@/components/ui/bookmark-tabs";
 
 export interface SupplementStat {
   agencyId: string;
@@ -218,35 +219,37 @@ export function SupplementPanel({
 
   return (
     <div className="space-y-4">
-      {/* 탭: 전체 / 모바일보완 / 명의변경보완 */}
-      <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
-        <button
-          className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-            activeTab === "all" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
-          }`}
+      {/* 책갈피 탭: 전체 / 모바일보완 / 명의변경보완 */}
+      <BookmarkTabsBar>
+        <BookmarkTab
+          active={activeTab === "all"}
           onClick={() => handleTabChange("all")}
-        >
-          전체
-        </button>
-        <button
-          className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-            activeTab === "mobile" ? "bg-white text-purple-700 shadow-sm" : "text-gray-500 hover:text-gray-700"
-          }`}
+          label="전체"
+          count={totals.total}
+        />
+        <BookmarkTab
+          active={activeTab === "mobile"}
           onClick={() => handleTabChange("mobile")}
-        >
-          <Smartphone className="h-3.5 w-3.5" />
-          모바일보완
-        </button>
-        <button
-          className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-            activeTab === "nameChange" ? "bg-white text-teal-700 shadow-sm" : "text-gray-500 hover:text-gray-700"
-          }`}
+          label="모바일보완"
+          count={
+            activeTab === "mobile"
+              ? totals.total
+              : supplementStats.reduce((s, r) => s + Number(r.mobileTotal), 0)
+          }
+          icon={<Smartphone className="h-3.5 w-3.5" />}
+        />
+        <BookmarkTab
+          active={activeTab === "nameChange"}
           onClick={() => handleTabChange("nameChange")}
-        >
-          <FileText className="h-3.5 w-3.5" />
-          명의변경보완
-        </button>
-      </div>
+          label="명의변경보완"
+          count={
+            activeTab === "nameChange"
+              ? totals.total
+              : supplementStats.reduce((s, r) => s + Number(r.nameChangeTotal), 0)
+          }
+          icon={<FileText className="h-3.5 w-3.5" />}
+        />
+      </BookmarkTabsBar>
 
       {/* 요약 카드 4개 - 클릭 가능 */}
       <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
