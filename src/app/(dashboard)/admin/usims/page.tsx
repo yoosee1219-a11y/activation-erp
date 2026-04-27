@@ -54,6 +54,7 @@ interface UsimLogRow {
   targetAgencyId: string | null;
   targetAgencyName: string | null;
   usimCount: number | null;
+  usimModel: string | null;
   details: string;
   userName: string;
   createdAt: string | null;
@@ -68,6 +69,7 @@ export default function UsimManagementPage() {
   // 배정 폼
   const [assignAgencyId, setAssignAgencyId] = useState("");
   const [assignQuantity, setAssignQuantity] = useState("");
+  const [assignUsimModel, setAssignUsimModel] = useState("");
   const [assignDate, setAssignDate] = useState(
     new Date().toISOString().split("T")[0]
   );
@@ -77,6 +79,7 @@ export default function UsimManagementPage() {
   const [transferFromId, setTransferFromId] = useState("");
   const [transferToId, setTransferToId] = useState("");
   const [transferQuantity, setTransferQuantity] = useState("");
+  const [transferUsimModel, setTransferUsimModel] = useState("");
   const [transferDate, setTransferDate] = useState(
     new Date().toISOString().split("T")[0]
   );
@@ -118,6 +121,7 @@ export default function UsimManagementPage() {
           agencyId: assignAgencyId,
           quantity: Number(assignQuantity),
           date: assignDate,
+          usimModel: assignUsimModel.trim() || undefined,
         }),
       });
 
@@ -129,6 +133,7 @@ export default function UsimManagementPage() {
       const result = await res.json();
       toast.success(result.message);
       setAssignQuantity("");
+      setAssignUsimModel("");
       fetchData();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "배정 실패");
@@ -164,6 +169,7 @@ export default function UsimManagementPage() {
           toAgencyId: transferToId,
           quantity: Number(transferQuantity),
           date: transferDate,
+          usimModel: transferUsimModel.trim() || undefined,
         }),
       });
 
@@ -175,6 +181,7 @@ export default function UsimManagementPage() {
       const result = await res.json();
       toast.success(result.message);
       setTransferQuantity("");
+      setTransferUsimModel("");
       fetchData();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "이송 실패");
@@ -234,7 +241,7 @@ export default function UsimManagementPage() {
               <CardTitle className="text-lg">유심 배정</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
                 <div className="space-y-2">
                   <Label>거래처</Label>
                   <Select
@@ -252,6 +259,15 @@ export default function UsimManagementPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>USIM 모델</Label>
+                  <Input
+                    placeholder="예) K3920"
+                    value={assignUsimModel}
+                    onChange={(e) => setAssignUsimModel(e.target.value)}
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -298,7 +314,7 @@ export default function UsimManagementPage() {
               <CardTitle className="text-lg">유심 이송</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
                 <div className="space-y-2">
                   <Label>출발 거래처</Label>
                   <Select
@@ -335,6 +351,15 @@ export default function UsimManagementPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>USIM 모델</Label>
+                  <Input
+                    placeholder="예) K3920"
+                    value={transferUsimModel}
+                    onChange={(e) => setTransferUsimModel(e.target.value)}
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -459,6 +484,7 @@ export default function UsimManagementPage() {
                       <TableRow>
                         <TableHead className="w-[140px]">일시</TableHead>
                         <TableHead className="w-[80px]">구분</TableHead>
+                        <TableHead className="w-[100px]">USIM 모델</TableHead>
                         <TableHead>내용</TableHead>
                         <TableHead className="w-[100px]">처리자</TableHead>
                       </TableRow>
@@ -495,6 +521,9 @@ export default function UsimManagementPage() {
                                 ? "조정"
                                 : log.action}
                             </span>
+                          </TableCell>
+                          <TableCell className="text-sm font-mono">
+                            {log.usimModel || <span className="text-muted-foreground">-</span>}
                           </TableCell>
                           <TableCell className="text-sm">
                             {log.details}

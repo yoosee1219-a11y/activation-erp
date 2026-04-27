@@ -37,10 +37,11 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { agencyId, quantity, date } = (await request.json()) as {
+    const { agencyId, quantity, date, usimModel } = (await request.json()) as {
       agencyId: string;
       quantity: number;
       date?: string;
+      usimModel?: string;
     };
 
     if (!agencyId || !quantity || quantity <= 0) {
@@ -70,13 +71,15 @@ export async function POST(request: NextRequest) {
       agency[0].name,
       quantity,
       assignDate,
-      { id: user.id, name: user.name, role: user.role }
+      { id: user.id, name: user.name, role: user.role },
+      usimModel
     );
 
+    const modelLabel = usimModel ? ` [${usimModel}]` : "";
     return NextResponse.json({
       success: true,
       ...result,
-      message: `${agency[0].name}에 유심 ${quantity}개 배정 완료`,
+      message: `${agency[0].name}에 유심${modelLabel} ${quantity}개 배정 완료`,
     });
   } catch (error) {
     console.error("POST /api/usims error:", error);

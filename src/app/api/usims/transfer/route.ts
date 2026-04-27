@@ -12,11 +12,12 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { fromAgencyId, toAgencyId, quantity, date } = (await request.json()) as {
+    const { fromAgencyId, toAgencyId, quantity, date, usimModel } = (await request.json()) as {
       fromAgencyId: string;
       toAgencyId: string;
       quantity: number;
       date?: string;
+      usimModel?: string;
     };
 
     if (!fromAgencyId || !toAgencyId || !quantity || quantity <= 0) {
@@ -55,13 +56,15 @@ export async function POST(request: NextRequest) {
       toAgency[0].name,
       quantity,
       transferDate,
-      { id: user.id, name: user.name, role: user.role }
+      { id: user.id, name: user.name, role: user.role },
+      usimModel
     );
 
+    const modelLabel = usimModel ? ` [${usimModel}]` : "";
     return NextResponse.json({
       success: true,
       ...result,
-      message: `${fromAgency[0].name} → ${toAgency[0].name} 유심 ${quantity}개 이송 완료`,
+      message: `${fromAgency[0].name} → ${toAgency[0].name} 유심${modelLabel} ${quantity}개 이송 완료`,
     });
   } catch (error) {
     console.error("POST /api/usims/transfer error:", error);

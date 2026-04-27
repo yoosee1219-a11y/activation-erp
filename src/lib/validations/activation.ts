@@ -13,6 +13,7 @@ export const createActivationSchema = z.object({
       (v) => !v || /^\d{6}-?\d{1}$/.test(v.trim()),
       "주민번호 앞 7자리 형식이어야 합니다 (예: 990101-1)"
     ),
+  usimModel: z.string().max(50).optional().nullable(),
   usimNumber: z.string().max(50).optional().nullable(),
   entryDate: z.string().optional().nullable(),
 

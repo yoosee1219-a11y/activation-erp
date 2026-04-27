@@ -4,7 +4,7 @@ import {
   createActivation,
 } from "@/lib/db/queries/activations";
 import { getSessionUser } from "@/lib/auth/session";
-import { canAccessAgency, resolveAllowedAgencyIds } from "@/lib/db/queries/users";
+import { resolveAllowedAgencyIds } from "@/lib/db/queries/users";
 import {
   getAgencyIdsByMediumCategories,
   getAgencyIdsByMajorCategory,
@@ -147,10 +147,11 @@ export async function POST(request: NextRequest) {
       ])
     ) as typeof parsed.data;
 
-    // 에이전시 접근 권한 확인
-    if (
-      !canAccessAgency(user.role, user.allowedAgencies, validated.agencyId)
-    ) {
+    // 에이전시 접근 권한 확인 (카테고리 기반 권한 포함)
+    const allowedIds = await resolveAllowedAgencyIds(user);
+    const allowed =
+      allowedIds === null || allowedIds.includes(validated.agencyId);
+    if (!allowed) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

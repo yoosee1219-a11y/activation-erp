@@ -47,6 +47,7 @@ export interface CustomerDetailData {
   agencyName?: string;
   customerName: string;
   customerBirthDate?: string | null;
+  usimModel?: string | null;
   usimNumber: string | null;
   entryDate: string | null;
   subscriptionNumber: string | null;
@@ -678,7 +679,13 @@ export function CustomerDetailDialog({
                 onSave={canEdit ? (v) => update("customerBirthDate", v) : undefined}
               />
               <EditableText
-                label="USIM번호"
+                label="USIM 모델"
+                value={customer.usimModel}
+                placeholder="예) K3920"
+                onSave={canEdit ? (v) => update("usimModel", v) : undefined}
+              />
+              <EditableText
+                label="USIM 번호"
                 value={customer.usimNumber}
                 onSave={canEdit ? (v) => update("usimNumber", v) : undefined}
               />

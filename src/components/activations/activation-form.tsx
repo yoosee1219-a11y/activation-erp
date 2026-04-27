@@ -48,6 +48,7 @@ export function ActivationForm({
   const [formData, setFormData] = useState({
     agencyId: (initialData?.agencyId as string) || "",
     customerName: (initialData?.customerName as string) || "",
+    usimModel: (initialData?.usimModel as string) || "",
     usimNumber: (initialData?.usimNumber as string) || "",
     entryDate: (initialData?.entryDate as string) || "",
     subscriptionNumber: (initialData?.subscriptionNumber as string) || "",
@@ -194,6 +195,16 @@ export function ActivationForm({
                     : digits;
                 updateField("customerBirthDate", formatted);
               }}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="usimModel">USIM 모델</Label>
+            <Input
+              id="usimModel"
+              placeholder="예) K3920"
+              value={formData.usimModel}
+              onChange={(e) => updateField("usimModel", e.target.value)}
             />
           </div>
 

@@ -69,6 +69,7 @@ export const activations = pgTable("activations", {
     .references(() => agencies.id),
   customerName: text("customer_name").notNull(),
   customerBirthDate: text("customer_birth_date"), // 고객 생년월일 (본인확인용, 7자리 "990101-1" 형식)
+  usimModel: text("usim_model"), // USIM 모델명 (예: K3920)
   usimNumber: text("usim_number"),
   entryDate: date("entry_date"), // 입국예정일
 
@@ -198,6 +199,7 @@ export const usimLogs = pgTable("usim_logs", {
   targetAgencyId: text("target_agency_id"),
   targetAgencyName: text("target_agency_name"),
   usimCount: integer("usim_count"),
+  usimModel: text("usim_model"), // USIM 모델명 (예: K3920)
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 

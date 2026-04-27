@@ -20,6 +20,7 @@ export interface UsimLogRow {
   targetAgencyId: string | null;
   targetAgencyName: string | null;
   usimCount: number | null;
+  usimModel: string | null;
   details: string;
   userName: string;
   createdAt: Date | null;
@@ -31,8 +32,10 @@ export async function assignUsims(
   agencyName: string,
   quantity: number,
   date: string,
-  performedBy: { id: string; name: string; role: string }
+  performedBy: { id: string; name: string; role: string },
+  usimModel?: string | null
 ) {
+  const modelLabel = usimModel ? ` [${usimModel}]` : "";
   await db.insert(usimLogs).values({
     userId: performedBy.id,
     userName: performedBy.name,
@@ -41,7 +44,8 @@ export async function assignUsims(
     agencyId,
     agencyName,
     usimCount: quantity,
-    details: `${agencyName}에 유심 ${quantity}개 배정 (${date})`,
+    usimModel: usimModel || null,
+    details: `${agencyName}에 유심${modelLabel} ${quantity}개 배정 (${date})`,
   });
 
   return { assigned: quantity };
@@ -55,8 +59,10 @@ export async function transferUsims(
   toAgencyName: string,
   quantity: number,
   date: string,
-  performedBy: { id: string; name: string; role: string }
+  performedBy: { id: string; name: string; role: string },
+  usimModel?: string | null
 ) {
+  const modelLabel = usimModel ? ` [${usimModel}]` : "";
   // 출고 기록
   await db.insert(usimLogs).values({
     userId: performedBy.id,
@@ -68,7 +74,8 @@ export async function transferUsims(
     targetAgencyId: toAgencyId,
     targetAgencyName: toAgencyName,
     usimCount: -quantity, // 출고는 마이너스
-    details: `${fromAgencyName} → ${toAgencyName} 유심 ${quantity}개 이송 (${date})`,
+    usimModel: usimModel || null,
+    details: `${fromAgencyName} → ${toAgencyName} 유심${modelLabel} ${quantity}개 이송 (${date})`,
   });
 
   // 입고 기록
@@ -82,7 +89,8 @@ export async function transferUsims(
     targetAgencyId: fromAgencyId,
     targetAgencyName: fromAgencyName,
     usimCount: quantity, // 입고는 플러스
-    details: `${fromAgencyName} → ${toAgencyName} 유심 ${quantity}개 이송 (${date})`,
+    usimModel: usimModel || null,
+    details: `${fromAgencyName} → ${toAgencyName} 유심${modelLabel} ${quantity}개 이송 (${date})`,
   });
 
   return { transferred: quantity };
@@ -160,6 +168,7 @@ export async function getUsimLogs(limit = 100): Promise<UsimLogRow[]> {
       targetAgencyId: usimLogs.targetAgencyId,
       targetAgencyName: usimLogs.targetAgencyName,
       usimCount: usimLogs.usimCount,
+      usimModel: usimLogs.usimModel,
       details: usimLogs.details,
       userName: usimLogs.userName,
       createdAt: usimLogs.createdAt,
