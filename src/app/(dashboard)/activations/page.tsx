@@ -215,6 +215,15 @@ export default function ActivationsPage() {
 
     try {
       const res = await fetch(`/api/activations?${params}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(
+          `데이터 로드 실패 (${res.status}): ${err.error || res.statusText}`
+        );
+        setData([]);
+        setTotal(0);
+        return;
+      }
       const result = await res.json();
       const rows = (result.data || []).map((row: ActivationRow) => ({
         ...row,
