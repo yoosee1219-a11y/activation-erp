@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { getSupplementInfo as computeSupplement } from "@/lib/supplement";
 
 // 파트너 + 어드민 모두 지원하는 공통 타입
 export interface CustomerDetailData {
@@ -524,20 +525,18 @@ export function CustomerDetailDialog({
       const graceDaysLeft = 7 - Math.floor((today.getTime() - alertDate.getTime()) / (1000 * 60 * 60 * 24));
       return { text: `해지예고 D-${Math.max(graceDaysLeft, 0)}`, color: "bg-red-500 text-white animate-pulse" };
     }
-    if (
-      customer.nameChangeDocsReview === "완료" &&
-      customer.arcReview === "완료" &&
-      customer.autopayReview === "완료"
-    ) {
-      return { text: "보완완료", color: "bg-green-100 text-green-700" };
-    }
-    const deadline = customer.arcSupplementDeadline;
-    if (!deadline) return null;
-    const daysLeft = Math.ceil((new Date(deadline).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
-    if (daysLeft < 0) return { text: "기한초과", color: "bg-red-100 text-red-700" };
-    if (daysLeft <= 30) return { text: `D-${daysLeft}`, color: "bg-red-100 text-red-700" };
-    if (daysLeft <= 60) return { text: `D-${daysLeft}`, color: "bg-orange-100 text-orange-700" };
-    return { text: `D-${daysLeft}`, color: "bg-gray-100 text-gray-600" };
+    const info = computeSupplement({
+      activationMethod: customer.activationMethod ?? null,
+      applicationDocsReview: customer.applicationDocsReview,
+      nameChangeDocsReview: customer.nameChangeDocsReview,
+      arcReview: customer.arcReview,
+      autopayReview: customer.autopayReview,
+      arcSupplementDeadline: customer.arcSupplementDeadline,
+    });
+    if (info.kind === "none") return null;
+    if (info.kind === "complete") return { text: "보완완료", color: info.badgeClass };
+    if (info.kind === "autopay-only") return { text: "자동이체 미등록", color: info.badgeClass };
+    return { text: info.label, color: info.badgeClass };
   };
 
   const supplementInfo = getSupplementInfo();

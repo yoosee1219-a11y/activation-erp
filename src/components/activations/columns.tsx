@@ -2,6 +2,7 @@
 
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
+import { getSupplementInfo } from "@/lib/supplement";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -872,56 +873,13 @@ export function getColumns(options: {
             </Badge>
           );
         }
-        // 외국인등록증 + 최종완료: 검수 불필요
-        if (r.activationMethod === "외국인등록증" && r.workStatus === "최종완료") {
-          return (
-            <Badge className="bg-green-100 text-green-700 text-[10px]">
-              완료
-            </Badge>
-          );
-        }
-        // 여권개통: 4개 검수 모두 완료 + 최종완료
-        if (
-          r.applicationDocsReview === "완료" &&
-          r.nameChangeDocsReview === "완료" &&
-          r.arcReview === "완료" &&
-          r.autopayReview === "완료" &&
-          r.workStatus === "최종완료"
-        ) {
-          return (
-            <Badge className="bg-green-100 text-green-700 text-[10px]">
-              완료
-            </Badge>
-          );
-        }
-        const deadline = r.arcSupplementDeadline;
-        if (!deadline)
+        const info = getSupplementInfo(r);
+        if (info.kind === "none") {
           return <span className="text-xs text-gray-400">-</span>;
-        const daysLeft = Math.ceil(
-          (new Date(deadline).getTime() - new Date().getTime()) /
-            (1000 * 60 * 60 * 24)
-        );
-        if (daysLeft < 0)
-          return (
-            <Badge className="bg-red-100 text-red-700 text-[10px]">
-              기한초과
-            </Badge>
-          );
-        if (daysLeft <= 30)
-          return (
-            <Badge className="bg-red-100 text-red-700 text-[10px]">
-              D-{daysLeft}
-            </Badge>
-          );
-        if (daysLeft <= 60)
-          return (
-            <Badge className="bg-orange-100 text-orange-700 text-[10px]">
-              D-{daysLeft}
-            </Badge>
-          );
+        }
         return (
-          <Badge className="bg-gray-100 text-gray-600 text-[10px]">
-            D-{daysLeft}
+          <Badge className={`${info.badgeClass} text-[10px]`} title={info.kind === "autopay-only" ? "자동이체만 미완료" : undefined}>
+            {info.label}
           </Badge>
         );
       },

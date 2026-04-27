@@ -13,6 +13,7 @@ import { EditableCell } from "./editable-cell";
 import { FileCell } from "./file-cell";
 import { NoteIndicator } from "@/components/activations/note-indicator";
 import { format } from "date-fns";
+import { getSupplementInfo } from "@/lib/supplement";
 
 export type PartnerActivationRow = {
   id: string;
@@ -593,20 +594,15 @@ export function getPartnerColumns(options: {
             </Badge>
           );
         }
-        const isArc = r.activationMethod === "외국인등록증";
-        const docsComplete = isArc
-          ? r.applicationDocsReview === "완료" && r.autopayReview === "완료"
-          : r.applicationDocsReview === "완료" && r.nameChangeDocsReview === "완료" && r.arcReview === "완료" && r.autopayReview === "완료";
-        if (docsComplete) {
-          return <Badge className="bg-green-100 text-green-700 text-[10px]">완료</Badge>;
+        const info = getSupplementInfo(r);
+        if (info.kind === "none") {
+          return <span className="text-xs text-gray-400">-</span>;
         }
-        const deadline = r.arcSupplementDeadline;
-        if (!deadline) return <span className="text-xs text-gray-400">-</span>;
-        const daysLeft = Math.ceil((new Date(deadline).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
-        if (daysLeft < 0) return <Badge className="bg-red-100 text-red-700 text-[10px]">기한초과</Badge>;
-        if (daysLeft <= 30) return <Badge className="bg-red-100 text-red-700 text-[10px]">D-{daysLeft}</Badge>;
-        if (daysLeft <= 60) return <Badge className="bg-orange-100 text-orange-700 text-[10px]">D-{daysLeft}</Badge>;
-        return <Badge className="bg-gray-100 text-gray-600 text-[10px]">D-{daysLeft}</Badge>;
+        return (
+          <Badge className={`${info.badgeClass} text-[10px]`} title={info.kind === "autopay-only" ? "자동이체만 미완료" : undefined}>
+            {info.label}
+          </Badge>
+        );
       },
     },
   ];
