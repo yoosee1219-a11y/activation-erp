@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -14,13 +14,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { CheckCheck, Undo2 } from "lucide-react";
+import { CheckCheck, Undo2, FileUp, Link as LinkIcon, Trash2 } from "lucide-react";
 import {
   User,
   Phone,
@@ -33,6 +38,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { format } from "date-fns";
+import { toast } from "sonner";
 
 // 파트너 + 어드민 모두 지원하는 공통 타입
 export interface CustomerDetailData {
@@ -205,48 +211,168 @@ function EditableText({
   );
 }
 
-// ─── 서류 + 검수 상태 (검수 수정 가능) ───
+// 업로드 값(JSON 배열 또는 단일 링크)에서 링크 목록을 추출
+function parseLinks(value: string | null): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((item) => {
+          if (typeof item === "string") return item;
+          if (item && typeof item === "object" && typeof item.url === "string") return item.url;
+          return null;
+        })
+        .filter((v): v is string => !!v);
+    }
+  } catch {
+    if (value.startsWith("http")) return [value];
+  }
+  return value.startsWith("http") ? [value] : [];
+}
+
+// ─── 서류 + 검수 상태 + 업로드 (검수/업로드 수정 가능) ───
 function DocStatusRow({
   label,
-  hasFile,
   fileValue,
   review,
   onReviewChange,
+  onFileChange,
+  agencyId,
+  rowId,
+  field,
   isAdmin,
+  canUpload,
+  isLocked,
 }: {
   label: string;
-  hasFile: boolean;
   fileValue: string | null;
   review: string | null;
   onReviewChange?: (v: string) => void;
+  onFileChange?: (v: string) => void;
+  agencyId?: string;
+  rowId?: string;
+  field?: string;
   isAdmin?: boolean;
+  canUpload?: boolean;
+  isLocked?: boolean;
 }) {
+  const links = parseLinks(fileValue);
+  const hasFile = links.length > 0;
+  const [open, setOpen] = useState(false);
+  const [linkInput, setLinkInput] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const saveLinks = (next: string[]) => {
+    if (!onFileChange) return;
+    if (next.length === 0) onFileChange("");
+    else if (next.length === 1) onFileChange(next[0]);
+    else onFileChange(JSON.stringify(next));
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    if (!agencyId) {
+      toast.error("거래처 정보가 없어 업로드할 수 없습니다");
+      return;
+    }
+    if (!field) return;
+
+    const MAX_SIZE = 10 * 1024 * 1024;
+    const oversized = Array.from(files).filter((f) => f.size > MAX_SIZE);
+    if (oversized.length > 0) {
+      const names = oversized
+        .map((f) => `${f.name} (${(f.size / 1024 / 1024).toFixed(1)}MB)`)
+        .join(", ");
+      toast.error(
+        `10MB 초과 파일은 업로드 불가: ${names}. 사진은 해상도를 낮추거나 PDF로 변환해 주세요.`,
+        { duration: 6000 }
+      );
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    setUploading(true);
+    const newLinks = [...links];
+
+    try {
+      for (const file of Array.from(files)) {
+        const formData = new FormData();
+        formData.append("file", file);
+        if (rowId) formData.append("activationId", rowId);
+        formData.append("agencyId", agencyId);
+        formData.append("fileType", field);
+
+        const res = await fetch("/api/files/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const link = data.document?.googleDriveLink || data.link || data.url;
+          if (link) newLinks.push(link);
+        } else if (res.status === 413) {
+          toast.error(`${file.name}: 파일이 너무 커서 서버에서 거부되었습니다.`);
+        } else {
+          const err = await res.json().catch(() => ({}));
+          toast.error(`${file.name} 업로드 실패: ${err.error || res.statusText}`);
+        }
+      }
+
+      if (newLinks.length > links.length) {
+        saveLinks(newLinks);
+        setOpen(false);
+        toast.success(`${newLinks.length - links.length}개 파일 업로드 완료`);
+      }
+    } catch {
+      toast.error("파일 업로드 중 오류");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleLinkSave = () => {
+    const v = linkInput.trim();
+    if (!v) return;
+    saveLinks([...links, v]);
+    setLinkInput("");
+    setOpen(false);
+    toast.success("링크가 추가되었습니다");
+  };
+
+  const handleRemoveLink = (idx: number) => {
+    saveLinks(links.filter((_, i) => i !== idx));
+  };
+
+  const showUploadUI = !!(canUpload && onFileChange && !isLocked && agencyId && field);
+
   return (
-    <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-gray-50">
-      <div className="flex items-center gap-2">
-        <FileText className="h-4 w-4 text-gray-400" />
-        <span className="text-sm font-medium">{label}</span>
-        {hasFile && fileValue && (
-          <a
-            href={(() => {
-              try {
-                const parsed = JSON.parse(fileValue);
-                if (Array.isArray(parsed) && parsed.length > 0) return parsed[0].url;
-              } catch {
-                if (fileValue.startsWith("http")) return fileValue;
-              }
-              return undefined;
-            })()}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[10px] text-blue-500 hover:underline"
-            onClick={(e) => e.stopPropagation()}
-          >
-            열기
-          </a>
+    <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-gray-50 gap-2">
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        <FileText className="h-4 w-4 text-gray-400 shrink-0" />
+        <span className="text-sm font-medium shrink-0">{label}</span>
+        {hasFile && (
+          <div className="flex items-center gap-1 flex-wrap min-w-0">
+            {links.map((link, i) => (
+              <a
+                key={i}
+                href={link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] text-blue-600 hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {links.length > 1 ? `파일${i + 1}` : "열기"}
+              </a>
+            ))}
+          </div>
         )}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5 shrink-0">
         {hasFile ? (
           <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-600 border-blue-200">
             파일있음
@@ -256,6 +382,95 @@ function DocStatusRow({
             미첨부
           </Badge>
         )}
+
+        {showUploadUI && (
+          <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-[10px] text-gray-600 hover:text-blue-600 hover:bg-blue-50 border border-dashed border-gray-300 hover:border-blue-400"
+              >
+                <FileUp className="h-3 w-3 mr-0.5" />
+                {hasFile ? "추가" : "첨부"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72 p-3" align="end">
+              <div className="space-y-3">
+                {links.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium">첨부된 파일</p>
+                    {links.map((link, i) => (
+                      <div key={i} className="flex items-center gap-1 text-xs">
+                        <a
+                          href={link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline truncate flex-1"
+                        >
+                          파일{i + 1}
+                        </a>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 w-5 p-0 text-red-400 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => handleRemoveLink(i)}
+                          title="삭제"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div>
+                  <p className="text-xs font-medium mb-1">파일 업로드 (여러 개 선택 가능)</p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    disabled={uploading}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    className="w-full flex flex-col items-center justify-center gap-1 py-3 px-2 border-2 border-dashed border-gray-300 rounded-md text-xs text-gray-600 hover:border-blue-500 hover:bg-blue-50 hover:text-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    <FileUp className="h-4 w-4" />
+                    <span>{uploading ? "업로드 중..." : "클릭하여 파일 선택"}</span>
+                    <span className="text-[10px] text-gray-400">이미지 · PDF · 최대 10MB</span>
+                  </button>
+                </div>
+
+                <div className="border-t pt-2">
+                  <p className="text-xs font-medium mb-1">또는 링크 입력</p>
+                  <div className="flex gap-1">
+                    <Input
+                      value={linkInput}
+                      onChange={(e) => setLinkInput(e.target.value)}
+                      placeholder="https://..."
+                      className="h-7 text-xs"
+                      onKeyDown={(e) => e.key === "Enter" && handleLinkSave()}
+                    />
+                    <Button
+                      size="sm"
+                      className="h-7 px-2"
+                      onClick={handleLinkSave}
+                      disabled={!linkInput.trim()}
+                    >
+                      <LinkIcon className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
+
         {onReviewChange && isAdmin ? (
           <Select value={review || ""} onValueChange={onReviewChange}>
             <SelectTrigger className={`h-7 w-[90px] text-[10px] border-dashed ${review ? reviewColors[review] || "" : ""}`}>
@@ -649,35 +864,55 @@ export function CustomerDetailDialog({
             <div className="space-y-1.5">
               <DocStatusRow
                 label="가입신청서"
-                hasFile={!!customer.applicationDocs}
                 fileValue={customer.applicationDocs}
                 review={customer.applicationDocsReview}
                 onReviewChange={canEdit ? (v) => update("applicationDocsReview", v) : undefined}
+                onFileChange={canEdit ? (v) => update("applicationDocs", v) : undefined}
+                agencyId={customer.agencyId}
+                rowId={customer.id}
+                field="applicationDocs"
                 isAdmin={isAdmin}
+                canUpload={canEdit}
+                isLocked={!!customer.isLocked && !isAdmin}
               />
               <DocStatusRow
                 label="명의변경서류"
-                hasFile={!!customer.nameChangeDocs}
                 fileValue={customer.nameChangeDocs}
                 review={customer.nameChangeDocsReview}
                 onReviewChange={canEdit ? (v) => update("nameChangeDocsReview", v) : undefined}
+                onFileChange={canEdit ? (v) => update("nameChangeDocs", v) : undefined}
+                agencyId={customer.agencyId}
+                rowId={customer.id}
+                field="nameChangeDocs"
                 isAdmin={isAdmin}
+                canUpload={canEdit}
+                isLocked={!!customer.isLocked && !isAdmin}
               />
               <DocStatusRow
                 label="외국인등록증"
-                hasFile={!!customer.arcInfo}
                 fileValue={customer.arcInfo}
                 review={customer.arcReview}
                 onReviewChange={canEdit ? (v) => update("arcReview", v) : undefined}
+                onFileChange={canEdit ? (v) => update("arcInfo", v) : undefined}
+                agencyId={customer.agencyId}
+                rowId={customer.id}
+                field="arcInfo"
                 isAdmin={isAdmin}
+                canUpload={canEdit}
+                isLocked={!!customer.isLocked && !isAdmin}
               />
               <DocStatusRow
                 label="자동이체"
-                hasFile={!!customer.autopayInfo}
                 fileValue={customer.autopayInfo}
                 review={customer.autopayReview}
                 onReviewChange={canEdit ? (v) => update("autopayReview", v) : undefined}
+                onFileChange={canEdit ? (v) => update("autopayInfo", v) : undefined}
+                agencyId={customer.agencyId}
+                rowId={customer.id}
+                field="autopayInfo"
                 isAdmin={isAdmin}
+                canUpload={canEdit}
+                isLocked={!!customer.isLocked && !isAdmin}
               />
             </div>
           </section>
