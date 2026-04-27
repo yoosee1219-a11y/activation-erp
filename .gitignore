@@ -43,3 +43,6 @@ next-env.d.ts
 
 .vercel
 .gstack/
+
+# 성능 측정 스크립트 산출물
+scripts/measure-perf-result.json
