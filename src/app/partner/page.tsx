@@ -269,8 +269,21 @@ export default function PartnerPage() {
 
   const handleUpdate = useCallback(
     async (id: string, field: string, value: string) => {
+      // agencyId 변경 시 agencyName도 옵티미스틱 갱신
+      const agencyName =
+        field === "agencyId"
+          ? agencies.find((a) => a.id === value)?.name
+          : undefined;
       setData((prev) =>
-        prev.map((row) => (row.id === id ? { ...row, [field]: value } : row))
+        prev.map((row) =>
+          row.id === id
+            ? {
+                ...row,
+                [field]: value,
+                ...(agencyName ? { agencyName } : {}),
+              }
+            : row
+        )
       );
       try {
         const res = await fetch(`/api/activations/${id}`, {
@@ -288,7 +301,7 @@ export default function PartnerPage() {
         fetchDataRef.current();
       }
     },
-    []
+    [agencies]
   );
 
   const handleAddRow = async () => {
@@ -298,15 +311,13 @@ export default function PartnerPage() {
       const selectedAgencies = agencies.filter((a) =>
         selectedMediumCategories.includes(a.mediumCategory || "")
       );
-      if (selectedAgencies.length === 1) {
-        agencyId = selectedAgencies[0].id;
-      } else if (selectedAgencies.length > 1) {
-        toast.error("거래처를 하나만 선택한 후 추가해주세요.");
-        return;
-      } else {
+      if (selectedAgencies.length === 0) {
         toast.error("선택된 분류에 거래처가 없습니다.");
         return;
       }
+      // 1개든 여러 개든 첫 번째 거래처로 행 추가
+      // (테이블에서 거래처 드롭다운으로 변경 가능)
+      agencyId = selectedAgencies[0].id;
     } else {
       if (!user?.allowedAgencies?.length) {
         toast.error("거래처가 배정되지 않았습니다.");
@@ -315,13 +326,13 @@ export default function PartnerPage() {
       if (selectedAgency !== "all") {
         agencyId = selectedAgency;
       } else if (user.allowedAgencies.includes("ALL")) {
-        toast.error("거래처를 먼저 선택해주세요.");
-        return;
-      } else if (user.allowedAgencies.length === 1) {
-        agencyId = user.allowedAgencies[0];
+        if (agencies.length === 0) {
+          toast.error("거래처가 없습니다.");
+          return;
+        }
+        agencyId = agencies[0].id;
       } else {
-        toast.error("거래처를 먼저 선택해주세요.");
-        return;
+        agencyId = user.allowedAgencies[0];
       }
     }
 
@@ -350,9 +361,26 @@ export default function PartnerPage() {
     }
   };
 
+  // 사용자 권한 범위 거래처 (드롭다운 옵션)
+  const availableAgencies = useMemo(() => {
+    if (hasCategoryAccess) {
+      return agencies
+        .filter((a) =>
+          selectedMediumCategories.includes(a.mediumCategory || "")
+        )
+        .map((a) => ({ id: a.id, name: a.name }));
+    }
+    if (user?.allowedAgencies?.includes("ALL")) {
+      return agencies.map((a) => ({ id: a.id, name: a.name }));
+    }
+    return agencies
+      .filter((a) => user?.allowedAgencies?.includes(a.id))
+      .map((a) => ({ id: a.id, name: a.name }));
+  }, [agencies, hasCategoryAccess, selectedMediumCategories, user?.allowedAgencies]);
+
   const columns = useMemo(
-    () => getPartnerColumns({ onUpdate: handleUpdate }),
-    [handleUpdate]
+    () => getPartnerColumns({ onUpdate: handleUpdate, availableAgencies }),
+    [handleUpdate, availableAgencies]
   );
 
   // 요약 통계 (workStatus 기준 - 6개)

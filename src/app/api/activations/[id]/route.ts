@@ -5,7 +5,7 @@ import {
   deleteActivation,
 } from "@/lib/db/queries/activations";
 import { getSessionUser } from "@/lib/auth/session";
-import { canAccessAgency } from "@/lib/db/queries/users";
+import { resolveAllowedAgencyIds } from "@/lib/db/queries/users";
 
 import { addActivationLog } from "@/lib/db/queries/activation-logs";
 import { updateActivationSchema } from "@/lib/validations/activation";
@@ -15,8 +15,11 @@ import { eq, and } from "drizzle-orm";
 
 // 거래처(PARTNER)가 편집할 수 있는 필드 (전체 목록)
 const PARTNER_EDITABLE_FIELDS = new Set([
+  // 거래처 (입력중 상태에서만, 본인 권한 범위 내)
+  "agencyId",
   // 기본 정보 (입력중/보완요청 상태에서만)
   "customerName",
+  "usimModel",
   "usimNumber",
   "entryDate",
   "subscriptionType",
@@ -103,9 +106,10 @@ export async function GET(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    if (
-      !canAccessAgency(user.role, user.allowedAgencies, activation.agencyId)
-    ) {
+    const allowedIdsForGet = await resolveAllowedAgencyIds(user);
+    const canAccessGet =
+      allowedIdsForGet === null || allowedIdsForGet.includes(activation.agencyId);
+    if (!canAccessGet) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -140,9 +144,11 @@ export async function PATCH(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    if (
-      !canAccessAgency(user.role, user.allowedAgencies, existing.agencyId)
-    ) {
+    // 카테고리 기반 권한도 인식
+    const allowedIds = await resolveAllowedAgencyIds(user);
+    const canAccess =
+      allowedIds === null || allowedIds.includes(existing.agencyId);
+    if (!canAccess) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -180,6 +186,22 @@ export async function PATCH(
           { error: `수정 권한이 없는 필드: ${forbiddenFields.join(", ")}` },
           { status: 403 }
         );
+      }
+
+      // 1-1) agencyId 변경: 입력중 상태 + 본인 권한 거래처만 허용
+      if (body.agencyId !== undefined && body.agencyId !== existing.agencyId) {
+        if (!isEditable) {
+          return NextResponse.json(
+            { error: "현재 상태에서는 거래처를 변경할 수 없습니다." },
+            { status: 403 }
+          );
+        }
+        if (allowedIds !== null && !allowedIds.includes(body.agencyId as string)) {
+          return NextResponse.json(
+            { error: "권한 범위 외 거래처로는 변경할 수 없습니다." },
+            { status: 403 }
+          );
+        }
       }
 
       // 2) workStatus 변경 검증

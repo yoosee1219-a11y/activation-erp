@@ -86,8 +86,9 @@ function isDocLocked(review: string | null): boolean {
 
 export function getPartnerColumns(options: {
   onUpdate: (id: string, field: string, value: string) => void;
+  availableAgencies?: { id: string; name: string }[];
 }): ColumnDef<PartnerActivationRow>[] {
-  const { onUpdate } = options;
+  const { onUpdate, availableAgencies = [] } = options;
 
   return [
     // ─── 핵심 상태 (스크롤 없이 바로 보이는 영역) ───
@@ -145,11 +146,34 @@ export function getPartnerColumns(options: {
     {
       accessorKey: "agencyName",
       header: "거래처",
-      cell: ({ row }) => (
-        <span className="text-sm font-medium text-gray-700">
-          {row.original.agencyName || row.original.agencyId}
-        </span>
-      ),
+      cell: ({ row }) => {
+        const ws = row.original.workStatus || "입력중";
+        const editable = isEditableStatus(ws) && availableAgencies.length > 1;
+        if (editable) {
+          return (
+            <Select
+              value={row.original.agencyId}
+              onValueChange={(v) => onUpdate(row.original.id, "agencyId", v)}
+            >
+              <SelectTrigger className="h-7 w-[140px] text-xs border-dashed">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {availableAgencies.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          );
+        }
+        return (
+          <span className="text-sm font-medium text-gray-700">
+            {row.original.agencyName || row.original.agencyId}
+          </span>
+        );
+      },
     },
     {
       accessorKey: "customerName",
