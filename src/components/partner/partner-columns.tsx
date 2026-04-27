@@ -72,7 +72,7 @@ const reviewColors: Record<string, string> = {
   "완료": "bg-green-100 text-green-700",
   "보완요청": "bg-red-100 text-red-700",
   "개통요청": "bg-blue-100 text-blue-700",
-  "진행요청": "bg-orange-100 text-orange-700",
+  "보완완료": "bg-orange-100 text-orange-700",
 };
 
 // 파트너가 편집 가능한 상태
@@ -80,9 +80,10 @@ function isEditableStatus(ws: string): boolean {
   return ws === "입력중" || ws === "보완요청";
 }
 
-// 서류별 잠금: 해당 검수가 "진행요청" 또는 "완료"이면 서류 수정 불가
+// 서류별 잠금: 해당 검수가 "보완완료"(파트너가 보완 마침, 관리자 확인 대기)
+// 또는 "완료"(관리자 최종 확인)이면 서류 수정 불가
 function isDocLocked(review: string | null): boolean {
-  return review === "진행요청" || review === "완료";
+  return review === "보완완료" || review === "완료";
 }
 
 export function getPartnerColumns(options: {
@@ -380,7 +381,7 @@ export function getPartnerColumns(options: {
       cell: ({ row }) => {
         const v = row.original.applicationDocsReview;
         const hasDoc = !!row.original.applicationDocs;
-        // 파트너는 서류가 있고 검수가 비어있거나 보완요청일 때만 "진행요청" 설정 가능
+        // 파트너는 서류가 있고 검수가 비어있거나 보완요청일 때만 "보완완료"로 설정 가능
         if (hasDoc && (!v || v === "보완요청")) {
           return (
             <Select
@@ -392,7 +393,7 @@ export function getPartnerColumns(options: {
               </SelectTrigger>
               <SelectContent>
                 {v === "보완요청" && <SelectItem value="보완요청">보완요청</SelectItem>}
-                <SelectItem value="진행요청">진행요청</SelectItem>
+                <SelectItem value="보완완료">보완완료</SelectItem>
               </SelectContent>
             </Select>
           );
@@ -438,7 +439,7 @@ export function getPartnerColumns(options: {
         }
         const v = row.original.nameChangeDocsReview;
         const hasDoc = !!row.original.nameChangeDocs;
-        // 파트너는 서류가 있고 검수가 비어있거나 보완요청일 때만 "진행요청" 설정 가능
+        // 파트너는 서류가 있고 검수가 비어있거나 보완요청일 때만 "보완완료"로 설정 가능
         if (hasDoc && (!v || v === "보완요청")) {
           return (
             <Select
@@ -450,7 +451,7 @@ export function getPartnerColumns(options: {
               </SelectTrigger>
               <SelectContent>
                 {v === "보완요청" && <SelectItem value="보완요청">보완요청</SelectItem>}
-                <SelectItem value="진행요청">진행요청</SelectItem>
+                <SelectItem value="보완완료">보완완료</SelectItem>
               </SelectContent>
             </Select>
           );
@@ -497,7 +498,7 @@ export function getPartnerColumns(options: {
         }
         const v = row.original.arcReview;
         const hasDoc = !!row.original.arcInfo;
-        // 파트너는 서류가 있고 검수가 비어있거나 보완요청일 때만 "진행요청" 설정 가능
+        // 파트너는 서류가 있고 검수가 비어있거나 보완요청일 때만 "보완완료"로 설정 가능
         if (hasDoc && (!v || v === "보완요청")) {
           return (
             <Select
@@ -509,7 +510,7 @@ export function getPartnerColumns(options: {
               </SelectTrigger>
               <SelectContent>
                 {v === "보완요청" && <SelectItem value="보완요청">보완요청</SelectItem>}
-                <SelectItem value="진행요청">진행요청</SelectItem>
+                <SelectItem value="보완완료">보완완료</SelectItem>
               </SelectContent>
             </Select>
           );
@@ -549,7 +550,7 @@ export function getPartnerColumns(options: {
       cell: ({ row }) => {
         const v = row.original.autopayReview;
         const hasDoc = !!row.original.autopayInfo;
-        // 파트너는 서류가 있고 검수가 비어있거나 보완요청일 때만 "진행요청" 설정 가능
+        // 파트너는 서류가 있고 검수가 비어있거나 보완요청일 때만 "보완완료"로 설정 가능
         if (hasDoc && (!v || v === "보완요청")) {
           return (
             <Select
@@ -561,7 +562,7 @@ export function getPartnerColumns(options: {
               </SelectTrigger>
               <SelectContent>
                 {v === "보완요청" && <SelectItem value="보완요청">보완요청</SelectItem>}
-                <SelectItem value="진행요청">진행요청</SelectItem>
+                <SelectItem value="보완완료">보완완료</SelectItem>
               </SelectContent>
             </Select>
           );

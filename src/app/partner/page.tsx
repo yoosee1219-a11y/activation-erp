@@ -33,6 +33,12 @@ import { Label } from "@/components/ui/label";
 import { SupplementPanel } from "@/components/dashboard/supplement-panel";
 import type { SupplementStat, SupplementItem } from "@/components/dashboard/supplement-panel";
 import { BookmarkTab, BookmarkTabsBar } from "@/components/ui/bookmark-tabs";
+import {
+  DocFacetFilters,
+  applyDocFacetFilters,
+  countDocFacetIncomplete,
+  type DocFacetFilters as DocFacetFiltersType,
+} from "@/components/activations/doc-facet-filters";
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
 import { CustomerDetailDialog } from "@/components/partner/customer-detail-dialog";
@@ -407,17 +413,30 @@ export default function PartnerPage() {
     );
   }, [usimStats]);
 
-  // 필터링된 데이터
+  // 서류 보완 필터 (가입신청 / 명변 / 외등 / 자동이체)
+  const [docFilters, setDocFilters] = useState<DocFacetFiltersType>({});
+
+  // 필터링된 데이터 (statusFilter + docFilters)
   const filteredData = useMemo(() => {
-    if (!statusFilter) return data;
-    return data.filter((r) => {
-      const ws = r.workStatus || "입력중";
-      if (statusFilter === "개통완료") {
-        return ws === "개통완료" || ws === "최종완료";
-      }
-      return ws === statusFilter;
-    });
-  }, [data, statusFilter]);
+    let rows = data;
+    if (statusFilter) {
+      rows = rows.filter((r) => {
+        const ws = r.workStatus || "입력중";
+        if (statusFilter === "개통완료") {
+          return ws === "개통완료" || ws === "최종완료";
+        }
+        return ws === statusFilter;
+      });
+    }
+    rows = applyDocFacetFilters(rows, docFilters);
+    return rows;
+  }, [data, statusFilter, docFilters]);
+
+  // 미완료 카운트 (필터 안 걸린 원본 기준)
+  const docIncompleteCounts = useMemo(
+    () => countDocFacetIncomplete(data),
+    [data]
+  );
 
   const handleCardClick = (filter: WorkStatusFilter) => {
     setStatusFilter((prev) => (prev === filter ? null : filter));
@@ -902,11 +921,18 @@ export default function PartnerPage() {
               <DataTable
                 columns={columns}
                 data={filteredData}
-                total={statusFilter ? filteredData.length : total}
+                total={statusFilter || Object.keys(docFilters).length > 0 ? filteredData.length : total}
                 page={page}
                 pageSize={200}
                 onPageChange={setPage}
                 searchPlaceholder="가입번호/고객명/신규번호 검색..."
+                toolbarChildren={
+                  <DocFacetFilters
+                    value={docFilters}
+                    onChange={setDocFilters}
+                    counts={docIncompleteCounts}
+                  />
+                }
                 initialColumnVisibility={{
                   usimNumber: false,
                   entryDate: false,

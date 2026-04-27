@@ -5,6 +5,12 @@ import { useSearchParams } from "next/navigation";
 import { useDashboard } from "../dashboard-context";
 import { DataTable } from "@/components/activations/data-table";
 import { Filters } from "@/components/activations/filters";
+import {
+  DocFacetFilters,
+  applyDocFacetFilters,
+  countDocFacetIncomplete,
+  type DocFacetFilters as DocFacetFiltersType,
+} from "@/components/activations/doc-facet-filters";
 import { CascadingFilter } from "@/components/layout/cascading-filter";
 import {
   getColumns,
@@ -123,7 +129,10 @@ export default function ActivationsPage() {
     return result;
   }, [data, localMajors, localMediums, agencyMajorMap, agencyMediumMap]);
 
-  // 책갈피 탭 기준 2차 필터링
+  // 서류 보완 필터 (가입신청/명변/외등/자동이체)
+  const [docFilters, setDocFilters] = useState<DocFacetFiltersType>({});
+
+  // 책갈피 탭 기준 2차 필터링 + 서류 보완 필터
   const tabFilteredData = useMemo(() => {
     let result = sideFilteredData;
     if (selectedMediumTab) {
@@ -135,6 +144,7 @@ export default function ActivationsPage() {
         (row) => agencyMajorMap[row.agencyId] === selectedMajorTab
       );
     }
+    result = applyDocFacetFilters(result, docFilters);
     // 날짜순 (entryDate desc, null은 끝으로)
     return [...result].sort((a, b) => {
       const ad = a.entryDate || "";
@@ -147,6 +157,7 @@ export default function ActivationsPage() {
   }, [
     sideFilteredData,
     selectedMajorTab,
+    docFilters,
     selectedMediumTab,
     agencyMajorMap,
     agencyMediumMap,
@@ -613,10 +624,6 @@ export default function ActivationsPage() {
         <div className="flex h-64 items-center justify-center text-gray-500">
           로딩 중...
         </div>
-      ) : tabFilteredData.length === 0 ? (
-        <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50/50 text-sm text-gray-400">
-          해당 조건의 데이터가 없습니다.
-        </div>
       ) : (
         <DataTable
           columns={columns}
@@ -626,6 +633,13 @@ export default function ActivationsPage() {
           pageSize={50}
           onPageChange={setPage}
           searchPlaceholder="가입번호/고객명/신규번호 검색..."
+          toolbarChildren={
+            <DocFacetFilters
+              value={docFilters}
+              onChange={setDocFilters}
+              counts={countDocFacetIncomplete(sideFilteredData)}
+            />
+          }
           highlightId={highlightId}
           getRowId={(row: ActivationRow) => row.id}
           getRowClassName={(row: ActivationRow) => {

@@ -56,6 +56,8 @@ interface DataTableProps<TData, TValue> {
   showPagination?: boolean;
   onRowClick?: (row: TData) => void;
   initialColumnVisibility?: VisibilityState;
+  // 검색창 오른쪽(컬럼 버튼 왼쪽)에 끼워넣을 추가 툴바 (예: 필터 버튼)
+  toolbarChildren?: React.ReactNode;
 }
 
 export function DataTable<TData, TValue>({
@@ -74,6 +76,7 @@ export function DataTable<TData, TValue>({
   showPagination = true,
   onRowClick,
   initialColumnVisibility,
+  toolbarChildren,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -212,13 +215,16 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <Input
-          placeholder={searchPlaceholder}
-          value={globalFilter}
-          onChange={(e) => setGlobalFilter(e.target.value)}
-          className="max-w-sm"
-        />
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap flex-1">
+          <Input
+            placeholder={searchPlaceholder}
+            value={globalFilter}
+            onChange={(e) => setGlobalFilter(e.target.value)}
+            className="max-w-sm"
+          />
+          {toolbarChildren}
+        </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm">

@@ -29,7 +29,7 @@ const PARTNER_EDITABLE_FIELDS = new Set([
   "nameChangeDocs",
   "arcInfo",
   "autopayInfo",
-  // 검수 상태 (파트너가 "진행요청"으로 변경 가능)
+  // 검수 상태 (파트너가 "보완완료"로 변경 가능)
   "applicationDocsReview",
   "nameChangeDocsReview",
   "arcReview",
@@ -61,7 +61,7 @@ const DOCUMENT_FIELDS = new Set([
   "arcAutopayInfo", // 하위호환
 ]);
 
-// 검수 필드 (파트너가 "진행요청"으로만 변경 가능)
+// 검수 필드 (파트너가 "보완완료"로만 변경 가능)
 const REVIEW_FIELDS = new Set([
   "applicationDocsReview",
   "nameChangeDocsReview",
@@ -230,13 +230,13 @@ export async function PATCH(
         );
       }
 
-      // 4) 검수 필드: 파트너는 "진행요청"으로만 변경 가능
+      // 4) 검수 필드: 파트너는 "보완완료"로만 변경 가능
       for (const field of requestedFields) {
         if (REVIEW_FIELDS.has(field)) {
           const newValue = (body as Record<string, unknown>)[field];
-          if (newValue !== "진행요청") {
+          if (newValue !== "보완완료") {
             return NextResponse.json(
-              { error: `검수 상태는 "진행요청"으로만 변경할 수 있습니다.` },
+              { error: `검수 상태는 "보완완료"로만 변경할 수 있습니다.` },
               { status: 403 }
             );
           }
@@ -251,8 +251,8 @@ export async function PATCH(
             const reviewField = DOC_TO_REVIEW_MAP[field];
             if (reviewField) {
               const reviewValue = (existing as Record<string, unknown>)[reviewField] as string | null;
-              // "진행요청" 또는 "완료"이면 해당 서류 잠금
-              if (reviewValue === "진행요청" || reviewValue === "완료") {
+              // "보완완료" 또는 "완료"이면 해당 서류 잠금
+              if (reviewValue === "보완완료" || reviewValue === "완료") {
                 return NextResponse.json(
                   { error: `해당 서류는 검수 ${reviewValue} 상태이므로 수정할 수 없습니다.` },
                   { status: 403 }

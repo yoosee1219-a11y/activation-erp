@@ -87,7 +87,7 @@ const workStatusColors: Record<string, string> = {
 const reviewColors: Record<string, string> = {
   완료: "bg-green-100 text-green-700",
   보완요청: "bg-red-100 text-red-700",
-  진행요청: "bg-orange-100 text-orange-700",
+  보완완료: "bg-orange-100 text-orange-700",
 };
 
 // ─── Inline editable text cell ───
@@ -257,7 +257,7 @@ function ReviewDropdown({
       <SelectContent>
         <SelectItem value="완료">완료</SelectItem>
         <SelectItem value="보완요청">보완요청</SelectItem>
-        <SelectItem value="진행요청">진행요청</SelectItem>
+        <SelectItem value="보완완료">보완완료</SelectItem>
       </SelectContent>
     </Select>
   );

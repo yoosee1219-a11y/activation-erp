@@ -447,7 +447,7 @@ export function ActivationForm({
               <SelectContent>
                 <SelectItem value="완료">완료</SelectItem>
                 <SelectItem value="보완요청">보완요청</SelectItem>
-                <SelectItem value="진행요청">진행요청</SelectItem>
+                <SelectItem value="보완완료">보완완료</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -479,7 +479,7 @@ export function ActivationForm({
               <SelectContent>
                 <SelectItem value="완료">완료</SelectItem>
                 <SelectItem value="보완요청">보완요청</SelectItem>
-                <SelectItem value="진행요청">진행요청</SelectItem>
+                <SelectItem value="보완완료">보완완료</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -511,7 +511,7 @@ export function ActivationForm({
               <SelectContent>
                 <SelectItem value="완료">완료</SelectItem>
                 <SelectItem value="보완요청">보완요청</SelectItem>
-                <SelectItem value="진행요청">진행요청</SelectItem>
+                <SelectItem value="보완완료">보완완료</SelectItem>
               </SelectContent>
             </Select>
           </div>

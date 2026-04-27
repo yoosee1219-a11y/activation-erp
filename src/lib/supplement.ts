@@ -35,6 +35,45 @@ export interface SupplementInfo {
 
 const REVIEW_DONE = "완료";
 
+// 검수 상태 분류 (필터링용)
+//   완료    : '완료'                       → 관리자 최종 확인 OK
+//   미완료  : '보완요청' | '보완완료' | null → 아직 관리자 확인 전 (보완완료 = 파트너가 보완 마쳤음, 관리자 확인 대기)
+export type ReviewBucket = "완료" | "미완료";
+
+export function reviewBucket(review: string | null | undefined): ReviewBucket {
+  return review === REVIEW_DONE ? "완료" : "미완료";
+}
+
+// 외국인등록증 개통의 경우 명변/외등 검수가 N/A → 필터에서 제외해야 함
+// 필요한 검수 차원 반환
+export type DocFacet = "applicationDocs" | "nameChangeDocs" | "arc" | "autopay";
+
+export function isFacetApplicable(
+  facet: DocFacet,
+  activationMethod: string | null | undefined
+): boolean {
+  const isArc = activationMethod === "외국인등록증";
+  if (isArc) {
+    // 외국인등록증 개통은 명변/외등 N/A
+    return facet === "applicationDocs" || facet === "autopay";
+  }
+  return true;
+}
+
+export const FACET_TO_REVIEW_FIELD: Record<DocFacet, keyof SupplementInput> = {
+  applicationDocs: "applicationDocsReview",
+  nameChangeDocs: "nameChangeDocsReview",
+  arc: "arcReview",
+  autopay: "autopayReview",
+};
+
+export const FACET_LABELS: Record<DocFacet, string> = {
+  applicationDocs: "가입신청서",
+  nameChangeDocs: "명의변경서류",
+  arc: "외국인등록증",
+  autopay: "자동이체",
+};
+
 export function getSupplementInfo(r: SupplementInput): SupplementInfo {
   const isArc = r.activationMethod === "외국인등록증";
 
