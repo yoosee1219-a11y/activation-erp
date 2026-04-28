@@ -39,6 +39,7 @@ import {
   countDocFacetIncomplete,
   type DocFacetFilters as DocFacetFiltersType,
 } from "@/components/activations/doc-facet-filters";
+import { getSupplementInfo } from "@/lib/supplement";
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
 import { CustomerDetailDialog } from "@/components/partner/customer-detail-dialog";
@@ -1043,22 +1044,33 @@ export default function PartnerPage() {
                   autopayReview: false,
                 }}
                 getRowClassName={(row: PartnerActivationRow) => {
-                  const isArc = row.activationMethod === "외국인등록증";
+                  const supplementInfo = getSupplementInfo({
+                    activationMethod: row.activationMethod,
+                    applicationDocsReview: row.applicationDocsReview,
+                    nameChangeDocsReview: row.nameChangeDocsReview,
+                    arcReview: row.arcReview,
+                    autopayReview: row.autopayReview,
+                    arcSupplementDeadline: row.arcSupplementDeadline,
+                  });
 
-                  // 개통방법에 따른 필수 서류/검수 필드
+                  // 자동이체만 미완료 → 노랑
+                  if (supplementInfo.kind === "autopay-only") {
+                    return "bg-yellow-50/80 hover:bg-yellow-100/80";
+                  }
+
+                  // 모두 완료 → 초록
+                  if (supplementInfo.kind === "complete") {
+                    return "bg-green-50/80 hover:bg-green-100/80";
+                  }
+
+                  // 보완요청 또는 서류 미첨부 → 빨강
+                  const isArc = row.activationMethod === "외국인등록증";
                   const requiredDocs = isArc
                     ? [row.applicationDocs, row.autopayInfo]
                     : [row.applicationDocs, row.nameChangeDocs, row.arcInfo, row.autopayInfo];
                   const requiredReviews = isArc
                     ? [row.applicationDocsReview, row.autopayReview]
                     : [row.applicationDocsReview, row.nameChangeDocsReview, row.arcReview, row.autopayReview];
-
-                  // 모든 필수 검수 완료 → 초록
-                  if (requiredReviews.every(r => r === "완료")) {
-                    return "bg-green-50/80 hover:bg-green-100/80";
-                  }
-
-                  // 보완요청 또는 미첨부 → 빨강
                   const hasIssue =
                     row.workStatus === "보완요청" ||
                     requiredReviews.some(r => r === "보완요청") ||

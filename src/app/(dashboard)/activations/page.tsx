@@ -11,6 +11,7 @@ import {
   countDocFacetIncomplete,
   type DocFacetFilters as DocFacetFiltersType,
 } from "@/components/activations/doc-facet-filters";
+import { getSupplementInfo } from "@/lib/supplement";
 import { CascadingFilter } from "@/components/layout/cascading-filter";
 import {
   getColumns,
@@ -479,7 +480,7 @@ export default function ActivationsPage() {
     arcReview: false,
     autopayInfo: false,
     autopayReview: false,
-    supplementDeadline: false,
+    supplementDeadline: true,
     holdReason: false,
     terminationDate: false,
     terminationReason: false,
@@ -726,6 +727,23 @@ export default function ActivationsPage() {
           highlightId={highlightId}
           getRowId={(row: ActivationRow) => row.id}
           getRowClassName={(row: ActivationRow) => {
+            const supplementInfo = getSupplementInfo({
+              activationMethod: row.activationMethod,
+              applicationDocsReview: row.applicationDocsReview,
+              nameChangeDocsReview: row.nameChangeDocsReview,
+              arcReview: row.arcReview,
+              autopayReview: row.autopayReview,
+              arcSupplementDeadline: row.arcSupplementDeadline,
+            });
+            // 자동이체만 미완료 → 노랑
+            if (supplementInfo.kind === "autopay-only") {
+              return "bg-yellow-50/80 hover:bg-yellow-100/80";
+            }
+            // 모두 완료 → 녹색
+            if (supplementInfo.kind === "complete") {
+              return "bg-green-50/80 hover:bg-green-100/80";
+            }
+            // 그 외 미완료 → 빨강 (보완요청/서류 누락)
             const isArc = row.activationMethod === "외국인등록증";
             const requiredDocs = isArc
               ? [row.applicationDocs, row.autopayInfo]
@@ -743,9 +761,6 @@ export default function ActivationsPage() {
                   row.arcReview,
                   row.autopayReview,
                 ];
-            if (requiredReviews.every((r) => r === "완료")) {
-              return "bg-green-50/80 hover:bg-green-100/80";
-            }
             const hasIssue =
               row.workStatus === "보완요청" ||
               requiredReviews.some((r) => r === "보완요청") ||
