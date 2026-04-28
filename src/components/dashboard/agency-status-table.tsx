@@ -25,6 +25,7 @@ interface AgencyStat {
   agencyName: string | null;
   total: number;
   completed: number;
+  today: number;
   pending: number;
   cancelled: number;
   working: number;
@@ -34,6 +35,7 @@ interface AgencyStat {
 interface AggregatedStat {
   total: number;
   completed: number;
+  today: number;
   pending: number;
   cancelled: number;
   working: number;
@@ -45,12 +47,13 @@ function sumStats(stats: AggregatedStat[]): AggregatedStat {
     (acc, s) => ({
       total: acc.total + Number(s.total),
       completed: acc.completed + Number(s.completed),
+      today: acc.today + Number(s.today),
       pending: acc.pending + Number(s.pending),
       cancelled: acc.cancelled + Number(s.cancelled),
       working: acc.working + Number(s.working),
       autopayPending: acc.autopayPending + Number(s.autopayPending),
     }),
-    { total: 0, completed: 0, pending: 0, cancelled: 0, working: 0, autopayPending: 0 }
+    { total: 0, completed: 0, today: 0, pending: 0, cancelled: 0, working: 0, autopayPending: 0 }
   );
 }
 
@@ -58,6 +61,15 @@ function StatCells({ stat }: { stat: AggregatedStat }) {
   return (
     <>
       <TableCell className="text-center font-bold">{stat.total}</TableCell>
+      <TableCell className="text-center">
+        {Number(stat.today) > 0 ? (
+          <Badge className="bg-emerald-500 text-white font-bold">
+            +{stat.today}
+          </Badge>
+        ) : (
+          <span className="text-gray-300">-</span>
+        )}
+      </TableCell>
       <TableCell className="text-center">
         <Badge className="bg-green-100 text-green-800">{stat.completed}</Badge>
       </TableCell>
@@ -216,6 +228,7 @@ export function AgencyStatusTable({ data, categories, agencies }: Props) {
             <TableRow>
               <TableHead className="min-w-[180px]">거래처</TableHead>
               <TableHead className="text-center">전체</TableHead>
+              <TableHead className="text-center">당일 개통</TableHead>
               <TableHead className="text-center">개통완료</TableHead>
               <TableHead className="text-center">대기</TableHead>
               <TableHead className="text-center">취소</TableHead>
@@ -372,6 +385,9 @@ export function AgencyStatusTable({ data, categories, agencies }: Props) {
             <TableRow className="bg-gray-50 font-bold">
               <TableCell>합계</TableCell>
               <TableCell className="text-center">{totalAll.total}</TableCell>
+              <TableCell className="text-center text-emerald-700">
+                {totalAll.today > 0 ? `+${totalAll.today}` : "-"}
+              </TableCell>
               <TableCell className="text-center text-green-700">
                 {totalAll.completed}
               </TableCell>

@@ -221,12 +221,17 @@ export async function getAgencyStats(agencyIds?: string[]) {
     ? sql`WHERE a.agency_id IN (${inList(agencyIds)})`
     : sql``;
 
+  // 당일 개통: activation_date = 오늘 (Asia/Seoul 기준) AND 개통완료 상태
   const result = await db.execute(sql`
     SELECT
       a.agency_id as "agencyId",
       ag.name as "agencyName",
       COUNT(*) as "total",
       COUNT(*) FILTER (WHERE a.activation_status = '개통완료') as "completed",
+      COUNT(*) FILTER (
+        WHERE a.activation_status = '개통완료'
+          AND a.activation_date = (NOW() AT TIME ZONE 'Asia/Seoul')::date
+      ) as "today",
       COUNT(*) FILTER (WHERE a.activation_status = '대기') as "pending",
       COUNT(*) FILTER (WHERE a.activation_status = '개통취소') as "cancelled",
       COUNT(*) FILTER (WHERE a.work_status = '진행중') as "working",

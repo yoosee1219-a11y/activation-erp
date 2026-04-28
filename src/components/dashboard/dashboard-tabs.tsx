@@ -43,6 +43,7 @@ interface DashboardTabsProps {
     agencyName: string | null;
     total: number;
     completed: number;
+    today: number;
     pending: number;
     cancelled: number;
     working: number;
