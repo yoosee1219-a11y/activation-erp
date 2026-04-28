@@ -30,6 +30,7 @@ export type ActivationRow = {
   majorCategoryName?: string;
   mediumCategoryName?: string;
   customerName: string;
+  updatedAt?: string | null;
   customerBirthDate?: string | null;
   usimNumber: string | null;
   entryDate: string | null;
@@ -272,6 +273,7 @@ export function getColumns(options: {
   staffList?: string[];
   /** 거래처 인라인 수정용: 활성 중분류 목록 [{id, name, parentName}] */
   agencyOptions?: Array<{ id: string; name: string; parentName: string }>;
+  isRowNew?: (row: ActivationRow) => boolean;
 }): ColumnDef<ActivationRow>[] {
   const {
     onDelete,
@@ -281,6 +283,7 @@ export function getColumns(options: {
     canLock,
     staffList = [],
     agencyOptions = [],
+    isRowNew,
   } = options;
 
   return [
@@ -288,11 +291,21 @@ export function getColumns(options: {
     {
       id: "rowNumber",
       header: "No.",
-      size: 50,
+      size: 60,
       cell: ({ row }) => (
-        <span className="text-sm text-gray-500 font-medium">
-          {row.index + 1}
-        </span>
+        <div className="flex items-center gap-1">
+          <span className="text-sm text-gray-500 font-medium">
+            {row.index + 1}
+          </span>
+          {isRowNew?.(row.original) && (
+            <span
+              className="text-[9px] font-bold text-white bg-rose-500 px-1 py-0.5 rounded animate-pulse"
+              title="최근 변경됨"
+            >
+              NEW
+            </span>
+          )}
+        </div>
       ),
     },
     {

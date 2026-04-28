@@ -36,6 +36,7 @@ import {
   XCircle,
   MessageSquare,
   Pencil,
+  History,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -1000,9 +1001,120 @@ export function CustomerDetailDialog({
               </section>
             </>
           )}
+
+          {/* ── 작업 이력 ── */}
+          <Separator />
+          <ActivityLogSection activationId={customer.id} />
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─── 작업 이력 섹션 ───
+interface LogEntry {
+  id: string;
+  userName: string;
+  userRole: string;
+  agencyName: string | null;
+  action: string;
+  details: string;
+  createdAt: string | null;
+}
+
+function ActivityLogSection({ activationId }: { activationId: string }) {
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [order, setOrder] = useState<"desc" | "asc">("desc");
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetch(`/api/activations/${activationId}/logs`)
+      .then((r) => (r.ok ? r.json() : { logs: [] }))
+      .then((data) => {
+        if (!cancelled) {
+          setLogs(data.logs || []);
+          // 본 시점 기록 (NEW 표시 해제용)
+          try {
+            const seen = JSON.parse(localStorage.getItem("activationSeen") || "{}");
+            seen[activationId] = new Date().toISOString();
+            localStorage.setItem("activationSeen", JSON.stringify(seen));
+          } catch {}
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLogs([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activationId]);
+
+  const sortedLogs = [...logs].sort((a, b) => {
+    const ad = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bd = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return order === "desc" ? bd - ad : ad - bd;
+  });
+
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+          <History className="h-4 w-4" />
+          작업 이력
+          {logs.length > 0 && (
+            <span className="text-xs text-gray-400 font-normal">({logs.length})</span>
+          )}
+        </h3>
+        {logs.length > 1 && (
+          <button
+            type="button"
+            onClick={() => setOrder((o) => (o === "desc" ? "asc" : "desc"))}
+            className="text-[10px] text-blue-500 hover:underline"
+          >
+            {order === "desc" ? "최신순 ↓" : "오래된순 ↑"}
+          </button>
+        )}
+      </div>
+      {loading ? (
+        <p className="text-xs text-gray-400 px-3 py-2">불러오는 중...</p>
+      ) : logs.length === 0 ? (
+        <p className="text-xs text-gray-400 px-3 py-2">변경 이력이 없습니다.</p>
+      ) : (
+        <ul className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+          {sortedLogs.map((log) => (
+            <li
+              key={log.id}
+              className="text-xs px-3 py-2 rounded-md bg-gray-50 border border-gray-100"
+            >
+              <div className="flex items-center justify-between gap-2 mb-0.5">
+                <span className="font-medium text-gray-700 truncate">
+                  {log.userName}
+                  {log.agencyName && (
+                    <span className="ml-1 text-gray-400">· {log.agencyName}</span>
+                  )}
+                </span>
+                <span className="text-[10px] text-gray-400 whitespace-nowrap">
+                  {log.createdAt
+                    ? new Date(log.createdAt).toLocaleString("ko-KR", {
+                        month: "2-digit",
+                        day: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : "-"}
+                </span>
+              </div>
+              <p className="text-gray-600 break-words">{log.details}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

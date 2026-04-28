@@ -132,6 +132,54 @@ export default function ActivationsPage() {
   // 서류 보완 필터 (가입신청/명변/외등/자동이체)
   const [docFilters, setDocFilters] = useState<DocFacetFiltersType>({});
 
+  // 변경 알림 (NEW)
+  const [seenMap, setSeenMap] = useState<Record<string, string>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      return JSON.parse(localStorage.getItem("activationSeen") || "{}");
+    } catch {
+      return {};
+    }
+  });
+  const [showNewOnly, setShowNewOnly] = useState(false);
+
+  useEffect(() => {
+    if (data.length === 0) return;
+    setSeenMap((prev) => {
+      const next = { ...prev };
+      const now = new Date().toISOString();
+      let changed = false;
+      for (const row of data) {
+        if (!next[row.id]) {
+          next[row.id] = now;
+          changed = true;
+        }
+      }
+      if (changed) {
+        try {
+          localStorage.setItem("activationSeen", JSON.stringify(next));
+        } catch {}
+      }
+      return changed ? next : prev;
+    });
+  }, [data]);
+
+  const refreshSeenMap = useCallback(() => {
+    try {
+      setSeenMap(JSON.parse(localStorage.getItem("activationSeen") || "{}"));
+    } catch {}
+  }, []);
+
+  const isRowNew = useCallback(
+    (row: ActivationRow) => {
+      if (!row.updatedAt) return false;
+      const seen = seenMap[row.id];
+      if (!seen) return false;
+      return new Date(row.updatedAt).getTime() > new Date(seen).getTime();
+    },
+    [seenMap]
+  );
+
   // 책갈피 탭 기준 2차 필터링 + 서류 보완 필터
   const tabFilteredData = useMemo(() => {
     let result = sideFilteredData;
@@ -145,6 +193,9 @@ export default function ActivationsPage() {
       );
     }
     result = applyDocFacetFilters(result, docFilters);
+    if (showNewOnly) {
+      result = result.filter(isRowNew);
+    }
     // 날짜순 (entryDate desc, null은 끝으로)
     return [...result].sort((a, b) => {
       const ad = a.entryDate || "";
@@ -158,10 +209,17 @@ export default function ActivationsPage() {
     sideFilteredData,
     selectedMajorTab,
     docFilters,
+    showNewOnly,
+    isRowNew,
     selectedMediumTab,
     agencyMajorMap,
     agencyMediumMap,
   ]);
+
+  const newCount = useMemo(
+    () => sideFilteredData.filter(isRowNew).length,
+    [sideFilteredData, isRowNew]
+  );
 
   // 대분류별 카운트 (sideFilteredData 기준)
   const majorCounts = useMemo(() => {
@@ -398,6 +456,7 @@ export default function ActivationsPage() {
     canLock: isAdmin,
     staffList: STAFF_LIST,
     agencyOptions: isAdmin ? agencyOptions : [],
+    isRowNew,
   });
 
   const defaultHiddenColumns: VisibilityState = {
@@ -634,11 +693,35 @@ export default function ActivationsPage() {
           onPageChange={setPage}
           searchPlaceholder="가입번호/고객명/신규번호 검색..."
           toolbarChildren={
-            <DocFacetFilters
-              value={docFilters}
-              onChange={setDocFilters}
-              counts={countDocFacetIncomplete(sideFilteredData)}
-            />
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <DocFacetFilters
+                value={docFilters}
+                onChange={setDocFilters}
+                counts={countDocFacetIncomplete(sideFilteredData)}
+              />
+              {(newCount > 0 || showNewOnly) && (
+                <Button
+                  size="sm"
+                  variant={showNewOnly ? "default" : "outline"}
+                  className={`h-8 px-2.5 text-xs gap-1 ${
+                    showNewOnly
+                      ? "bg-rose-600 hover:bg-rose-700 text-white"
+                      : "border-rose-300 text-rose-600 hover:bg-rose-50"
+                  }`}
+                  onClick={() => setShowNewOnly((v) => !v)}
+                >
+                  {!showNewOnly && (
+                    <span className="text-[9px] font-bold bg-rose-500 text-white px-1 rounded animate-pulse">
+                      NEW
+                    </span>
+                  )}
+                  <span>변경됨</span>
+                  {newCount > 0 && (
+                    <span className="text-[10px] opacity-80">{newCount}</span>
+                  )}
+                </Button>
+              )}
+            </div>
           }
           highlightId={highlightId}
           getRowId={(row: ActivationRow) => row.id}
@@ -678,7 +761,10 @@ export default function ActivationsPage() {
 
       <CustomerDetailDialog
         open={!!detailCustomer}
-        onClose={() => setDetailCustomer(null)}
+        onClose={() => {
+          setDetailCustomer(null);
+          refreshSeenMap();
+        }}
         customer={detailCustomer}
         onUpdate={
           user?.role !== "GUEST"

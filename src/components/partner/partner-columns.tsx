@@ -20,6 +20,7 @@ export type PartnerActivationRow = {
   agencyId: string;
   agencyName?: string;
   customerName: string;
+  updatedAt?: string | null;
   usimNumber: string | null;
   entryDate: string | null;
   subscriptionNumber: string | null;
@@ -89,19 +90,30 @@ function isDocLocked(review: string | null): boolean {
 export function getPartnerColumns(options: {
   onUpdate: (id: string, field: string, value: string) => void;
   availableAgencies?: { id: string; name: string }[];
+  isRowNew?: (row: PartnerActivationRow) => boolean;
 }): ColumnDef<PartnerActivationRow>[] {
-  const { onUpdate, availableAgencies = [] } = options;
+  const { onUpdate, availableAgencies = [], isRowNew } = options;
 
   return [
     // ─── 핵심 상태 (스크롤 없이 바로 보이는 영역) ───
     {
       id: "rowNumber",
       header: "No.",
-      size: 50,
+      size: 60,
       cell: ({ row }) => (
-        <span className="text-sm text-gray-500 font-medium">
-          {row.index + 1}
-        </span>
+        <div className="flex items-center gap-1">
+          <span className="text-sm text-gray-500 font-medium">
+            {row.index + 1}
+          </span>
+          {isRowNew?.(row.original) && (
+            <span
+              className="text-[9px] font-bold text-white bg-rose-500 px-1 py-0.5 rounded animate-pulse"
+              title="최근 변경됨"
+            >
+              NEW
+            </span>
+          )}
+        </div>
       ),
     },
     {

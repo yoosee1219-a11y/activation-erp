@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { getActivationById } from "@/lib/db/queries/activations";
 import { getActivationLogs } from "@/lib/db/queries/activation-logs";
-import { canAccessAgency } from "@/lib/db/queries/users";
+import { resolveAllowedAgencyIds } from "@/lib/db/queries/users";
 
 export async function GET(
   request: NextRequest,
@@ -20,7 +20,11 @@ export async function GET(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    if (!canAccessAgency(user.role, user.allowedAgencies, activation.agencyId)) {
+    // 카테고리 기반 권한 인식
+    const allowedIds = await resolveAllowedAgencyIds(user);
+    const canAccess =
+      allowedIds === null || allowedIds.includes(activation.agencyId);
+    if (!canAccess) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
