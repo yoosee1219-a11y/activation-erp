@@ -92,13 +92,15 @@ export function getSupplementInfo(r: SupplementInput): SupplementInfo {
     };
   }
 
-  // 자동이체만 미완료 (나머지 필수 검수는 모두 완료) → 노란색
-  const otherReviews = isArc
-    ? [r.applicationDocsReview]
-    : [r.applicationDocsReview, r.nameChangeDocsReview, r.arcReview];
-  const othersDone = otherReviews.every((v) => v === REVIEW_DONE);
+  // 자동이체만 미완료 (핵심 보완 검수 명변/외등은 완료) → 노란색
+  // 가입신청서는 보완 차원이 아니라 별도이므로 판단에서 제외.
+  // 외등 개통은 명변/외등 N/A → 자동이체만 보면 됨.
   const autopayPending = r.autopayReview !== REVIEW_DONE;
-  if (othersDone && autopayPending) {
+  const coreSupplementDone = isArc
+    ? true
+    : r.nameChangeDocsReview === REVIEW_DONE &&
+      r.arcReview === REVIEW_DONE;
+  if (coreSupplementDone && autopayPending) {
     return {
       kind: "autopay-only",
       label: "자동이체",
