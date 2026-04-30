@@ -40,7 +40,6 @@ import {
   type DocFacetFilters as DocFacetFiltersType,
 } from "@/components/activations/doc-facet-filters";
 import { getSupplementInfo } from "@/lib/supplement";
-import * as XLSX from "xlsx";
 import Papa from "papaparse";
 import { CustomerDetailDialog } from "@/components/partner/customer-detail-dialog";
 
@@ -561,23 +560,26 @@ export default function PartnerPage() {
     }
   };
 
-  const handleImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setImportFile(file);
     setImportResult(null);
 
+    const isCsv = file.name.endsWith(".csv");
+    const XLSX = isCsv ? null : await import("xlsx");
+
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
         const data = evt.target?.result;
-        if (file.name.endsWith(".csv")) {
+        if (isCsv) {
           const parsed = Papa.parse(data as string, { header: true, skipEmptyLines: true });
           setImportPreview(parsed.data.slice(0, 10) as Record<string, string>[]);
         } else {
-          const wb = XLSX.read(data, { type: "array" });
+          const wb = XLSX!.read(data, { type: "array" });
           const ws = wb.Sheets[wb.SheetNames[0]];
-          const json = XLSX.utils.sheet_to_json<Record<string, string>>(ws);
+          const json = XLSX!.utils.sheet_to_json<Record<string, string>>(ws);
           setImportPreview(json.slice(0, 10));
         }
       } catch {
@@ -585,7 +587,7 @@ export default function PartnerPage() {
         setImportPreview([]);
       }
     };
-    if (file.name.endsWith(".csv")) {
+    if (isCsv) {
       reader.readAsText(file);
     } else {
       reader.readAsArrayBuffer(file);
@@ -597,18 +599,20 @@ export default function PartnerPage() {
     setImportLoading(true);
     setImportResult(null);
     try {
+      const isCsv = importFile.name.endsWith(".csv");
+      const XLSX = isCsv ? null : await import("xlsx");
       const reader = new FileReader();
       const rows = await new Promise<Record<string, string>[]>((resolve, reject) => {
         reader.onload = (evt) => {
           try {
             const data = evt.target?.result;
-            if (importFile.name.endsWith(".csv")) {
+            if (isCsv) {
               const parsed = Papa.parse(data as string, { header: true, skipEmptyLines: true });
               resolve(parsed.data as Record<string, string>[]);
             } else {
-              const wb = XLSX.read(data, { type: "array" });
+              const wb = XLSX!.read(data, { type: "array" });
               const ws = wb.Sheets[wb.SheetNames[0]];
-              resolve(XLSX.utils.sheet_to_json<Record<string, string>>(ws));
+              resolve(XLSX!.utils.sheet_to_json<Record<string, string>>(ws));
             }
           } catch (err) {
             reject(err);

@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useMemo } from "react";
 import Papa from "papaparse";
-import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Download } from "lucide-react";
 
@@ -149,8 +148,9 @@ export default function ImportPage() {
   }, []);
 
   // XLSX 파싱: 숫자 원본 보존 (과학표기법 문제 해결)
-  const parseXlsx = useCallback((data: ArrayBuffer) => {
+  const parseXlsx = useCallback(async (data: ArrayBuffer) => {
     try {
+      const XLSX = await import("xlsx");
       const workbook = XLSX.read(data, { type: "array" });
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];

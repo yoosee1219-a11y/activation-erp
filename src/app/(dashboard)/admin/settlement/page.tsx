@@ -45,7 +45,6 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
 
 // ─── Types ───
 interface UsimData {
@@ -477,8 +476,9 @@ export default function SettlementPage() {
     }
   };
 
-  const downloadExcel = () => {
+  const downloadExcel = async () => {
     if (!data) return;
+    const XLSX = await import("xlsx");
 
     // Sheet 1: Summary
     const summaryRows = data.agencies.map((a) => ({
